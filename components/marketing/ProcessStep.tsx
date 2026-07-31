@@ -11,13 +11,13 @@ export default function ProcessStep({
 }: ProcessStepProps) {
   return (
     <div className="rounded-xl border border-slate-200 p-6">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white font-bold">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-lg font-bold text-white">
         {step}
       </div>
 
-      <h3 className="mt-2 text-xl font-semibold">{title}</h3>
+      <h3 className="mt-4 text-xl font-semibold text-slate-900">{title}</h3>
 
-      <p className="mt-3 text-slate-600">{description}</p>
+      <p className="mt-2 leading-7 text-slate-600">{description}</p>
     </div>
   );
 }
