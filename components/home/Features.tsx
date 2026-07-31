@@ -1,4 +1,5 @@
 import FeatureCard from "@/components/home/FeatureCard";
+import SectionHeading from "@/components/ui/SectionHeading";
 
 const features = [
   {
@@ -21,7 +22,12 @@ const features = [
 export default function Features() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-24">
-      <div className="grid gap-6 md:grid-cols-3">
+      <SectionHeading
+        eyebrow="Features"
+        title="Everything you need to hire with confidence"
+        description="From resume screening to expert evaluations, HireIQ helps your team make faster and better hiring decisions."
+      />
+      <div className="mt-16 grid gap-6 md:grid-cols-3">
         {features.map((feature) => (
           <FeatureCard
             key={feature.title}
