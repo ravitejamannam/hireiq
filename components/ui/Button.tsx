@@ -2,7 +2,7 @@
 
 type ButtonProps = {
   label: string;
-  variant: "primary" | "danger";
+  variant: "primary" | "secondary" ;
   onClick: () => void;
 };
 
@@ -11,15 +11,15 @@ export default function Button({
   variant,
   onClick,
 }: ButtonProps) {
-  const styles = {
-    primary: "bg-slate-900 hover:bg-slate-700",
-    danger: "bg-red-600 hover:bg-red-500",
+  const buttonStyles = {
+    primary: "bg-slate-900 text-white hover:bg-slate-800",
+    secondary: "border border-slate-300 bg-white text-slate-900 hover:bg-slate-100",
   };
 
   return (
     <button
       onClick={onClick}
-      className={`rounded-md px-4 py-2 text-white ${styles[variant]}`}
+      className={`rounded-md px-4 py-2 font-medium transition-colors ${buttonStyles[variant]}`}
     >
       {label}
     </button>
