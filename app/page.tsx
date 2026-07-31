@@ -1,19 +1,25 @@
+"use client";
+
+import Button from "@/components/ui/Button";
+
 export default function HomePage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50">
-      <div className="text-center">
-        <h1 className="text-6xl font-extrabold tracking-tight text-slate-900">
-          HireIQ
-        </h1>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-4">
+      <h1 className="text-4xl font-bold">
+        Welcome to HireIQ 🚀
+      </h1>
 
-        <p className="mt-4 text-lg text-slate-600">
-          AI-assisted technical hiring platform.
-        </p>
+      <Button
+        label="Login"
+        variant="primary"
+        onClick={() => alert("Login clicked")}
+      />
 
-        <button className="mt-8 rounded-lg bg-slate-900 px-6 py-3 text-white transition hover:bg-slate-700">
-          Get Started
-        </button>
-      </div>
+      <Button
+        label="Delete Account"
+        variant="danger"
+        onClick={() => alert("Delete Account clicked")}
+      />
     </main>
   );
 }
