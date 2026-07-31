@@ -1,8 +1,8 @@
 "use client";
 
-import Hero from "@/components/home/Hero";
-import Navbar from "@/components/home/Navbar";
-import Features from "@/components/home/Features";
+import Hero from "@/components/marketing/Hero";
+import Navbar from "@/components/marketing/Navbar";
+import Features from "@/components/marketing/Features";
 
 export default function HomePage() {
   return (

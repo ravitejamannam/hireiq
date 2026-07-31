@@ -1,4 +1,4 @@
-import FeatureCard from "@/components/home/FeatureCard";
+import FeatureCard from "@/components/marketing/FeatureCard";
 import SectionHeading from "@/components/ui/SectionHeading";
 
 const features = [
