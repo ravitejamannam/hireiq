@@ -2,7 +2,7 @@
 
 type ButtonProps = {
   label: string;
-  variant: "primary" | "secondary" ;
+  variant: "primary" | "secondary";
   onClick: () => void;
 };
 
@@ -12,14 +12,17 @@ export default function Button({
   onClick,
 }: ButtonProps) {
   const buttonStyles = {
-    primary: "bg-slate-900 text-white hover:bg-slate-800",
-    secondary: "bg-white text-slate-900 hover:bg-slate-100",
+    primary:
+      "bg-black text-white hover:bg-zinc-800",
+
+    secondary:
+      "border border-zinc-300 bg-white text-black hover:bg-zinc-100",
   };
 
   return (
     <button
       onClick={onClick}
-      className={`rounded-md px-4 py-2 font-medium transition-colors ${buttonStyles[variant]}`}
+      className={`rounded-lg px-5 py-2.5 font-medium transition-colors ${buttonStyles[variant]}`}
     >
       {label}
     </button>

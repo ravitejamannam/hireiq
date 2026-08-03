@@ -7,11 +7,11 @@ const links = [
 
 export default function Navbar() {
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/80 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/90 backdrop-blur-md">
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <a
           href="#"
-          className="text-2xl font-bold tracking-tight text-slate-900"
+          className="text-2xl font-bold tracking-tight text-zinc-900"
         >
           HireIQ
         </a>
@@ -21,7 +21,7 @@ export default function Navbar() {
             <a
               key={link.label}
               href={link.href}
-              className="text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
+              className="text-sm font-medium text-zinc-600 transition-colors duration-200 hover:text-zinc-900"
             >
               {link.label}
             </a>

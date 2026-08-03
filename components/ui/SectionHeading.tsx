@@ -17,8 +17,8 @@ export default function SectionHeading({
     <div className="mx-auto max-w-3xl text-center">
       {eyebrow && (
         <p
-          className={`text-sm font-semibold uppercase tracking-widest ${
-            isDark ? "text-slate-400" : "text-slate-500"
+          className={`text-sm font-semibold uppercase tracking-[0.2em] ${
+            isDark ? "text-zinc-500" : "text-zinc-500"
           }`}
         >
           {eyebrow}
@@ -26,8 +26,8 @@ export default function SectionHeading({
       )}
 
       <h2
-        className={`mt-2 text-4xl font-bold tracking-tight ${
-          isDark ? "text-white" : "text-slate-900"
+        className={`mt-4 text-4xl font-bold tracking-tight md:text-5xl ${
+          isDark ? "text-white" : "text-zinc-900"
         }`}
       >
         {title}
@@ -35,8 +35,8 @@ export default function SectionHeading({
 
       {description && (
         <p
-          className={`mt-4 text-lg leading-8 ${
-            isDark ? "text-slate-300" : "text-slate-600"
+          className={`mt-6 text-lg leading-8 ${
+            isDark ? "text-zinc-400" : "text-zinc-600"
           }`}
         >
           {description}

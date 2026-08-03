@@ -14,20 +14,22 @@ export default function FaqItem({
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white transition-all duration-300">
       <button
-        onClick={() => {
-          setIsOpen(!isOpen);
-        }}
-        className="flex w-full items-center justify-between p-5 text-left font-medium"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex w-full items-center justify-between p-6 text-left"
       >
-        <span className="text-lg font-medium text-slate-900">{question}</span>
+        <span className="text-lg font-semibold text-zinc-900">
+          {question}
+        </span>
 
-        <span className="text-2xl font-semibold text-slate-500">{isOpen ? "−" : "+"}</span>
+        <span className="text-2xl font-light text-zinc-500">
+          {isOpen ? "−" : "+"}
+        </span>
       </button>
 
       {isOpen && (
-        <div className="border-t border-slate-200 p-6 leading-7 text-slate-600">
+        <div className="border-t border-zinc-200 px-6 pb-6 pt-5 leading-7 text-zinc-600">
           {answer}
         </div>
       )}
