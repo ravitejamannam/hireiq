@@ -17,6 +17,16 @@ export default function StateDemo() {
       >
         {isVisible ? "Hide Details" : "Show Details"}
       </button>
+
+      {isVisible && (
+
+        <p className="rounded-md bg-slate-100 p-4">
+
+          Welcome to HireIQ 🚀
+
+        </p>
+
+      )}
     </div>
   );
 }
