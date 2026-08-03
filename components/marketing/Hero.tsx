@@ -2,7 +2,7 @@ import Button from "@/components/ui/Button";
 
 export default function Hero() {
   return (
-    <section className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
+    <section className="mx-auto flex min-h-screen max-w-6xl flex-col items-center justify-center px-6 text-center">
       <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-6xl">
         Hire better developers with AI
       </h1>

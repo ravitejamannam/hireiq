@@ -11,21 +11,23 @@ const steps = [
 
 export default function HowItWorks() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-24">
-      <SectionHeading
-        eyebrow="Process"
-        title="How HireIQ Works"
-        description="A simple hiring workflow that helps companies identify and hire the right engineers."
-      />
-      <div className="mt-16 grid gap-6 md:grid-cols-5">
-        {steps.map((step) => (
-          <ProcessStep
-            key={step.step}
-            step={step.step}
-            title={step.title}
-            description={step.description}
-          />
-        ))}
+    <section className="bg-slate-50">
+      <div className="mx-auto max-w-6xl px-6 py-24">
+        <SectionHeading
+          eyebrow="Process"
+          title="How HireIQ Works"
+          description="A simple hiring workflow that helps companies identify and hire the right engineers."
+        />
+        <div className="mt-16 grid gap-6 md:grid-cols-5">
+          {steps.map((step) => (
+            <ProcessStep
+              key={step.step}
+              step={step.step}
+              title={step.title}
+              description={step.description}
+            />
+          ))}
+        </div>
       </div>
     </section>
   );

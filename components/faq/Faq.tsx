@@ -14,28 +14,29 @@ const faqs = [
   },
   {
     question: "How long does an interview take?",
-    answer:
-      "Most interviews take between 60 and 90 minutes.",
+    answer: "Most interviews take between 60 and 90 minutes.",
   },
 ];
 
 export default function Faq() {
   return (
-    <section className="mx-auto max-w-4xl px-6 py-24">
-      <SectionHeading
-        eyebrow="FAQ"
-        title="Frequently Asked Questions"
-        description="Everything you need to know before using HireIQ."
-      />
+    <section className="bg-slate-50">
+      <div className="mx-auto max-w-4xl px-6 py-24">
+        <SectionHeading
+          eyebrow="FAQ"
+          title="Frequently Asked Questions"
+          description="Everything you need to know before using HireIQ."
+        />
 
-      <div className="mt-12 space-y-4">
-        {faqs.map((faq) => (
-          <FaqItem
-            key={faq.question}
-            question={faq.question}
-            answer={faq.answer}
-          />
-        ))}
+        <div className="mt-12 space-y-4">
+          {faqs.map((faq) => (
+            <FaqItem
+              key={faq.question}
+              question={faq.question}
+              answer={faq.answer}
+            />
+          ))}
+        </div>
       </div>
     </section>
   );
