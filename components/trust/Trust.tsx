@@ -28,6 +28,7 @@ export default function Trust() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-24">
       <SectionHeading
+        theme="dark"
         eyebrow="Why HireIQ"
         title="Built for modern engineering teams"
         description="Technical hiring should be accurate, fast, and consistent."

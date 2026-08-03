@@ -3,38 +3,42 @@ import SectionHeading from "@/components/ui/SectionHeading";
 
 const features = [
   {
-    title: "AI Resume Screening",
+    title: "Expert-Led Technical Interviews",
     description:
-      "Automatically evaluate resumes and identify the strongest candidates.",
+      "Experienced software engineers evaluate candidates through structured technical interviews instead of relying only on automated assessments.",
   },
   {
-    title: "Live Coding Interviews",
+    title: "Structured Engineering Evaluations",
     description:
-      "Conduct coding interviews with real-time collaboration and feedback.",
+      "Every interview follows a consistent evaluation framework with detailed feedback, scorecards, and hiring recommendations.",
   },
   {
-    title: "Candidate Analytics",
+    title: "Hiring Intelligence",
     description:
-      "Track interview performance and compare candidates with actionable insights.",
+      "Compare candidates, review interview insights, and make confident hiring decisions backed by real engineering expertise.",
   },
 ];
 
 export default function Features() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-24">
-      <SectionHeading
-        eyebrow="Features"
-        title="Everything you need to hire with confidence"
-        description="From resume screening to expert evaluations, HireIQ helps your team make faster and better hiring decisions."
-      />
-      <div className="mt-16 grid gap-6 md:grid-cols-3">
-        {features.map((feature) => (
-          <FeatureCard
-            key={feature.title}
-            title={feature.title}
-            description={feature.description}
-          />
-        ))}
+    <section id="features" className="bg-slate-950">
+      <div className="mx-auto max-w-6xl px-6 py-24">
+        <SectionHeading
+          theme="dark"
+          eyebrow="Why HireIQ"
+          title="Everything your engineering team needs to hire with confidence."
+          description="From expert-led interviews to structured technical evaluations, HireIQ helps engineering teams identify exceptional talent faster and more consistently."
+        />
+
+        <div className="mt-16 grid gap-8 md:grid-cols-3">
+          {features.map((feature) => (
+            <FeatureCard
+              key={feature.title}
+              title={feature.title}
+              description={feature.description}
+            />
+          ))}
+        </div>
       </div>
     </section>
   );
