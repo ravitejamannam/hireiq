@@ -7,12 +7,12 @@ export default function Hero() {
         Hire better developers with AI
       </h1>
 
-      <p className="mt-6 max-w-2xl text-lg leading-8 text-gray-600">
+      <p className="mt-6 max-w-2xl text-base leading-8 text-gray-600 md:text-lg">
         Screen candidates, run coding interviews, and evaluate technical skills
         faster.
       </p>
 
-      <div className="mt-10 flex gap-4">
+      <div className="mt-10 flex flex-col gap-4 sm:flex-row">
         <Button
           label="Get Started"
           variant="primary"
