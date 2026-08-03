@@ -13,7 +13,7 @@ export default function Button({
 }: ButtonProps) {
   const buttonStyles = {
     primary: "bg-slate-900 text-white hover:bg-slate-800",
-    secondary: "border border-slate-300 bg-white text-slate-900 hover:bg-slate-100",
+    secondary: "bg-white text-slate-900 hover:bg-slate-100",
   };
 
   return (
