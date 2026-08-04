@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 
+
+
+
 import AuthButton from "./AuthButton";
 import AuthInput from "./AuthInput";
 
@@ -13,7 +16,10 @@ export default function SignupForm() {
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
-  function handleSignup() {
+  function handleSignup(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
     let valid = true;
 
     setCompanyError("");
@@ -48,7 +54,7 @@ export default function SignupForm() {
   }
 
   return (
-    <div className="space-y-5">
+    <form className="space-y-5" onSubmit={handleSignup}>
       <AuthInput
         label="Company Name"
         placeholder="Acme Inc."
@@ -76,7 +82,7 @@ export default function SignupForm() {
         showToggle
       />
 
-      <AuthButton label="Create Account" onClick={handleSignup} />
+      <AuthButton label="Create Account" type="submit" />
 
       <div className="text-center text-sm text-zinc-600">
         Already have an account?{" "}
@@ -84,6 +90,6 @@ export default function SignupForm() {
           Sign In
         </a>
       </div>
-    </div>
+    </form>
   );
 }

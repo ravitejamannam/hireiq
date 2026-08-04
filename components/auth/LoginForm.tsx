@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import {  useState } from "react";
+
+
 
 import AuthButton from "./AuthButton";
 import AuthInput from "./AuthInput";
@@ -11,7 +13,10 @@ export default function LoginForm() {
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
-  function handleLogin() {
+  function handleLogin(
+    event:React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
     let valid = true;
 
     setEmailError("");
@@ -44,7 +49,7 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="space-y-5">
+    <form className="space-y-5" onSubmit={handleLogin}>
       <AuthInput
         label="Email"
         type="email"
@@ -64,7 +69,7 @@ export default function LoginForm() {
         showToggle
       />
 
-      <AuthButton label="Sign In" onClick={handleLogin} />
+      <AuthButton label="Sign In" type="submit" />
 
       <div className="flex justify-between text-sm">
         <a href="#" className="text-zinc-600 hover:text-black">
@@ -75,6 +80,6 @@ export default function LoginForm() {
           Create account
         </a>
       </div>
-    </div>
+    </form>
   );
 }
