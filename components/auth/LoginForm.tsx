@@ -61,6 +61,7 @@ export default function LoginForm() {
         value={password}
         onChange={setPassword}
         error={passwordError}
+        showToggle
       />
 
       <AuthButton label="Sign In" onClick={handleLogin} />

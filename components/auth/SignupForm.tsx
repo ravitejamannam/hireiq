@@ -73,6 +73,7 @@ export default function SignupForm() {
         value={password}
         onChange={setPassword}
         error={passwordError}
+        showToggle
       />
 
       <AuthButton label="Create Account" onClick={handleSignup} />
