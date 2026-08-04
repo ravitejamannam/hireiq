@@ -1,8 +1,20 @@
+"use client";
+
+import { useState } from "react";
+
 import AuthLayout from "@/components/auth/AuthLayout";
 import AuthInput from "@/components/auth/AuthInput";
 import AuthButton from "@/components/auth/AuthButton";
 
 export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  function handleLogin() {
+    console.log("Email:", email);
+    console.log("Password:", password);
+  }
+
   return (
     <AuthLayout
       title="Welcome back"
@@ -13,15 +25,21 @@ export default function LoginPage() {
           label="Email"
           type="email"
           placeholder="you@company.com"
+          value={email}
+          onChange={setEmail}
         />
 
         <AuthInput
           label="Password"
           type="password"
           placeholder="Enter your password"
+          value={password}
+          onChange={setPassword}
         />
 
-        <AuthButton label="Sign In" />
+        <div onClick={handleLogin}>
+          <AuthButton label="Sign In" />
+        </div>
 
         <div className="flex justify-between text-sm">
           <a
