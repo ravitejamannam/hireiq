@@ -1,8 +1,6 @@
 "use client";
 
-import {  useState } from "react";
-
-
+import { useState } from "react";
 
 import AuthButton from "./AuthButton";
 import AuthInput from "./AuthInput";
@@ -12,10 +10,9 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  function handleLogin(
-    event:React.FormEvent<HTMLFormElement>
-  ) {
+  async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     let valid = true;
 
@@ -43,9 +40,31 @@ export default function LoginForm() {
 
     if (!valid) return;
 
-    console.log(email);
+    setIsLoading(true);
 
-    console.log(password);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    const fakeResponse = {
+      success: email === "admin@hireiq.com" && password === "password123",
+      message: "Login successful",
+      user: {
+        id: 1,
+        email,
+      },
+      }
+
+    setIsLoading(false);
+    if (fakeResponse.success) {
+        alert("Welcome back! You have successfully logged in.");
+    } else {
+        alert("Invalid email or password. Please try again."); 
+    }
+
+    //console.log(fakeResponse);
+
+    //console.log(email);
+
+    //console.log(password);
   }
 
   return (
@@ -69,7 +88,7 @@ export default function LoginForm() {
         showToggle
       />
 
-      <AuthButton label="Sign In" type="submit" />
+      <AuthButton label="Sign In" type="submit" isLoading={isLoading}  />
 
       <div className="flex justify-between text-sm">
         <a href="#" className="text-zinc-600 hover:text-black">

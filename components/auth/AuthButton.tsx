@@ -2,17 +2,22 @@ type AuthButtonProps = {
   label: string;
   onClick?: () => void;
   type?: "button" | "submit";
+  isLoading?: boolean;
+  disabled?: boolean;
 };
 
 export default function AuthButton({
   label,
   onClick,
   type = "button",
+  isLoading,
+  disabled,
 }: AuthButtonProps) {
   return (
     <button
       type={type}
       onClick={onClick}
+      disabled={disabled || isLoading}
       className="
         w-full
         rounded-xl
@@ -26,9 +31,11 @@ export default function AuthButton({
         hover:bg-zinc-800
         hover:shadow-md
         active:scale-[0.98]
+        disabled:cursor-not-allowed
+        disabled:opacity-60
       "
     >
-      {label}
+      {isLoading ? "Signing In..." : label}
     </button>
   );
 }
