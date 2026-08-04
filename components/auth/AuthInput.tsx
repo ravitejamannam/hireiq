@@ -4,6 +4,7 @@ type AuthInputProps = {
   placeholder: string;
   value: string;
   onChange: (value: string) => void;
+  error?: string;
 };
 
 export default function AuthInput({
@@ -12,6 +13,7 @@ export default function AuthInput({
   placeholder,
   value,
   onChange,
+  error,
 }: AuthInputProps) {
   return (
     <div className="space-y-2">
@@ -39,6 +41,7 @@ export default function AuthInput({
           focus:border-black
         "
       />
+      {error && (<p className="mt-2 text-sm text-red-600">{error}</p>)}
     </div>
   );
 }

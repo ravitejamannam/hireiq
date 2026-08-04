@@ -8,10 +8,39 @@ import AuthInput from "./AuthInput";
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   function handleLogin() {
-    console.log("Email:", email);
-    console.log("Password:", password);
+    let valid = true;
+
+    setEmailError("");
+
+    setPasswordError("");
+
+    if (!email) {
+      setEmailError("Email is required.");
+
+      valid = false;
+    }
+
+    if (!password) {
+      setPasswordError("Password is required.");
+
+      valid = false;
+    }
+
+    if (password && password.length < 8) {
+      setPasswordError("Password must be at least 8 characters.");
+
+      valid = false;
+    }
+
+    if (!valid) return;
+
+    console.log(email);
+
+    console.log(password);
   }
 
   return (
@@ -22,6 +51,7 @@ export default function LoginForm() {
         placeholder="you@company.com"
         value={email}
         onChange={setEmail}
+        error={emailError}
       />
 
       <AuthInput
@@ -30,25 +60,17 @@ export default function LoginForm() {
         placeholder="Enter your password"
         value={password}
         onChange={setPassword}
+        error={passwordError}
       />
 
-      <AuthButton
-        label="Sign In"
-        onClick={handleLogin}
-      />
+      <AuthButton label="Sign In" onClick={handleLogin} />
 
       <div className="flex justify-between text-sm">
-        <a
-          href="#"
-          className="text-zinc-600 hover:text-black"
-        >
+        <a href="#" className="text-zinc-600 hover:text-black">
           Forgot password?
         </a>
 
-        <a
-          href="/signup"
-          className="font-medium text-black"
-        >
+        <a href="/signup" className="font-medium text-black">
           Create account
         </a>
       </div>
