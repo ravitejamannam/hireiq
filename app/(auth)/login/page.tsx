@@ -1,4 +1,5 @@
 import AuthLayout from "@/components/auth/AuthLayout";
+import AuthInput from "@/components/auth/AuthInput";
 
 export default function LoginPage() {
   return (
@@ -6,7 +7,19 @@ export default function LoginPage() {
       title="Welcome back"
       subtitle="Sign in to your HireIQ account."
     >
-      <p className="text-center text-zinc-500">Login Form Goes Here</p>
+      <div className="space-y-5">
+        <AuthInput
+          label="Email"
+          type="email"
+          placeholder="you@company.com"
+        />
+
+        <AuthInput
+          label="Password"
+          type="password"
+          placeholder="Enter your password"
+        />
+      </div>
     </AuthLayout>
   );
 }
