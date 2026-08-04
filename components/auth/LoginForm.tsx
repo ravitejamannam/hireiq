@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { useRouter } from "next/navigation";
+
 import AuthButton from "./AuthButton";
 import AuthInput from "./AuthInput";
 
@@ -11,6 +13,7 @@ export default function LoginForm() {
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,7 +58,7 @@ export default function LoginForm() {
 
     setIsLoading(false);
     if (fakeResponse.success) {
-        alert("Welcome back! You have successfully logged in.");
+        router.push("/dashboard");
     } else {
         alert("Invalid email or password. Please try again."); 
     }
