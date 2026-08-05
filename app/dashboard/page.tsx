@@ -52,19 +52,19 @@ export default function DashboardPage() {
         <div className="mt-6 space-y-4">
           <InterviewItem
             time="09:00 AM"
-            candidate="John Anderson"
+            candidate="Reddy"
             status="Scheduled"
           />
 
           <InterviewItem
             time="11:30 AM"
-            candidate="Sarah Chen"
+            candidate="Raviteja"
             status="In Progress"
           />
 
           <InterviewItem
             time="02:00 PM"
-            candidate="Michael Brown"
+            candidate="Prasanth"
             status="Scheduled"
           />
         </div>
