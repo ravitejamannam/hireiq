@@ -198,6 +198,7 @@ export default function CandidateForm({
       <div className="flex justify-end gap-3">
         <button
           type="button"
+          onClick={onCancel}
           className="
             rounded-lg
             border

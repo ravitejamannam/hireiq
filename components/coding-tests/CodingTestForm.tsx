@@ -1,6 +1,12 @@
 "use client";
 
-export default function CodingTestForm() {
+type CodingTestFormProps = {
+
+  onCancel: () => void;
+
+};
+
+export default function CodingTestForm({ onCancel }: CodingTestFormProps) {
   return (
     <form className="space-y-6">
       <input
@@ -31,7 +37,8 @@ export default function CodingTestForm() {
       <div className="flex justify-end gap-3">
         <button
           type="button"
-          className="rounded-lg border border-zinc-300 px-5 py-3"
+          onClick={onCancel}
+          className="rounded-lg border border-zinc-300 text-black px-5 py-3"
         >
           Cancel
         </button>

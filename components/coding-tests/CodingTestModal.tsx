@@ -29,7 +29,7 @@ export default function CodingTestModal({
           </button>
         </div>
 
-        <CodingTestForm />
+        <CodingTestForm onCancel={onClose} />
       </div>
     </div>
   );
