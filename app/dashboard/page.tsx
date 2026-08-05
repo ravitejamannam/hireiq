@@ -1,3 +1,4 @@
+
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import StatCard from "@/components/dashboard/StatCard";
 import ActivityItem from "@/components/dashboard/ActivityItem";
@@ -9,7 +10,7 @@ export default function DashboardPage() {
       <div>
         <h2 className="text-3xl font-bold text-black">Welcome back 👋</h2>
 
-        <p className="mt-2 text-zinc-600">Here's what's happening today.</p>
+        <p className="mt-2 text-zinc-600">Here&apos;s what&apos;s happening today.</p>
       </div>
 
       <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
