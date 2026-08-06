@@ -7,25 +7,125 @@ datasource db {
   provider = "postgresql"
 }
 
+enum CandidateStatus {
+  APPLIED
+  INTERVIEWING
+  OFFER
+  HIRED
+  REJECTED
+}
+
+enum InterviewResult {
+  PENDING
+  PASSED
+  FAILED
+  CANCELLED
+}
+
+enum InterviewType {
+  PHONE_SCREEN
+  TECHNICAL
+  SYSTEM_DESIGN
+  HR
+}
+
+enum CodingTestStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum Recommendation {
+  STRONG_HIRE
+  HIRE
+  NO_HIRE
+  STRONG_NO_HIRE
+}
+
 model Company {
   id        Int    @id @default(autoincrement())
   name      String
   industry  String
   employees Int
 
-  candidates Candidate[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  candidates Candidate[]
 }
 
-
 model Candidate {
-  id          Int    @id @default(autoincrement())
-  name        String
-  role        String
-  experience  String
-  status      String
+  id              Int             @id @default(autoincrement())
+  name            String
+  role            String
+  experienceYears Int
+  status          CandidateStatus
 
-  companyId   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id])
+  companyId Int
+
+  company     Company      @relation(fields: [companyId], references: [id])
+  interviews  Interview[]
+  codingTests CodingTest[]
+  report      Report?
+
+
+  @@index([companyId])
+}
+
+model Interview {
+  id          Int             @id @default(autoincrement())
+  type        InterviewType
+  interviewAt DateTime
+  result      InterviewResult
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  candidateId Int
+
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+  @@index([candidateId])
+}
+
+model CodingTest {
+  id Int @id @default(autoincrement())
+
+  title String
+
+  score Int
+
+  maxScore Int
+
+  status CodingTestStatus
+
+  takenAt DateTime
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  candidateId Int
+
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+  @@index([candidateId])
+}
+
+model Report {
+  id Int @id @default(autoincrement())
+
+  recommendation Recommendation
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  candidateId Int @unique
+
+  candidate Candidate @relation(fields: [candidateId], references: [id])
 }
