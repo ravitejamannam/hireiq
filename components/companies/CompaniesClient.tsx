@@ -26,7 +26,11 @@ export default function CompaniesClient({
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
 
   async function handleSaveCompany(
-    company: Omit<Company, "id" | "openRoles">,
+    company: {
+  name: string;
+  industry: string;
+  employees: number;
+}
   ) {
     if (editingCompany){
       await updateCompany(
@@ -122,7 +126,6 @@ export default function CompaniesClient({
               name={company.name}
               industry={company.industry}
               employees={company.employees}
-              openRoles={company.openRoles}
               onDelete={handleDeleteCompany}
               onEdit={handleEditCompany}
             />

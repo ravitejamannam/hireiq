@@ -3,7 +3,6 @@ type CompanyCardProps = {
   name: string;
   industry: string;
   employees: number;
-  openRoles: number;
   onDelete: (id: number) => void;
   onEdit: (id: number) => void;
 };
@@ -13,7 +12,6 @@ export default function CompanyCard({
   name,
   industry,
   employees,
-  openRoles,
   onDelete,
   onEdit,
 }: CompanyCardProps) {
@@ -26,9 +24,7 @@ export default function CompanyCard({
           <p className="mt-1 text-zinc-500">{industry}</p>
         </div>
 
-        <div className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-black">
-          {openRoles} Roles
-        </div>
+        
       </div>
 
       <div className="mt-8 border-t border-zinc-200 pt-4">

@@ -3,5 +3,4 @@ export type Company = {
   name: string;
   industry: string;
   employees: number;
-  openRoles: number;
 };

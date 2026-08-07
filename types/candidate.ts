@@ -6,11 +6,5 @@ export type Candidate = {
   role: string;
   experienceYears: number;
   status: CandidateStatus;
-
   companyId: number;
-
-  company: {
-    id: number;
-    name: string;
-  };
 };
