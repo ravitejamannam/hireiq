@@ -1,31 +1,40 @@
 "use client";
 
 import { useState } from "react";
+import type { CandidateStatus } from "@prisma/client";
+import type { Company } from "@/types/company";
 
 type CandidateFormData = {
   name: string;
   role: string;
-  experience: string;
-  status: string;
+  experienceYears: number;
+  status: CandidateStatus;
+  companyId: number;
 };
 
 type CandidateFormProps = {
   onCreate: (candidate: CandidateFormData) => void;
   onCancel: () => void;
+  companies: Company[];
+  initialValues?: CandidateFormData;
 };
 export default function CandidateForm({
   onCreate,
   onCancel,
+  companies,
+  initialValues,
 }: CandidateFormProps) {
-  const [name, setName] = useState("");
-  const [role, setRole] = useState("");
-  const [experience, setExperience] = useState("");
-  const [status, setStatus] = useState("");
+  const [name, setName] = useState(initialValues?.name ?? "");
+  const [role, setRole] = useState( initialValues?.role ?? "");
+  const [experienceYears, setExperienceYears] = useState( initialValues?.experienceYears.toString() ?? "");
+  const [status, setStatus] = useState( initialValues?.status ?? "");
+  const [companyId, setCompanyId] = useState( initialValues?.companyId.toString() ?? "");
 
   const [nameError, setNameError] = useState("");
   const [roleError, setRoleError] = useState("");
-  const [experienceError, setExperienceError] = useState("");
+  const [experienceYearsError, setExperienceYearsError] = useState("");
   const [statusError, setStatusError] = useState("");
+  const [companyIdError, setCompanyIdError] = useState("");
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,7 +43,7 @@ export default function CandidateForm({
 
     setNameError("");
     setRoleError("");
-    setExperienceError("");
+    setExperienceYearsError("");
     setStatusError("");
 
     if (!name.trim()) {
@@ -47,8 +56,8 @@ export default function CandidateForm({
       valid = false;
     }
 
-    if (!experience.trim()) {
-      setExperienceError("Experience is required.");
+    if (!experienceYears.trim()) {
+      setExperienceYearsError("Experience is required.");
       valid = false;
     }
 
@@ -57,23 +66,29 @@ export default function CandidateForm({
       valid = false;
     }
 
+    if (!companyId.trim()) {
+      setCompanyIdError("Company is required.");
+      valid = false;
+    }
+
     if (!valid) return;
 
     onCreate({
       name: name.trim(),
       role: role.trim(),
-      experience: experience.trim(),
-      status: status.trim(),
+      experienceYears: Number(experienceYears),
+      status: status as CandidateStatus,
+      companyId: Number(companyId),
     });
 
     setName("");
     setRole("");
-    setExperience("");
+    setExperienceYears("");
     setStatus("");
 
     setNameError("");
     setRoleError("");
-    setExperienceError("");
+    setExperienceYearsError("");
     setStatusError("");
   }
 
@@ -141,10 +156,10 @@ export default function CandidateForm({
         </label>
 
         <input
-          type="text"
-          placeholder="4 Years"
-          value={experience}
-          onChange={(event) => setExperience(event.target.value)}
+          type="number"
+          placeholder="4"
+          value={experienceYears}
+          onChange={(event) => setExperienceYears(event.target.value)}
           className="
             mt-2
             w-full
@@ -161,37 +176,76 @@ export default function CandidateForm({
             focus:border-black
           "
         />
-        {experienceError && (
-          <p className="mt-2 text-sm text-red-600">{experienceError}</p>
+        {experienceYearsError && (
+          <p className="mt-2 text-sm text-red-600">{experienceYearsError}</p>
         )}
       </div>
 
       <div>
         <label className="block text-sm font-medium text-black">Status</label>
 
-        <input
-          type="text"
-          placeholder="Interview"
+        <select
           value={status}
           onChange={(event) => setStatus(event.target.value)}
           className="
-            mt-2
-            w-full
-            rounded-lg
-            border
-            border-zinc-300
-            bg-white
-            px-4
-            py-3
-            text-black
-            placeholder:text-zinc-400
-            outline-none
-            transition
-            focus:border-black
-          "
-        />
+    mt-2
+    w-full
+    rounded-lg
+    border
+    border-zinc-300
+    bg-white
+    px-4
+    py-3
+    text-black
+    outline-none
+    transition
+    focus:border-black
+  "
+        >
+          <option value="">Select Status</option>
+          <option value="APPLIED">Applied</option>
+          <option value="INTERVIEWING">Interviewing</option>
+          <option value="OFFER">Offer</option>
+          <option value="HIRED">Hired</option>
+          <option value="REJECTED">Rejected</option>
+        </select>
         {statusError && (
           <p className="mt-2 text-sm text-red-600">{statusError}</p>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-black">Company</label>
+
+        <select
+          value={companyId}
+          onChange={(event) => setCompanyId(event.target.value)}
+          className="
+      mt-2
+      w-full
+      rounded-lg
+      border
+      border-zinc-300
+      bg-white
+      px-4
+      py-3
+      text-black
+      outline-none
+      transition
+      focus:border-black
+    "
+        >
+          <option value="">Select Company</option>
+
+          {companies.map((company) => (
+            <option key={company.id} value={company.id}>
+              {company.name}
+            </option>
+          ))}
+        </select>
+
+        {companyIdError && (
+          <p className="mt-2 text-sm text-red-600">{companyIdError}</p>
         )}
       </div>
 

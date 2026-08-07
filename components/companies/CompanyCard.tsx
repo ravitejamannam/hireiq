@@ -36,27 +36,24 @@ export default function CompanyCard({
 
         <p className="mt-1 text-2xl font-bold text-black">{employees}</p>
       </div>
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex justify-end gap-3">
         <button
           onClick={() => onEdit(id)}
           className="
       rounded-lg
       border
-      border-red-200
+      border-zinc-300
       px-4
       py-2
       text-sm
       font-medium
-      text-red-600
-      transition
-      hover:bg-red-50
+      text-black
+      hover:bg-zinc-100
     "
         >
           Edit
         </button>
-      </div>
 
-       <div className="mt-6 flex justify-end">
         <button
           onClick={() => onDelete(id)}
           className="

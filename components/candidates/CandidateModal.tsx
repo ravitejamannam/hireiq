@@ -1,24 +1,31 @@
 "use client";
 
 import CandidateForm from "@/components/candidates/CandidateForm";
+import type { CandidateStatus } from "@prisma/client";
+import type { Company } from "@/types/company";
 
 type CandidateFormData = {
   name: string;
   role: string;
-  experience: string;
-  status: string;
+  experienceYears: number;
+  status: CandidateStatus;
+  companyId: number;
 };
 
 type CandidateModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onCreate: (candidate: CandidateFormData) => void;
+  companies: Company[];
+  initialValues?: CandidateFormData;
 };
 
 export default function CandidateModal({
   isOpen,
   onClose,
   onCreate,
+  companies,
+  initialValues,
 }: CandidateModalProps) {
   if (!isOpen) return null;
 
@@ -38,7 +45,7 @@ export default function CandidateModal({
           </button>
         </div>
 
-        <CandidateForm onCreate={onCreate} onCancel={onClose}  />
+        <CandidateForm onCreate={onCreate} onCancel={onClose} companies={companies} initialValues={initialValues} />
       </div>
     </div>
   );
