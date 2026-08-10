@@ -101,7 +101,6 @@ model Candidate {
 
   company      Company        @relation(fields: [companyId], references: [id])
   applications Application[]
-  interviews   Interview[]
   codingTests  CodingTest[]
   report       Report?
 
@@ -120,7 +119,8 @@ model Application {
   jobId       Int
 
   candidate Candidate @relation(fields: [candidateId], references: [id])
-  job       Job       @relation(fields: [jobId], references: [id])
+  job        Job         @relation(fields: [jobId], references: [id])
+  interviews Interview[]
 
   @@unique([candidateId, jobId])
   @@index([candidateId])
@@ -136,10 +136,10 @@ model Interview {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  candidateId Int
+  applicationId Int
 
-  candidate Candidate @relation(fields: [candidateId], references: [id])
-  @@index([candidateId])
+  application Application @relation(fields: [applicationId], references: [id])
+  @@index([applicationId])
 }
 
 model CodingTest {
