@@ -43,6 +43,12 @@ enum Recommendation {
   STRONG_NO_HIRE
 }
 
+enum JobStatus {
+  OPEN
+  CLOSED
+  FILLED
+}
+
 model Company {
   id        Int    @id @default(autoincrement())
   name      String
@@ -53,6 +59,22 @@ model Company {
   updatedAt DateTime @updatedAt
 
   candidates Candidate[]
+  jobs       Job[]
+}
+
+model Job {
+  id     Int       @id @default(autoincrement())
+  title  String
+  status JobStatus @default(OPEN)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId Int
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, status])
 }
 
 model Candidate {
