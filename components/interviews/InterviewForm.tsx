@@ -1,119 +1,198 @@
 "use client";
 
 import { useState } from "react";
+import type { InterviewResult, InterviewType } from "@prisma/client";
+import type { getApplications } from "@/lib/repositories/application-repository";
 
-type InterviewFormData = {
-  candidate: string;
-  company: string;
-  interviewer: string;
-  date: string;
-  time: string;
-  status: string;
+type Application = Awaited<ReturnType<typeof getApplications>>[number];
+
+export type InterviewFormData = {
+  applicationId: number;
+  type: InterviewType;
+  interviewAt: Date;
+  result: InterviewResult;
 };
 
 type InterviewFormProps = {
   onCreate: (interview: InterviewFormData) => void;
   onCancel: () => void;
+  applications: Application[];
+  initialValues?: {
+    applicationId: number;
+    type: InterviewType;
+    interviewAt: Date;
+    result: InterviewResult;
+  };
 };
+
+function formatDateTimeLocalValue(value: Date) {
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
 
 export default function InterviewForm({
   onCreate,
   onCancel,
+  applications,
+  initialValues,
 }: InterviewFormProps) {
-  const [candidate, setCandidate] = useState("");
-  const [company, setCompany] = useState("");
-  const [interviewer, setInterviewer] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [status, setStatus] = useState("");
+  const [applicationId, setApplicationId] = useState(
+    initialValues?.applicationId.toString() ?? "",
+  );
+  const [type, setType] = useState(initialValues?.type ?? "");
+  const [interviewAt, setInterviewAt] = useState(
+    initialValues ? formatDateTimeLocalValue(initialValues.interviewAt) : "",
+  );
+  const [result, setResult] = useState(initialValues?.result ?? "");
 
-  const [candidateError, setCandidateError] = useState("");
-  const [companyError, setCompanyError] = useState("");
-  const [interviewerError, setInterviewerError] = useState("");
-  const [dateError, setDateError] = useState("");
-  const [timeError, setTimeError] = useState("");
-  const [statusError, setStatusError] = useState("");
+  const [applicationError, setApplicationError] = useState("");
+  const [typeError, setTypeError] = useState("");
+  const [interviewAtError, setInterviewAtError] = useState("");
+  const [resultError, setResultError] = useState("");
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     let valid = true;
 
-    setCandidateError("");
-    setCompanyError("");
-    setInterviewerError("");
-    setDateError("");
-    setTimeError("");
-    setStatusError("");
+    setApplicationError("");
+    setTypeError("");
+    setInterviewAtError("");
+    setResultError("");
 
-    if (!candidate.trim()) {
-      setCandidateError("Candidate is required.");
+    if (!applicationId.trim()) {
+      setApplicationError("Application is required.");
       valid = false;
     }
 
-    if (!company.trim()) {
-      setCompanyError("Company is required.");
+    if (!type.trim()) {
+      setTypeError("Interview type is required.");
       valid = false;
     }
 
-    if (!interviewer.trim()) {
-      setInterviewerError("Interviewer is required.");
+    if (!interviewAt) {
+      setInterviewAtError("Interview date and time are required.");
       valid = false;
     }
 
-    if (!date) {
-      setDateError("Date is required.");
-      valid = false;
-    }
-
-    if (!time) {
-      setTimeError("Time is required.");
-      valid = false;
-    }
-
-    if (!status.trim()) {
-      setStatusError("Status is required.");
+    if (!result.trim()) {
+      setResultError("Result is required.");
       valid = false;
     }
 
     if (!valid) return;
 
     onCreate({
-      candidate: candidate.trim(),
-      company: company.trim(),
-      interviewer: interviewer.trim(),
-      date,
-      time,
-      status: status.trim(),
+      applicationId: Number(applicationId),
+      type: type as InterviewType,
+      interviewAt: new Date(interviewAt),
+      result: result as InterviewResult,
     });
-
-    setCandidate("");
-    setCompany("");
-    setInterviewer("");
-    setDate("");
-    setTime("");
-    setStatus("");
-
-    setCandidateError("");
-    setCompanyError("");
-    setInterviewerError("");
-    setDateError("");
-    setTimeError("");
-    setStatusError("");
   }
 
   return (
     <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
       <div>
-        <label className="block text-sm font-medium text-black">
-          Candidate
+        <label
+          htmlFor="interview-application"
+          className="block text-sm font-medium text-black"
+        >
+          Application
+        </label>
+
+        <select
+          id="interview-application"
+          value={applicationId}
+          onChange={(event) => setApplicationId(event.target.value)}
+          className="
+            mt-2
+            w-full
+            rounded-lg
+            border
+            border-zinc-300
+            bg-white
+            px-4
+            py-3
+            text-black
+            placeholder:text-zinc-400
+            outline-none
+            transition
+            focus:border-black
+          "
+        >
+          <option value="">Select Application</option>
+          {applications.map((application) => (
+            <option key={application.id} value={application.id}>
+              {application.candidate.name} - {application.job.title} -{" "}
+              {application.job.company.name}
+            </option>
+          ))}
+        </select>
+
+        {applicationError && (
+          <p className="mt-2 text-sm text-red-600">{applicationError}</p>
+        )}
+      </div>
+
+      <div>
+        <label
+          htmlFor="interview-type"
+          className="block text-sm font-medium text-black"
+        >
+          Interview Type
+        </label>
+
+        <select
+          id="interview-type"
+          value={type}
+          onChange={(event) => setType(event.target.value as InterviewType)}
+          className="
+            mt-2
+            w-full
+            rounded-lg
+            border
+            border-zinc-300
+            bg-white
+            px-4
+            py-3
+            text-black
+            placeholder:text-zinc-400
+            outline-none
+            transition
+            focus:border-black
+          "
+        >
+          <option value="">Select Interview Type</option>
+          <option value="PHONE_SCREEN">Phone Screen</option>
+          <option value="TECHNICAL">Technical</option>
+          <option value="SYSTEM_DESIGN">System Design</option>
+          <option value="HR">HR</option>
+        </select>
+
+        {typeError && (
+          <p className="mt-2 text-sm text-red-600">{typeError}</p>
+        )}
+      </div>
+
+      <div>
+        <label
+          htmlFor="interview-date-time"
+          className="block text-sm font-medium text-black"
+        >
+          Interview Date & Time
         </label>
 
         <input
-          type="text"
-          placeholder="Reddy"
-          value={candidate}
-          onChange={(event) => setCandidate(event.target.value)}
+          id="interview-date-time"
+          type="datetime-local"
+          value={interviewAt}
+          onChange={(event) => setInterviewAt(event.target.value)}
           className="
             mt-2
             w-full
@@ -131,51 +210,23 @@ export default function InterviewForm({
           "
         />
 
-        {candidateError && (
-          <p className="mt-2 text-sm text-red-600">{candidateError}</p>
+        {interviewAtError && (
+          <p className="mt-2 text-sm text-red-600">{interviewAtError}</p>
         )}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-black">Company</label>
-
-        <input
-          type="text"
-          placeholder="Google"
-          value={company}
-          onChange={(event) => setCompany(event.target.value)}
-          className="
-            mt-2
-            w-full
-            rounded-lg
-            border
-            border-zinc-300
-            bg-white
-            px-4
-            py-3
-            text-black
-            placeholder:text-zinc-400
-            outline-none
-            transition
-            focus:border-black
-          "
-        />
-
-        {companyError && (
-          <p className="mt-2 text-sm text-red-600">{companyError}</p>
-        )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-black">
-          Interviewer
+        <label
+          htmlFor="interview-result"
+          className="block text-sm font-medium text-black"
+        >
+          Result
         </label>
 
-        <input
-          type="text"
-          placeholder="Alice Johnson"
-          value={interviewer}
-          onChange={(event) => setInterviewer(event.target.value)}
+        <select
+          id="interview-result"
+          value={result}
+          onChange={(event) => setResult(event.target.value as InterviewResult)}
           className="
             mt-2
             w-full
@@ -191,92 +242,16 @@ export default function InterviewForm({
             transition
             focus:border-black
           "
-        />
+        >
+          <option value="">Select Result</option>
+          <option value="PENDING">Pending</option>
+          <option value="PASSED">Passed</option>
+          <option value="FAILED">Failed</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
 
-        {interviewerError && (
-          <p className="mt-2 text-sm text-red-600">{interviewerError}</p>
-        )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-black">Date</label>
-
-        <input
-          type="date"
-          value={date}
-          onChange={(event) => setDate(event.target.value)}
-          className="
-            mt-2
-            w-full
-            rounded-lg
-            border
-            border-zinc-300
-            bg-white
-            px-4
-            py-3
-            text-black
-            outline-none
-            transition
-            focus:border-black
-          "
-        />
-
-        {dateError && <p className="mt-2 text-sm text-red-600">{dateError}</p>}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-black">Time</label>
-
-        <input
-          type="time"
-          value={time}
-          onChange={(event) => setTime(event.target.value)}
-          className="
-            mt-2
-            w-full
-            rounded-lg
-            border
-            border-zinc-300
-            bg-white
-            px-4
-            py-3
-            text-black
-            outline-none
-            transition
-            focus:border-black
-          "
-        />
-
-        {timeError && <p className="mt-2 text-sm text-red-600">{timeError}</p>}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-black">Status</label>
-
-        <input
-          type="text"
-          placeholder="Scheduled"
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
-          className="
-            mt-2
-            w-full
-            rounded-lg
-            border
-            border-zinc-300
-            bg-white
-            px-4
-            py-3
-            text-black
-            placeholder:text-zinc-400
-            outline-none
-            transition
-            focus:border-black
-          "
-        />
-
-        {statusError && (
-          <p className="mt-2 text-sm text-red-600">{statusError}</p>
+        {resultError && (
+          <p className="mt-2 text-sm text-red-600">{resultError}</p>
         )}
       </div>
 
@@ -313,7 +288,7 @@ export default function InterviewForm({
             hover:bg-zinc-800
           "
         >
-          Schedule Interview
+          {initialValues ? "Save Changes" : "Create Interview"}
         </button>
       </div>
     </form>

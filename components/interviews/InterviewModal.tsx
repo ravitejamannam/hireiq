@@ -1,28 +1,25 @@
 "use client";
 
-
-
 import InterviewForm from "@/components/interviews/InterviewForm";
+import type { InterviewFormData } from "@/components/interviews/InterviewForm";
+import type { getApplications } from "@/lib/repositories/application-repository";
 
-type InterviewFormData = {
-  candidate: string;
-  company: string;
-  interviewer: string;
-  date: string;
-  time: string;
-  status: string;
-};
+type Application = Awaited<ReturnType<typeof getApplications>>[number];
 
 type InterviewModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onCreate: (interview: InterviewFormData) => void;
+  applications: Application[];
+  initialValues?: InterviewFormData;
 };
 
 export default function InterviewModal({
   isOpen,
   onClose,
   onCreate,
+  applications,
+  initialValues,
 }: InterviewModalProps) {
   if (!isOpen) return null;
 
@@ -31,7 +28,7 @@ export default function InterviewModal({
       <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-2xl">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-black">
-            Schedule Interview
+            {initialValues ? "Edit Interview" : "Add Interview"}
           </h2>
 
           <button
@@ -42,8 +39,12 @@ export default function InterviewModal({
           </button>
         </div>
 
-        <InterviewForm 
-          onCreate={onCreate} onCancel={onClose}/>
+        <InterviewForm
+          onCreate={onCreate}
+          onCancel={onClose}
+          applications={applications}
+          initialValues={initialValues}
+        />
       </div>
     </div>
   );
