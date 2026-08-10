@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Building2,
   Briefcase,
+  ClipboardList,
   Users,
   Calendar,
   Code2,
@@ -30,6 +31,11 @@ const links = [
     icon: Briefcase,
     label: "Jobs",
     href: "/dashboard/jobs",
+  },
+  {
+    icon: ClipboardList,
+    label: "Applications",
+    href: "/dashboard/applications",
   },
   {
     icon: Users,

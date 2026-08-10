@@ -49,6 +49,15 @@ enum JobStatus {
   FILLED
 }
 
+enum ApplicationStatus {
+  APPLIED
+  SCREENING
+  INTERVIEWING
+  OFFER
+  HIRED
+  REJECTED
+}
+
 model Company {
   id        Int    @id @default(autoincrement())
   name      String
@@ -72,7 +81,8 @@ model Job {
 
   companyId Int
 
-  company Company @relation(fields: [companyId], references: [id])
+  company      Company        @relation(fields: [companyId], references: [id])
+  applications Application[]
 
   @@index([companyId, status])
 }
@@ -89,13 +99,32 @@ model Candidate {
 
   companyId Int
 
-  company     Company      @relation(fields: [companyId], references: [id])
-  interviews  Interview[]
-  codingTests CodingTest[]
-  report      Report?
-
+  company      Company        @relation(fields: [companyId], references: [id])
+  applications Application[]
+  interviews   Interview[]
+  codingTests  CodingTest[]
+  report       Report?
 
   @@index([companyId])
+}
+
+model Application {
+  id Int @id @default(autoincrement())
+
+  status ApplicationStatus @default(APPLIED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  candidateId Int
+  jobId       Int
+
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+  job       Job       @relation(fields: [jobId], references: [id])
+
+  @@unique([candidateId, jobId])
+  @@index([candidateId])
+  @@index([jobId, status])
 }
 
 model Interview {
