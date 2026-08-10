@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Building2,
+  Briefcase,
   Users,
   Calendar,
   Code2,
@@ -24,6 +25,11 @@ const links = [
     icon: Building2,
     label: "Companies",
     href: "/dashboard/companies",
+  },
+  {
+    icon: Briefcase,
+    label: "Jobs",
+    href: "/dashboard/jobs",
   },
   {
     icon: Users,
