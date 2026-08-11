@@ -12,6 +12,7 @@ import {
   requireConfiguredSourcingDatabaseSource,
   assertSourcingAccessCanBeRecorded,
   assertShortlistingCanBeCompleted,
+  validateJobRequirementCompletion,
   type JobRequirementInput,
   JobValidationError,
 } from "@/lib/validation/job-validation";
@@ -193,6 +194,67 @@ export async function assignInterviewerToJob(
 
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard/interviewers");
+
+  return job;
+}
+
+export async function completeJobRequirement(jobId: number) {
+  const validatedJobId = validateJobId(jobId);
+
+  const existingJob = await prisma.job.findUnique({
+    where: {
+      id: validatedJobId,
+    },
+    select: {
+      id: true,
+      title: true,
+      requirementLifecycle: true,
+      clientCompletedAt: true,
+      roleCategory: true,
+      experienceRange: true,
+      location: true,
+      compensationRange: true,
+      targetHireDate: true,
+      numberOfPositions: true,
+      mustHaveRequirements: true,
+      niceToHaveRequirements: true,
+      jobDescription: true,
+      evaluationCriteria: true,
+      primarySkills: true,
+    },
+  });
+
+  if (!existingJob) {
+    throw new JobValidationError("Job not found.");
+  }
+
+  if (existingJob.requirementLifecycle === "REQUIREMENT_POSTED") {
+    throw new JobValidationError("Requirement is already posted.");
+  }
+
+  if (existingJob.requirementLifecycle !== "CLIENT_NOTIFIED") {
+    throw new JobValidationError(
+      "Requirement must be in CLIENT_NOTIFIED state.",
+    );
+  }
+
+  validateJobRequirementCompletion(existingJob);
+
+  const job = await prisma.job.update({
+    where: {
+      id: validatedJobId,
+    },
+    data: {
+      clientCompletedAt: new Date(),
+      requirementLifecycle: "REQUIREMENT_POSTED",
+    },
+  });
+
+  try {
+    revalidatePath("/dashboard/jobs");
+  } catch {
+    // revalidatePath requires a Next.js request context
+  }
 
   return job;
 }

@@ -78,8 +78,10 @@ type JobFormProps = {
   isSaving?: boolean;
   isRecordingAccess?: boolean;
   isCompletingShortlisting?: boolean;
+  isPostingRequirement?: boolean;
   onMarkAccessReceived?: () => void;
   onCompleteShortlisting?: () => void;
+  onCompleteRequirement?: () => void;
 };
 
 function formatDateInputValue(value: Date | string | null | undefined) {
@@ -137,8 +139,10 @@ export default function JobForm({
   isSaving = false,
   isRecordingAccess = false,
   isCompletingShortlisting = false,
+  isPostingRequirement = false,
   onMarkAccessReceived,
   onCompleteShortlisting,
+  onCompleteRequirement,
 }: JobFormProps) {
   const [title, setTitle] = useState(initialValues?.title ?? "");
   const [status, setStatus] = useState<JobStatus | "">(
@@ -696,6 +700,36 @@ export default function JobForm({
               Lifecycle changes use the controlled stage action on the
               requirement card.
             </p>
+
+            {initialValues && (
+              <div className="mt-4 flex flex-wrap gap-3">
+                {currentRequirementLifecycle === "CLIENT_NOTIFIED" &&
+                  onCompleteRequirement && (
+                    <button
+                      type="button"
+                      onClick={onCompleteRequirement}
+                      disabled={isPostingRequirement || isSaving}
+                      className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isPostingRequirement
+                        ? "Posting..."
+                        : "Post Requirement"}
+                    </button>
+                  )}
+
+                {currentRequirementLifecycle === "REQUIREMENT_POSTED" && (
+                  <span className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
+                    Requirement Posted
+                  </span>
+                )}
+
+                {initialValues.clientCompletedAt && (
+                  <span className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700">
+                    Client completed recorded
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div>

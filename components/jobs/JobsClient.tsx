@@ -10,6 +10,7 @@ import type { Company } from "@/types/company";
 import type { JobFormData } from "@/components/jobs/JobForm";
 import {
   assignInterviewerToJob,
+  completeJobRequirement,
   completeJobShortlisting,
   createJob,
   deleteJob,
@@ -53,6 +54,9 @@ export default function JobsClient({
   >(null);
   const [completingShortlistingJobId, setCompletingShortlistingJobId] =
     useState<number | null>(null);
+  const [postingRequirementJobId, setPostingRequirementJobId] = useState<
+    number | null
+  >(null);
   const [search, setSearch] = useState("");
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [actionError, setActionError] = useState("");
@@ -134,6 +138,20 @@ export default function JobsClient({
       setActionError(getErrorMessage(error));
     } finally {
       setRecordingAccessJobId(null);
+    }
+  }
+
+  async function handleCompleteRequirement(jobId: number) {
+    setActionError("");
+    setPostingRequirementJobId(jobId);
+
+    try {
+      await completeJobRequirement(jobId);
+      router.refresh();
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setPostingRequirementJobId(null);
     }
   }
 
@@ -279,14 +297,17 @@ export default function JobsClient({
               assignedInterviewerId={job.assignedInterviewerId}
               assignedInterviewer={job.assignedInterviewer}
               interviewers={interviewers}
+              clientCompletedAt={job.clientCompletedAt}
               isAdvancing={advancingJobId === job.id}
               isAssigning={assigningJobId === job.id}
               isRecordingAccess={recordingAccessJobId === job.id}
               isCompletingShortlisting={completingShortlistingJobId === job.id}
+              isPostingRequirement={postingRequirementJobId === job.id}
               onAdvanceLifecycle={handleAdvanceLifecycle}
               onAssignInterviewer={handleAssignInterviewer}
               onMarkAccessReceived={handleMarkAccessReceived}
               onCompleteShortlisting={handleCompleteShortlisting}
+              onCompleteRequirement={handleCompleteRequirement}
               onEdit={handleEditJob}
               onDelete={handleDeleteJob}
             />
@@ -315,6 +336,11 @@ export default function JobsClient({
             ? completingShortlistingJobId === activeEditingJob.id
             : false
         }
+        isPostingRequirement={
+          activeEditingJob
+            ? postingRequirementJobId === activeEditingJob.id
+            : false
+        }
         onMarkAccessReceived={
           activeEditingJob
             ? () => handleMarkAccessReceived(activeEditingJob.id)
@@ -323,6 +349,11 @@ export default function JobsClient({
         onCompleteShortlisting={
           activeEditingJob
             ? () => handleCompleteShortlisting(activeEditingJob.id)
+            : undefined
+        }
+        onCompleteRequirement={
+          activeEditingJob
+            ? () => handleCompleteRequirement(activeEditingJob.id)
             : undefined
         }
         initialValues={

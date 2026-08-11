@@ -34,14 +34,17 @@ type JobCardProps = {
   assignedInterviewerId: number | null;
   assignedInterviewer: InterviewerOption | null;
   interviewers: InterviewerOption[];
+  clientCompletedAt: Date | null;
   isAdvancing?: boolean;
   isAssigning?: boolean;
   isRecordingAccess?: boolean;
   isCompletingShortlisting?: boolean;
+  isPostingRequirement?: boolean;
   onAdvanceLifecycle: (id: number, nextLifecycle: RequirementLifecycle) => void;
   onAssignInterviewer: (jobId: number, interviewerId: number | null) => void;
   onMarkAccessReceived: (jobId: number) => void;
   onCompleteShortlisting: (jobId: number) => void;
+  onCompleteRequirement: (jobId: number) => void;
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
 };
@@ -65,7 +68,7 @@ const nextRequirementLifecycle: Partial<
   Record<RequirementLifecycle, RequirementLifecycle>
 > = {
   REQUIREMENT_DRAFTED: "CLIENT_NOTIFIED",
-  CLIENT_NOTIFIED: "REQUIREMENT_POSTED",
+  // CLIENT_NOTIFIED → REQUIREMENT_POSTED happens via completeJobRequirement
   REQUIREMENT_POSTED: "INTERVIEWER_NOTIFIED",
   // INTERVIEWER_NOTIFIED → SOURCING_SHORTLISTING happens via mark access received
 };
@@ -163,14 +166,17 @@ export default function JobCard({
   assignedInterviewerId,
   assignedInterviewer,
   interviewers,
+  clientCompletedAt,
   isAdvancing = false,
   isAssigning = false,
   isRecordingAccess = false,
   isCompletingShortlisting = false,
+  isPostingRequirement = false,
   onAdvanceLifecycle,
   onAssignInterviewer,
   onMarkAccessReceived,
   onCompleteShortlisting,
+  onCompleteRequirement,
   onEdit,
   onDelete,
 }: JobCardProps) {
@@ -180,6 +186,7 @@ export default function JobCard({
     shortlistingCompletedAt,
     shortlistingDueAt,
   });
+  const canCompleteRequirement = requirementLifecycle === "CLIENT_NOTIFIED";
   const canMarkAccessReceived =
     requirementLifecycle === "INTERVIEWER_NOTIFIED" &&
     Boolean(sourcingDatabaseSource);
@@ -231,6 +238,18 @@ export default function JobCard({
           <div>
             <dt className="font-medium text-black">Positions</dt>
             <dd className="mt-1">{numberOfPositions}</dd>
+          </div>
+        )}
+        {requirementLifecycle === "REQUIREMENT_POSTED" && (
+          <div>
+            <dt className="font-medium text-black">Requirement Posted</dt>
+            <dd className="mt-1">Requirement Posted</dd>
+          </div>
+        )}
+        {clientCompletedAt && (
+          <div>
+            <dt className="font-medium text-black">Client completed</dt>
+            <dd className="mt-1">{formatJobDateTime(clientCompletedAt)}</dd>
           </div>
         )}
       </dl>
@@ -323,6 +342,23 @@ export default function JobCard({
                 ? "Moving..."
                 : `Move to ${requirementLifecycleLabels[nextLifecycle]}`}
             </button>
+          )}
+
+          {canCompleteRequirement && (
+            <button
+              type="button"
+              onClick={() => onCompleteRequirement(id)}
+              disabled={isPostingRequirement}
+              className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isPostingRequirement ? "Posting..." : "Post Requirement"}
+            </button>
+          )}
+
+          {requirementLifecycle === "REQUIREMENT_POSTED" && (
+            <span className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
+              Requirement Posted
+            </span>
           )}
 
           {canMarkAccessReceived && (

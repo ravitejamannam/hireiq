@@ -14,8 +14,10 @@ type JobModalProps = {
   isSaving?: boolean;
   isRecordingAccess?: boolean;
   isCompletingShortlisting?: boolean;
+  isPostingRequirement?: boolean;
   onMarkAccessReceived?: () => void;
   onCompleteShortlisting?: () => void;
+  onCompleteRequirement?: () => void;
 };
 
 export default function JobModal({
@@ -28,8 +30,10 @@ export default function JobModal({
   isSaving,
   isRecordingAccess,
   isCompletingShortlisting,
+  isPostingRequirement,
   onMarkAccessReceived,
   onCompleteShortlisting,
+  onCompleteRequirement,
 }: JobModalProps) {
   if (!isOpen) return null;
 
@@ -61,6 +65,7 @@ export default function JobModal({
             initialValues
               ? [
                   initialValues.requirementLifecycle,
+                  initialValues.clientCompletedAt?.toString() ?? "not-completed",
                   initialValues.sourcingAccessReceivedAt?.toString() ?? "no-access",
                   initialValues.shortlistingCompletedAt?.toString() ??
                     "incomplete",
@@ -75,8 +80,10 @@ export default function JobModal({
           isSaving={isSaving}
           isRecordingAccess={isRecordingAccess}
           isCompletingShortlisting={isCompletingShortlisting}
+          isPostingRequirement={isPostingRequirement}
           onMarkAccessReceived={onMarkAccessReceived}
           onCompleteShortlisting={onCompleteShortlisting}
+          onCompleteRequirement={onCompleteRequirement}
         />
       </div>
     </div>
