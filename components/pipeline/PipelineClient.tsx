@@ -1,0 +1,303 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { ApplicationPipelineStatus } from "@prisma/client";
+
+import {
+  transitionApplicationStatus,
+} from "@/app/actions/application-actions";
+import {
+  APPLICATION_PIPELINE_STATUS_OPTIONS,
+  getApplicationPipelineStatusLabel,
+  getApplicationSourceLabel,
+} from "@/components/applications/ApplicationForm";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import PipelineCard from "@/components/pipeline/PipelineCard";
+import type { getApplications } from "@/lib/repositories/application-repository";
+
+type Application = Awaited<ReturnType<typeof getApplications>>[number];
+type StatusFilter = "ALL" | ApplicationPipelineStatus;
+
+type PipelineClientProps = {
+  initialApplications: Application[];
+};
+
+const PIPELINE_COLUMNS: ApplicationPipelineStatus[] = [
+  ApplicationPipelineStatus.CV_POOL,
+  ApplicationPipelineStatus.EXPERT_REVIEW,
+  ApplicationPipelineStatus.TECH_EVALUATION,
+  ApplicationPipelineStatus.SHORTLISTED,
+  ApplicationPipelineStatus.SELECTED,
+  ApplicationPipelineStatus.HIRED,
+  ApplicationPipelineStatus.REJECTED,
+];
+
+const APPLICATION_STATUS_TRANSITIONS: Record<
+  ApplicationPipelineStatus,
+  ApplicationPipelineStatus[]
+> = {
+  [ApplicationPipelineStatus.CV_POOL]: [
+    ApplicationPipelineStatus.EXPERT_REVIEW,
+    ApplicationPipelineStatus.REJECTED,
+  ],
+  [ApplicationPipelineStatus.EXPERT_REVIEW]: [
+    ApplicationPipelineStatus.TECH_EVALUATION,
+    ApplicationPipelineStatus.REJECTED,
+  ],
+  [ApplicationPipelineStatus.TECH_EVALUATION]: [
+    ApplicationPipelineStatus.SHORTLISTED,
+    ApplicationPipelineStatus.REJECTED,
+  ],
+  [ApplicationPipelineStatus.SHORTLISTED]: [
+    ApplicationPipelineStatus.SELECTED,
+    ApplicationPipelineStatus.REJECTED,
+  ],
+  [ApplicationPipelineStatus.SELECTED]: [ApplicationPipelineStatus.HIRED],
+  [ApplicationPipelineStatus.REJECTED]: [],
+  [ApplicationPipelineStatus.HIRED]: [],
+};
+
+function getValidApplicationStatusTransitions(
+  currentStatus: ApplicationPipelineStatus,
+) {
+  return APPLICATION_STATUS_TRANSITIONS[currentStatus] ?? [];
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : "Something went wrong. Please try again.";
+}
+
+function getMoveLabel(status: ApplicationPipelineStatus) {
+  if (status === ApplicationPipelineStatus.REJECTED) {
+    return "Reject";
+  }
+
+  return `Move to ${getApplicationPipelineStatusLabel(status)}`;
+}
+
+export default function PipelineClient({
+  initialApplications,
+}: PipelineClientProps) {
+  const router = useRouter();
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [actionError, setActionError] = useState("");
+  const [movingApplicationId, setMovingApplicationId] = useState<number | null>(
+    null,
+  );
+
+  async function handleMove(
+    id: number,
+    nextStatus: ApplicationPipelineStatus,
+  ) {
+    if (movingApplicationId !== null) return;
+
+    setActionError("");
+    setMovingApplicationId(id);
+
+    try {
+      await transitionApplicationStatus(id, nextStatus);
+      router.refresh();
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setMovingApplicationId(null);
+    }
+  }
+
+  const filteredApplications = initialApplications.filter((application) => {
+    if (statusFilter !== "ALL" && application.status !== statusFilter) {
+      return false;
+    }
+
+    const query = search.trim().toLowerCase();
+
+    if (!query) return true;
+
+    const searchableValues = [
+      application.candidate.name,
+      application.candidate.role,
+      application.candidate.currentEmployer,
+      application.candidate.location,
+      application.candidate.skills,
+      application.job.title,
+      application.job.company.name,
+      application.source,
+      getApplicationSourceLabel(application.source),
+      application.status,
+      getApplicationPipelineStatusLabel(application.status),
+    ];
+
+    return searchableValues.some((value) =>
+      (value ?? "").toLowerCase().includes(query),
+    );
+  });
+
+  const applicationsByStatus = PIPELINE_COLUMNS.reduce(
+    (grouped, status) => {
+      grouped[status] = filteredApplications.filter(
+        (application) => application.status === status,
+      );
+      return grouped;
+    },
+    {} as Record<ApplicationPipelineStatus, Application[]>,
+  );
+
+  const visibleColumns =
+    statusFilter === "ALL"
+      ? PIPELINE_COLUMNS
+      : PIPELINE_COLUMNS.filter((status) => status === statusFilter);
+
+  return (
+    <DashboardLayout>
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-black">Pipeline</h1>
+          <p className="mt-2 text-zinc-600">
+            Move applications through CV Pool, Expert Review, Tech Evaluation,
+            Shortlisted, Selected, Hired, and Rejected.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <label htmlFor="pipeline-search" className="sr-only">
+          Search pipeline applications
+        </label>
+        <input
+          id="pipeline-search"
+          type="text"
+          placeholder="Search by candidate, role, employer, location, skills, job, company, source, or status..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          className="
+            w-full
+            rounded-lg
+            border
+            border-zinc-300
+            bg-white
+            px-4
+            py-3
+            text-black
+            outline-none
+            transition
+            placeholder:text-zinc-400
+            focus:border-black
+          "
+        />
+      </div>
+
+      <div className="mt-6 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setStatusFilter("ALL")}
+          className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+            statusFilter === "ALL"
+              ? "bg-black text-white"
+              : "bg-zinc-100 text-black hover:bg-zinc-200"
+          }`}
+        >
+          All
+        </button>
+
+        {APPLICATION_PIPELINE_STATUS_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setStatusFilter(option.value)}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+              statusFilter === option.value
+                ? "bg-black text-white"
+                : "bg-zinc-100 text-black hover:bg-zinc-200"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      {actionError && (
+        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {actionError}
+        </div>
+      )}
+
+      {filteredApplications.length === 0 ? (
+        <div className="mt-10 rounded-2xl border border-dashed border-zinc-300 bg-white py-20 text-center">
+          <p className="text-lg font-medium text-black">
+            {initialApplications.length === 0
+              ? "No applications in the pipeline"
+              : "No matching applications"}
+          </p>
+          <p className="mt-2 text-sm text-zinc-500">
+            {initialApplications.length === 0
+              ? "Create applications to start moving candidates through the workflow."
+              : "Try a different search or status filter."}
+          </p>
+        </div>
+      ) : (
+        <div className="mt-8 flex gap-4 overflow-x-auto pb-4">
+          {visibleColumns.map((status) => {
+            const columnApplications = applicationsByStatus[status];
+
+            return (
+              <section
+                key={status}
+                aria-label={`${getApplicationPipelineStatusLabel(status)} column`}
+                className="w-80 shrink-0 rounded-2xl border border-zinc-200 bg-zinc-50 p-4"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+                    {getApplicationPipelineStatusLabel(status)}
+                  </h2>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-zinc-600">
+                    {columnApplications.length}
+                  </span>
+                </div>
+
+                <div className="mt-4 space-y-4">
+                  {columnApplications.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-zinc-300 bg-white px-3 py-8 text-center text-sm text-zinc-500">
+                      No applications
+                    </p>
+                  ) : (
+                    columnApplications.map((application) => (
+                      <PipelineCard
+                        key={application.id}
+                        id={application.id}
+                        candidateName={application.candidate.name}
+                        candidateRole={application.candidate.role}
+                        currentEmployer={application.candidate.currentEmployer}
+                        location={application.candidate.location}
+                        experienceYears={application.candidate.experienceYears}
+                        skills={application.candidate.skills}
+                        expectedCTC={application.candidate.expectedCTC}
+                        jobTitle={application.job.title}
+                        companyName={application.job.company.name}
+                        source={application.source}
+                        expertScore={application.expertScore}
+                        status={application.status}
+                        moveOptions={getValidApplicationStatusTransitions(
+                          application.status,
+                        ).map((nextStatus) => ({
+                          status: nextStatus,
+                          label: getMoveLabel(nextStatus),
+                        }))}
+                        isMoving={movingApplicationId === application.id}
+                        onMove={handleMove}
+                      />
+                    ))
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </DashboardLayout>
+  );
+}

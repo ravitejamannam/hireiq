@@ -9,6 +9,7 @@ import {
   Briefcase,
   ClipboardList,
   ClipboardCheck,
+  Columns3,
   Users,
   UserCheck,
   Calendar,
@@ -38,6 +39,11 @@ const links = [
     icon: ClipboardList,
     label: "Applications",
     href: "/dashboard/applications",
+  },
+  {
+    icon: Columns3,
+    label: "Pipeline",
+    href: "/dashboard/pipeline",
   },
   {
     icon: Users,
