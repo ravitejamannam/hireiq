@@ -3,6 +3,17 @@
 import JobForm from "@/components/jobs/JobForm";
 import type { JobFormData } from "@/components/jobs/JobForm";
 import type { Company } from "@/types/company";
+import type {
+  InterviewerAvailability,
+  InterviewerCategory,
+} from "@prisma/client";
+
+type AssignedInterviewerSummary = {
+  id: number;
+  name: string;
+  category: InterviewerCategory;
+  availability: InterviewerAvailability;
+};
 
 type JobModalProps = {
   isOpen: boolean;
@@ -15,9 +26,12 @@ type JobModalProps = {
   isRecordingAccess?: boolean;
   isCompletingShortlisting?: boolean;
   isPostingRequirement?: boolean;
+  isNotifyingInterviewer?: boolean;
+  assignedInterviewer?: AssignedInterviewerSummary | null;
   onMarkAccessReceived?: () => void;
   onCompleteShortlisting?: () => void;
   onCompleteRequirement?: () => void;
+  onNotifyInterviewer?: () => void;
 };
 
 export default function JobModal({
@@ -31,9 +45,12 @@ export default function JobModal({
   isRecordingAccess,
   isCompletingShortlisting,
   isPostingRequirement,
+  isNotifyingInterviewer,
+  assignedInterviewer,
   onMarkAccessReceived,
   onCompleteShortlisting,
   onCompleteRequirement,
+  onNotifyInterviewer,
 }: JobModalProps) {
   if (!isOpen) return null;
 
@@ -69,6 +86,7 @@ export default function JobModal({
                   initialValues.sourcingAccessReceivedAt?.toString() ?? "no-access",
                   initialValues.shortlistingCompletedAt?.toString() ??
                     "incomplete",
+                  assignedInterviewer?.id?.toString() ?? "unassigned",
                 ].join(":")
               : "create-job"
           }
@@ -81,9 +99,12 @@ export default function JobModal({
           isRecordingAccess={isRecordingAccess}
           isCompletingShortlisting={isCompletingShortlisting}
           isPostingRequirement={isPostingRequirement}
+          isNotifyingInterviewer={isNotifyingInterviewer}
+          assignedInterviewer={assignedInterviewer}
           onMarkAccessReceived={onMarkAccessReceived}
           onCompleteShortlisting={onCompleteShortlisting}
           onCompleteRequirement={onCompleteRequirement}
+          onNotifyInterviewer={onNotifyInterviewer}
         />
       </div>
     </div>

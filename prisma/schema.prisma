@@ -97,6 +97,10 @@ enum EvaluationFitDecision {
   NOT_FIT
 }
 
+enum NotificationType {
+  INTERVIEWER_REQUIREMENT_READY
+}
+
 model Company {
   id        Int    @id @default(autoincrement())
   name      String
@@ -146,6 +150,7 @@ model Job {
   company      Company        @relation(fields: [companyId], references: [id])
   assignedInterviewer Interviewer? @relation(fields: [assignedInterviewerId], references: [id], onDelete: Restrict)
   applications Application[]
+  notifications Notification[]
 
   @@index([companyId, status])
   @@index([assignedInterviewerId])
@@ -162,6 +167,7 @@ model Interviewer {
 
   assignedJobs Job[]
   evaluations  Evaluation[]
+  notifications Notification[]
 }
 
 model Candidate {
@@ -311,4 +317,24 @@ model Report {
 
   application Application @relation(fields: [applicationId], references: [id])
   @@index([applicationId])
+}
+
+model Notification {
+  id Int @id @default(autoincrement())
+
+  type NotificationType
+
+  message String
+
+  createdAt DateTime @default(now())
+
+  jobId Int
+  interviewerId Int
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  interviewer Interviewer @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
+
+  @@index([jobId])
+  @@index([interviewerId])
+  @@index([type])
 }

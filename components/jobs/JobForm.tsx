@@ -2,12 +2,33 @@
 
 import { useState } from "react";
 import type {
+  InterviewerAvailability,
+  InterviewerCategory,
   JobStatus,
   RequirementLifecycle,
   RoleCategory,
   SourcingDatabaseSource,
 } from "@prisma/client";
 import type { Company } from "@/types/company";
+
+type AssignedInterviewerSummary = {
+  id: number;
+  name: string;
+  category: InterviewerCategory;
+  availability: InterviewerAvailability;
+};
+
+const interviewerCategoryLabels: Record<InterviewerCategory, string> = {
+  ENGINEERING: "Engineering",
+  DATA_SCIENCE: "Data Science",
+  PRODUCT: "Product",
+  DESIGN: "Design",
+};
+
+const availabilityLabels: Record<InterviewerAvailability, string> = {
+  AVAILABLE: "Available",
+  NOT_AVAILABLE: "Not Available",
+};
 
 const jobStatusOptions = [
   { value: "OPEN", label: "Open" },
@@ -79,9 +100,12 @@ type JobFormProps = {
   isRecordingAccess?: boolean;
   isCompletingShortlisting?: boolean;
   isPostingRequirement?: boolean;
+  isNotifyingInterviewer?: boolean;
+  assignedInterviewer?: AssignedInterviewerSummary | null;
   onMarkAccessReceived?: () => void;
   onCompleteShortlisting?: () => void;
   onCompleteRequirement?: () => void;
+  onNotifyInterviewer?: () => void;
 };
 
 function formatDateInputValue(value: Date | string | null | undefined) {
@@ -140,9 +164,12 @@ export default function JobForm({
   isRecordingAccess = false,
   isCompletingShortlisting = false,
   isPostingRequirement = false,
+  isNotifyingInterviewer = false,
+  assignedInterviewer = null,
   onMarkAccessReceived,
   onCompleteShortlisting,
   onCompleteRequirement,
+  onNotifyInterviewer,
 }: JobFormProps) {
   const [title, setTitle] = useState(initialValues?.title ?? "");
   const [status, setStatus] = useState<JobStatus | "">(
@@ -702,32 +729,71 @@ export default function JobForm({
             </p>
 
             {initialValues && (
-              <div className="mt-4 flex flex-wrap gap-3">
-                {currentRequirementLifecycle === "CLIENT_NOTIFIED" &&
-                  onCompleteRequirement && (
-                    <button
-                      type="button"
-                      onClick={onCompleteRequirement}
-                      disabled={isPostingRequirement || isSaving}
-                      className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isPostingRequirement
-                        ? "Posting..."
-                        : "Post Requirement"}
-                    </button>
+              <div className="mt-4 space-y-3">
+                <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700">
+                  <p className="font-medium text-black">Assigned interviewer</p>
+                  <p className="mt-1">
+                    {assignedInterviewer
+                      ? `${assignedInterviewer.name} / ${interviewerCategoryLabels[assignedInterviewer.category]} / ${availabilityLabels[assignedInterviewer.availability]}`
+                      : "Not assigned"}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  {currentRequirementLifecycle === "CLIENT_NOTIFIED" &&
+                    onCompleteRequirement && (
+                      <button
+                        type="button"
+                        onClick={onCompleteRequirement}
+                        disabled={isPostingRequirement || isSaving}
+                        className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isPostingRequirement
+                          ? "Posting..."
+                          : "Post Requirement"}
+                      </button>
+                    )}
+
+                  {currentRequirementLifecycle === "REQUIREMENT_POSTED" && (
+                    <span className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
+                      Requirement Posted
+                    </span>
                   )}
 
-                {currentRequirementLifecycle === "REQUIREMENT_POSTED" && (
-                  <span className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
-                    Requirement Posted
-                  </span>
-                )}
+                  {currentRequirementLifecycle === "REQUIREMENT_POSTED" &&
+                    assignedInterviewer &&
+                    onNotifyInterviewer && (
+                      <button
+                        type="button"
+                        onClick={onNotifyInterviewer}
+                        disabled={isNotifyingInterviewer || isSaving}
+                        className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isNotifyingInterviewer
+                          ? "Notifying..."
+                          : "Notify Interviewer"}
+                      </button>
+                    )}
 
-                {initialValues.clientCompletedAt && (
-                  <span className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700">
-                    Client completed recorded
-                  </span>
-                )}
+                  {currentRequirementLifecycle === "REQUIREMENT_POSTED" &&
+                    !assignedInterviewer && (
+                      <span className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800">
+                        Interviewer assignment required
+                      </span>
+                    )}
+
+                  {currentRequirementLifecycle === "INTERVIEWER_NOTIFIED" && (
+                    <span className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
+                      Interviewer Notified
+                    </span>
+                  )}
+
+                  {initialValues.clientCompletedAt && (
+                    <span className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700">
+                      Client completed recorded
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>

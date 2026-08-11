@@ -15,6 +15,7 @@ import {
   createJob,
   deleteJob,
   markJobSourcingAccessReceived,
+  notifyAssignedInterviewer,
   transitionJobLifecycle,
   updateJob,
 } from "@/app/actions/job-actions";
@@ -55,6 +56,9 @@ export default function JobsClient({
   const [completingShortlistingJobId, setCompletingShortlistingJobId] =
     useState<number | null>(null);
   const [postingRequirementJobId, setPostingRequirementJobId] = useState<
+    number | null
+  >(null);
+  const [notifyingInterviewerJobId, setNotifyingInterviewerJobId] = useState<
     number | null
   >(null);
   const [search, setSearch] = useState("");
@@ -152,6 +156,20 @@ export default function JobsClient({
       setActionError(getErrorMessage(error));
     } finally {
       setPostingRequirementJobId(null);
+    }
+  }
+
+  async function handleNotifyInterviewer(jobId: number) {
+    setActionError("");
+    setNotifyingInterviewerJobId(jobId);
+
+    try {
+      await notifyAssignedInterviewer(jobId);
+      router.refresh();
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setNotifyingInterviewerJobId(null);
     }
   }
 
@@ -303,11 +321,13 @@ export default function JobsClient({
               isRecordingAccess={recordingAccessJobId === job.id}
               isCompletingShortlisting={completingShortlistingJobId === job.id}
               isPostingRequirement={postingRequirementJobId === job.id}
+              isNotifyingInterviewer={notifyingInterviewerJobId === job.id}
               onAdvanceLifecycle={handleAdvanceLifecycle}
               onAssignInterviewer={handleAssignInterviewer}
               onMarkAccessReceived={handleMarkAccessReceived}
               onCompleteShortlisting={handleCompleteShortlisting}
               onCompleteRequirement={handleCompleteRequirement}
+              onNotifyInterviewer={handleNotifyInterviewer}
               onEdit={handleEditJob}
               onDelete={handleDeleteJob}
             />
@@ -341,6 +361,12 @@ export default function JobsClient({
             ? postingRequirementJobId === activeEditingJob.id
             : false
         }
+        isNotifyingInterviewer={
+          activeEditingJob
+            ? notifyingInterviewerJobId === activeEditingJob.id
+            : false
+        }
+        assignedInterviewer={activeEditingJob?.assignedInterviewer ?? null}
         onMarkAccessReceived={
           activeEditingJob
             ? () => handleMarkAccessReceived(activeEditingJob.id)
@@ -354,6 +380,11 @@ export default function JobsClient({
         onCompleteRequirement={
           activeEditingJob
             ? () => handleCompleteRequirement(activeEditingJob.id)
+            : undefined
+        }
+        onNotifyInterviewer={
+          activeEditingJob
+            ? () => handleNotifyInterviewer(activeEditingJob.id)
             : undefined
         }
         initialValues={

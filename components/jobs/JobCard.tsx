@@ -40,11 +40,13 @@ type JobCardProps = {
   isRecordingAccess?: boolean;
   isCompletingShortlisting?: boolean;
   isPostingRequirement?: boolean;
+  isNotifyingInterviewer?: boolean;
   onAdvanceLifecycle: (id: number, nextLifecycle: RequirementLifecycle) => void;
   onAssignInterviewer: (jobId: number, interviewerId: number | null) => void;
   onMarkAccessReceived: (jobId: number) => void;
   onCompleteShortlisting: (jobId: number) => void;
   onCompleteRequirement: (jobId: number) => void;
+  onNotifyInterviewer: (jobId: number) => void;
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
 };
@@ -69,7 +71,7 @@ const nextRequirementLifecycle: Partial<
 > = {
   REQUIREMENT_DRAFTED: "CLIENT_NOTIFIED",
   // CLIENT_NOTIFIED → REQUIREMENT_POSTED happens via completeJobRequirement
-  REQUIREMENT_POSTED: "INTERVIEWER_NOTIFIED",
+  // REQUIREMENT_POSTED → INTERVIEWER_NOTIFIED happens via notifyAssignedInterviewer
   // INTERVIEWER_NOTIFIED → SOURCING_SHORTLISTING happens via mark access received
 };
 
@@ -172,11 +174,13 @@ export default function JobCard({
   isRecordingAccess = false,
   isCompletingShortlisting = false,
   isPostingRequirement = false,
+  isNotifyingInterviewer = false,
   onAdvanceLifecycle,
   onAssignInterviewer,
   onMarkAccessReceived,
   onCompleteShortlisting,
   onCompleteRequirement,
+  onNotifyInterviewer,
   onEdit,
   onDelete,
 }: JobCardProps) {
@@ -187,6 +191,11 @@ export default function JobCard({
     shortlistingDueAt,
   });
   const canCompleteRequirement = requirementLifecycle === "CLIENT_NOTIFIED";
+  const canNotifyInterviewer =
+    requirementLifecycle === "REQUIREMENT_POSTED" &&
+    Boolean(assignedInterviewerId);
+  const needsInterviewerAssignment =
+    requirementLifecycle === "REQUIREMENT_POSTED" && !assignedInterviewerId;
   const canMarkAccessReceived =
     requirementLifecycle === "INTERVIEWER_NOTIFIED" &&
     Boolean(sourcingDatabaseSource);
@@ -358,6 +367,29 @@ export default function JobCard({
           {requirementLifecycle === "REQUIREMENT_POSTED" && (
             <span className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
               Requirement Posted
+            </span>
+          )}
+
+          {canNotifyInterviewer && (
+            <button
+              type="button"
+              onClick={() => onNotifyInterviewer(id)}
+              disabled={isNotifyingInterviewer}
+              className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isNotifyingInterviewer ? "Notifying..." : "Notify Interviewer"}
+            </button>
+          )}
+
+          {needsInterviewerAssignment && (
+            <span className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800">
+              Assign interviewer before notification
+            </span>
+          )}
+
+          {requirementLifecycle === "INTERVIEWER_NOTIFIED" && (
+            <span className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
+              Interviewer Notified
             </span>
           )}
 

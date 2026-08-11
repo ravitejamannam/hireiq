@@ -15,6 +15,7 @@ import {
   Calendar,
   Code2,
   BarChart3,
+  Bell,
   Settings,
 } from "lucide-react";
 
@@ -69,6 +70,11 @@ const links = [
     icon: ClipboardCheck,
     label: "Evaluations",
     href: "/dashboard/evaluations",
+  },
+  {
+    icon: Bell,
+    label: "Notifications",
+    href: "/dashboard/notifications",
   },
   {
     icon: BarChart3,

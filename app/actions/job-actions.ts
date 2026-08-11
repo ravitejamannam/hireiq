@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { JobStatus, RequirementLifecycle } from "@prisma/client";
@@ -257,6 +258,92 @@ export async function completeJobRequirement(jobId: number) {
   }
 
   return job;
+}
+
+export async function notifyAssignedInterviewer(jobId: number) {
+  const validatedJobId = validateJobId(jobId);
+
+  const existingJob = await prisma.job.findUnique({
+    where: {
+      id: validatedJobId,
+    },
+    select: {
+      id: true,
+      title: true,
+      requirementLifecycle: true,
+      assignedInterviewerId: true,
+    },
+  });
+
+  if (!existingJob) {
+    throw new JobValidationError("Job not found.");
+  }
+
+  if (existingJob.requirementLifecycle === "INTERVIEWER_NOTIFIED") {
+    throw new JobValidationError("Interviewer has already been notified.");
+  }
+
+  if (existingJob.requirementLifecycle !== "REQUIREMENT_POSTED") {
+    throw new JobValidationError(
+      "Requirement must be posted before notifying interviewer.",
+    );
+  }
+
+  if (!existingJob.assignedInterviewerId) {
+    throw new JobValidationError(
+      "Interviewer must be assigned before notification.",
+    );
+  }
+
+  try {
+    await ensureInterviewerExists(existingJob.assignedInterviewerId);
+  } catch {
+    throw new JobValidationError("Interviewer not found.");
+  }
+
+  const message = `Requirement ready for interviewer: ${existingJob.title}`;
+
+  let updatedJob;
+
+  try {
+    updatedJob = await prisma.$transaction(async (tx) => {
+      await tx.notification.create({
+        data: {
+          type: "INTERVIEWER_REQUIREMENT_READY",
+          message,
+          jobId: existingJob.id,
+          interviewerId: existingJob.assignedInterviewerId!,
+        },
+      });
+
+      return tx.job.update({
+        where: {
+          id: existingJob.id,
+        },
+        data: {
+          requirementLifecycle: "INTERVIEWER_NOTIFIED",
+        },
+      });
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2003"
+    ) {
+      throw new JobValidationError("Interviewer not found.");
+    }
+
+    throw error;
+  }
+
+  try {
+    revalidatePath("/dashboard/jobs");
+    revalidatePath("/dashboard/notifications");
+  } catch {
+    // revalidatePath requires a Next.js request context
+  }
+
+  return updatedJob;
 }
 
 export async function markJobSourcingAccessReceived(jobId: number) {

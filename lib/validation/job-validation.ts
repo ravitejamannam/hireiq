@@ -184,6 +184,15 @@ export function validateJobLifecycleTransition(
   }
 
   if (
+    currentLifecycle === "REQUIREMENT_POSTED" &&
+    validatedNextLifecycle === "INTERVIEWER_NOTIFIED"
+  ) {
+    throw new JobValidationError(
+      "Interviewer must be notified through the notification workflow.",
+    );
+  }
+
+  if (
     currentLifecycle === "SOURCING_SHORTLISTING" &&
     validatedNextLifecycle === "BILLING_GENERATED"
   ) {
