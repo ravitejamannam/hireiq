@@ -1,20 +1,22 @@
 "use client";
 
 import ApplicationForm from "@/components/applications/ApplicationForm";
-import type { ApplicationFormData } from "@/components/applications/ApplicationForm";
-import type { getCandidates } from "@/lib/repositories/candidate-repository";
+import type {
+  ApplicationCandidateOption,
+  ApplicationFormData,
+} from "@/components/applications/ApplicationForm";
 import type { getJobs } from "@/lib/repositories/job-repository";
 
-type Candidate = Awaited<ReturnType<typeof getCandidates>>[number];
 type Job = Awaited<ReturnType<typeof getJobs>>[number];
 
 type ApplicationModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onCreate: (application: ApplicationFormData) => void;
-  candidates: Candidate[];
+  candidates: ApplicationCandidateOption[];
   jobs: Job[];
   initialValues?: ApplicationFormData;
+  errorMessage?: string;
 };
 
 export default function ApplicationModal({
@@ -24,6 +26,7 @@ export default function ApplicationModal({
   candidates,
   jobs,
   initialValues,
+  errorMessage,
 }: ApplicationModalProps) {
   if (!isOpen) return null;
 
@@ -36,12 +39,20 @@ export default function ApplicationModal({
           </h2>
 
           <button
+            type="button"
+            aria-label="Close application modal"
             onClick={onClose}
             className="text-2xl text-zinc-500 hover:text-black"
           >
             ×
           </button>
         </div>
+
+        {errorMessage && (
+          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {errorMessage}
+          </div>
+        )}
 
         <ApplicationForm
           onCreate={onCreate}

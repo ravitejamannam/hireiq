@@ -92,6 +92,11 @@ enum ApplicationPipelineStatus {
   HIRED
 }
 
+enum EvaluationFitDecision {
+  RIGHT_FIT
+  NOT_FIT
+}
+
 model Company {
   id        Int    @id @default(autoincrement())
   name      String
@@ -156,6 +161,7 @@ model Interviewer {
   updatedAt DateTime @updatedAt
 
   assignedJobs Job[]
+  evaluations  Evaluation[]
 }
 
 model Candidate {
@@ -199,10 +205,57 @@ model Application {
   interviews Interview[]
   codingTests CodingTest[]
   reports     Report[]
+  evaluations Evaluation[]
 
   @@unique([candidateId, jobId])
   @@index([candidateId])
   @@index([jobId, status])
+}
+
+model Evaluation {
+  id Int @id @default(autoincrement())
+
+  overallScore    Int?
+  scorecard       Json?
+  notes           String?
+  recordingUrl    String?
+  recommendation  Recommendation?
+  hireProbability String?
+  fitDecision     EvaluationFitDecision?
+  evaluatedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applicationId Int
+  interviewerId Int
+
+  application Application @relation(fields: [applicationId], references: [id])
+  interviewer Interviewer @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
+  questions   EvaluationQuestion[]
+
+  @@index([applicationId])
+  @@index([interviewerId])
+}
+
+model EvaluationQuestion {
+  id Int @id @default(autoincrement())
+
+  question      String
+  answer        String?
+  expertComment String?
+  score         Int?
+  difficulty    String?
+  weight        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  evaluationId Int
+
+  evaluation Evaluation @relation(fields: [evaluationId], references: [id])
+
+  @@index([evaluationId])
 }
 
 model Interview {

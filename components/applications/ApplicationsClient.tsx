@@ -4,28 +4,43 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { getApplications } from "@/lib/repositories/application-repository";
-import type { getCandidates } from "@/lib/repositories/candidate-repository";
 import type { getJobs } from "@/lib/repositories/job-repository";
-import type { ApplicationFormData } from "@/components/applications/ApplicationForm";
+import {
+  APPLICATION_PIPELINE_STATUS_OPTIONS,
+  type ApplicationCandidateOption,
+  getApplicationPipelineStatusLabel,
+  type ApplicationFormData,
+} from "@/components/applications/ApplicationForm";
 import {
   createApplication,
   deleteApplication,
   updateApplication,
 } from "@/app/actions/application-actions";
+import type { ApplicationPipelineStatus } from "@prisma/client";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import ApplicationCard from "@/components/applications/ApplicationCard";
 import ApplicationModal from "@/components/applications/ApplicationModal";
 
-type Application = Awaited<ReturnType<typeof getApplications>>[number];
-type Candidate = Awaited<ReturnType<typeof getCandidates>>[number];
+type RepositoryApplication = Awaited<ReturnType<typeof getApplications>>[number];
+type Application = Omit<RepositoryApplication, "candidate"> & {
+  candidate: Omit<RepositoryApplication["candidate"], "status">;
+};
+type Candidate = ApplicationCandidateOption;
 type Job = Awaited<ReturnType<typeof getJobs>>[number];
+type StatusFilter = "ALL" | ApplicationPipelineStatus;
 
 type ApplicationsClientProps = {
   initialApplications: Application[];
   candidates: Candidate[];
   jobs: Job[];
 };
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : "Something went wrong. Please try again.";
+}
 
 export default function ApplicationsClient({
   initialApplications,
@@ -36,29 +51,43 @@ export default function ApplicationsClient({
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [actionError, setActionError] = useState("");
   const [editingApplication, setEditingApplication] =
     useState<Application | null>(null);
 
   async function handleSaveApplication(application: ApplicationFormData) {
-    if (editingApplication) {
-      await updateApplication(
-        editingApplication.id,
-        application.candidateId,
-        application.jobId,
-        application.status,
-      );
-    } else {
-      await createApplication(
-        application.candidateId,
-        application.jobId,
-        application.status,
-      );
+    setActionError("");
+
+    try {
+      if (editingApplication) {
+        await updateApplication(
+          editingApplication.id,
+          application.candidateId,
+          application.jobId,
+          application.status,
+          application.source,
+          application.expertScore,
+          application.rejectionReason,
+        );
+      } else {
+        await createApplication(
+          application.candidateId,
+          application.jobId,
+          application.status,
+          application.source,
+          application.expertScore,
+          application.rejectionReason,
+        );
+      }
+
+      setEditingApplication(null);
+      setIsModalOpen(false);
+
+      router.refresh();
+    } catch (error) {
+      setActionError(getErrorMessage(error));
     }
-
-    setEditingApplication(null);
-    setIsModalOpen(false);
-
-    router.refresh();
   }
 
   function handleEditApplication(id: number) {
@@ -68,23 +97,48 @@ export default function ApplicationsClient({
 
     if (!application) return;
 
+    setActionError("");
     setEditingApplication(application);
     setIsModalOpen(true);
   }
 
   async function handleDeleteApplication(id: number) {
-    await deleteApplication(id);
+    setActionError("");
 
-    router.refresh();
+    try {
+      await deleteApplication(id);
+      router.refresh();
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    }
+  }
+
+  function openCreateModal() {
+    setEditingApplication(null);
+    setActionError("");
+    setIsModalOpen(true);
   }
 
   const filteredApplications = initialApplications.filter((application) => {
-    const query = search.toLowerCase();
+    if (statusFilter !== "ALL" && application.status !== statusFilter) {
+      return false;
+    }
 
-    return (
-      application.candidate.name.toLowerCase().includes(query) ||
-      application.job.title.toLowerCase().includes(query) ||
-      application.job.company.name.toLowerCase().includes(query)
+    const query = search.trim().toLowerCase();
+    const searchableValues = [
+      application.candidate.name,
+      application.candidate.role,
+      application.candidate.currentEmployer,
+      application.candidate.location,
+      application.candidate.skills,
+      application.job.title,
+      application.job.company.name,
+      application.status,
+      getApplicationPipelineStatusLabel(application.status),
+    ];
+
+    return searchableValues.some((value) =>
+      (value ?? "").toLowerCase().includes(query),
     );
   });
 
@@ -95,14 +149,18 @@ export default function ApplicationsClient({
           <h1 className="text-3xl font-bold text-black">Applications</h1>
 
           <p className="mt-2 text-zinc-600">
-            Manage candidate pipelines for open roles.
+            Manage requirement-specific candidate profile pipelines.
           </p>
         </div>
 
         <div className="mt-8">
+          <label htmlFor="applications-search" className="sr-only">
+            Search applications
+          </label>
           <input
+            id="applications-search"
             type="text"
-            placeholder="Search applications..."
+            placeholder="Search by candidate, role, company, job, or status..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="
@@ -123,7 +181,8 @@ export default function ApplicationsClient({
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          type="button"
+          onClick={openCreateModal}
           className="
             rounded-lg
             bg-black
@@ -139,6 +198,41 @@ export default function ApplicationsClient({
           + Add Application
         </button>
       </div>
+
+      <div className="mt-6 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setStatusFilter("ALL")}
+          className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+            statusFilter === "ALL"
+              ? "bg-black text-white"
+              : "bg-zinc-100 text-black hover:bg-zinc-200"
+          }`}
+        >
+          All
+        </button>
+
+        {APPLICATION_PIPELINE_STATUS_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setStatusFilter(option.value)}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+              statusFilter === option.value
+                ? "bg-black text-white"
+                : "bg-zinc-100 text-black hover:bg-zinc-200"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      {actionError && !isModalOpen && (
+        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {actionError}
+        </div>
+      )}
 
       {filteredApplications.length === 0 ? (
         <div className="mt-10">
@@ -161,9 +255,18 @@ export default function ApplicationsClient({
               key={application.id}
               id={application.id}
               candidateName={application.candidate.name}
+              candidateRole={application.candidate.role}
+              candidateExperienceYears={application.candidate.experienceYears}
+              currentEmployer={application.candidate.currentEmployer}
+              location={application.candidate.location}
+              skills={application.candidate.skills}
+              expectedCTC={application.candidate.expectedCTC}
               jobTitle={application.job.title}
               companyName={application.job.company.name}
               status={application.status}
+              source={application.source}
+              expertScore={application.expertScore}
+              rejectionReason={application.rejectionReason}
               onEdit={handleEditApplication}
               onDelete={handleDeleteApplication}
             />
@@ -186,9 +289,13 @@ export default function ApplicationsClient({
                 candidateId: editingApplication.candidateId,
                 jobId: editingApplication.jobId,
                 status: editingApplication.status,
+                source: editingApplication.source,
+                expertScore: editingApplication.expertScore,
+                rejectionReason: editingApplication.rejectionReason,
               }
             : undefined
         }
+        errorMessage={actionError}
       />
     </DashboardLayout>
   );
