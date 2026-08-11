@@ -17,6 +17,7 @@ import {
   BarChart3,
   Bell,
   ClipboardPen,
+  ListChecks,
   Search,
   Settings,
 } from "lucide-react";
@@ -57,6 +58,11 @@ const links = [
     icon: ClipboardPen,
     label: "Expert Review",
     href: "/dashboard/expert-review",
+  },
+  {
+    icon: ListChecks,
+    label: "Technical Evaluations",
+    href: "/dashboard/technical-evaluations",
   },
   {
     icon: Users,

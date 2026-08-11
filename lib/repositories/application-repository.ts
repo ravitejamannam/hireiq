@@ -119,3 +119,35 @@ export async function getExpertReviewApplications() {
     "EXPERT_REVIEW",
   ] as ApplicationPipelineStatus[]);
 }
+
+export async function getTechnicalEvaluationApplications() {
+  return prisma.application.findMany({
+    where: {
+      status: {
+        in: ["EXPERT_REVIEW", "TECH_EVALUATION"],
+      },
+    },
+    select: {
+      ...applicationSelect,
+      evaluations: {
+        select: {
+          id: true,
+          overallScore: true,
+          recommendation: true,
+          hireProbability: true,
+          fitDecision: true,
+          evaluatedAt: true,
+          notes: true,
+          interviewerId: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: "asc" as const,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
