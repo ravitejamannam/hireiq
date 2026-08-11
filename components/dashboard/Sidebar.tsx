@@ -8,6 +8,7 @@ import {
   Building2,
   Briefcase,
   ClipboardList,
+  ClipboardCheck,
   Users,
   UserCheck,
   Calendar,
@@ -57,6 +58,11 @@ const links = [
     icon: Code2,
     label: "Coding Tests",
     href: "/dashboard/coding-tests",
+  },
+  {
+    icon: ClipboardCheck,
+    label: "Evaluations",
+    href: "/dashboard/evaluations",
   },
   {
     icon: BarChart3,
