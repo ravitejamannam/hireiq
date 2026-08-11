@@ -16,6 +16,8 @@ import {
   Code2,
   BarChart3,
   Bell,
+  ClipboardPen,
+  Search,
   Settings,
 } from "lucide-react";
 
@@ -45,6 +47,16 @@ const links = [
     icon: Columns3,
     label: "Pipeline",
     href: "/dashboard/pipeline",
+  },
+  {
+    icon: Search,
+    label: "Sourcing",
+    href: "/dashboard/sourcing",
+  },
+  {
+    icon: ClipboardPen,
+    label: "Expert Review",
+    href: "/dashboard/expert-review",
   },
   {
     icon: Users,

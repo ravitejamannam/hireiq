@@ -2,13 +2,23 @@
 
 import { prisma } from "@/lib/prisma";
 import {
+  assertApplicationIsInExpertReview,
+  assertJobAllowsSourcingIntake,
   ensureApplicationExists,
   validateApplicationId,
   validateApplicationInput,
+  validateExpertReviewNotes,
+  validateExpertReviewScore,
+  validateRequiredApplicationSource,
+  validateSourcedCandidateInput,
+  validateSourcingJobId,
+  ApplicationValidationError,
+  type SourcedCandidateInput,
 } from "@/lib/validation/application-validation";
 import { revalidatePath } from "next/cache";
 import {
   ApplicationPipelineStatus,
+  CandidateStatus,
   Prisma,
   SourcingDatabaseSource,
 } from "@prisma/client";
@@ -137,6 +147,232 @@ function isApplicationPipelineStatus(
       status as ApplicationPipelineStatus,
     )
   );
+}
+
+export async function createSourcedApplication(
+  jobId: number,
+  candidateInput: SourcedCandidateInput,
+  source: SourcingDatabaseSource,
+) {
+  const validatedJobId = validateSourcingJobId(jobId);
+  const validatedCandidate = validateSourcedCandidateInput(candidateInput);
+  const validatedSource = validateRequiredApplicationSource(source);
+
+  const job = await prisma.job.findUnique({
+    where: {
+      id: validatedJobId,
+    },
+    select: {
+      id: true,
+      companyId: true,
+      requirementLifecycle: true,
+      sourcingAccessReceivedAt: true,
+    },
+  });
+
+  if (!job) {
+    throw new ApplicationValidationError("Job not found.");
+  }
+
+  assertJobAllowsSourcingIntake(job);
+
+  let result;
+
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const candidate = await tx.candidate.create({
+        data: {
+          name: validatedCandidate.name,
+          role: validatedCandidate.role,
+          experienceYears: validatedCandidate.experienceYears,
+          location: validatedCandidate.location,
+          currentEmployer: validatedCandidate.currentEmployer,
+          skills: validatedCandidate.skills,
+          expectedCTC: validatedCandidate.expectedCTC,
+          status: CandidateStatus.APPLIED,
+          companyId: job.companyId,
+        },
+      });
+
+      const application = await tx.application.create({
+        data: {
+          candidateId: candidate.id,
+          jobId: job.id,
+          status: ApplicationPipelineStatus.CV_POOL,
+          source: validatedSource,
+          expertScore: null,
+          rejectionReason: null,
+        },
+      });
+
+      return {
+        candidate,
+        application,
+      };
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      throw new ApplicationValidationError(
+        "Candidate is already in this requirement pipeline.",
+      );
+    }
+
+    if (error instanceof ApplicationValidationError) {
+      throw error;
+    }
+
+    throw translateApplicationSaveError(error);
+  }
+
+  try {
+    revalidatePath("/dashboard/sourcing");
+    revalidatePath("/dashboard/applications");
+    revalidatePath("/dashboard/pipeline");
+    revalidatePath("/dashboard/candidates");
+    revalidatePath("/dashboard/jobs");
+  } catch {
+    // revalidatePath requires a Next.js request context
+  }
+
+  return result;
+}
+
+export async function saveExpertReview(
+  applicationId: number,
+  expertScore: number | null,
+  notes: string | null,
+) {
+  const validatedApplicationId = validateApplicationId(applicationId);
+  const validatedExpertScore = validateExpertReviewScore(expertScore);
+  const validatedNotes = validateExpertReviewNotes(notes);
+
+  if (validatedExpertScore === null && validatedNotes === null) {
+    throw new ApplicationValidationError("No review changes to save.");
+  }
+
+  const application = await prisma.application.findUnique({
+    where: {
+      id: validatedApplicationId,
+    },
+    select: {
+      id: true,
+      status: true,
+      candidateId: true,
+      jobId: true,
+      expertScore: true,
+      candidate: {
+        select: {
+          id: true,
+          companyId: true,
+        },
+      },
+      job: {
+        select: {
+          id: true,
+          companyId: true,
+          assignedInterviewerId: true,
+        },
+      },
+    },
+  });
+
+  if (!application) {
+    throw new ApplicationValidationError("Application not found.");
+  }
+
+  if (!application.job) {
+    throw new ApplicationValidationError("Job not found.");
+  }
+
+  if (application.candidate.companyId !== application.job.companyId) {
+    throw new ApplicationValidationError(
+      "Candidate and job must belong to the same company.",
+    );
+  }
+
+  assertApplicationIsInExpertReview(application.status);
+
+  if (!application.job.assignedInterviewerId) {
+    throw new ApplicationValidationError(
+      "Interviewer must be assigned before expert review.",
+    );
+  }
+
+  const assignedInterviewerId = application.job.assignedInterviewerId;
+
+  let result;
+
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const updatedApplication = await tx.application.update({
+        where: {
+          id: application.id,
+        },
+        data: {
+          expertScore: validatedExpertScore,
+        },
+      });
+
+      const existingEvaluation = await tx.evaluation.findFirst({
+        where: {
+          applicationId: application.id,
+          interviewerId: assignedInterviewerId,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      let evaluation = null;
+
+      if (existingEvaluation) {
+        evaluation = await tx.evaluation.update({
+          where: {
+            id: existingEvaluation.id,
+          },
+          data: {
+            notes: validatedNotes,
+          },
+        });
+      } else if (validatedNotes !== null) {
+        evaluation = await tx.evaluation.create({
+          data: {
+            applicationId: application.id,
+            interviewerId: assignedInterviewerId,
+            notes: validatedNotes,
+          },
+        });
+      }
+
+      return {
+        application: updatedApplication,
+        evaluation,
+      };
+    });
+  } catch (error) {
+    if (error instanceof ApplicationValidationError) {
+      throw error;
+    }
+
+    throw translateApplicationSaveError(error);
+  }
+
+  try {
+    revalidatePath("/dashboard/expert-review");
+    revalidatePath("/dashboard/pipeline");
+    revalidatePath("/dashboard/applications");
+    revalidatePath("/dashboard/evaluations");
+  } catch {
+    // revalidatePath requires a Next.js request context
+  }
+
+  return result;
 }
 
 export async function transitionApplicationStatus(

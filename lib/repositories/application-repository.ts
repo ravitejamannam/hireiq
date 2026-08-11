@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { ApplicationPipelineStatus, Prisma } from "@prisma/client";
 
 const applicationSelect = {
   id: true,
@@ -36,15 +37,35 @@ const applicationSelect = {
       title: true,
       status: true,
       companyId: true,
+      assignedInterviewerId: true,
       company: {
         select: {
           id: true,
           name: true,
         },
       },
+      assignedInterviewer: {
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          availability: true,
+        },
+      },
     },
   },
-};
+  evaluations: {
+    select: {
+      id: true,
+      notes: true,
+      interviewerId: true,
+      createdAt: true,
+    },
+    orderBy: {
+      createdAt: "desc" as const,
+    },
+  },
+} satisfies Prisma.ApplicationSelect;
 
 export async function getApplications() {
   return prisma.application.findMany({
@@ -62,4 +83,39 @@ export async function getApplicationById(id: number) {
     },
     select: applicationSelect,
   });
+}
+
+export async function getApplicationsByJobId(jobId: number) {
+  return prisma.application.findMany({
+    where: {
+      jobId,
+    },
+    select: applicationSelect,
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
+
+export async function getApplicationsByStatuses(
+  statuses: ApplicationPipelineStatus[],
+) {
+  return prisma.application.findMany({
+    where: {
+      status: {
+        in: statuses,
+      },
+    },
+    select: applicationSelect,
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
+
+export async function getExpertReviewApplications() {
+  return getApplicationsByStatuses([
+    "CV_POOL",
+    "EXPERT_REVIEW",
+  ] as ApplicationPipelineStatus[]);
 }
