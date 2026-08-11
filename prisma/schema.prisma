@@ -49,13 +49,47 @@ enum JobStatus {
   FILLED
 }
 
-enum ApplicationStatus {
-  APPLIED
-  SCREENING
-  INTERVIEWING
-  OFFER
-  HIRED
+enum RequirementLifecycle {
+  REQUIREMENT_DRAFTED
+  CLIENT_NOTIFIED
+  REQUIREMENT_POSTED
+  INTERVIEWER_NOTIFIED
+  SOURCING_SHORTLISTING
+  BILLING_GENERATED
+}
+
+enum RoleCategory {
+  ENGINEERING
+  SALES
+  DESIGN
+  FINANCE
+}
+
+enum SourcingDatabaseSource {
+  LINKEDIN
+  NAUKRI
+}
+
+enum InterviewerAvailability {
+  AVAILABLE
+  NOT_AVAILABLE
+}
+
+enum InterviewerCategory {
+  ENGINEERING
+  DATA_SCIENCE
+  PRODUCT
+  DESIGN
+}
+
+enum ApplicationPipelineStatus {
+  CV_POOL
+  EXPERT_REVIEW
+  TECH_EVALUATION
+  SHORTLISTED
+  SELECTED
   REJECTED
+  HIRED
 }
 
 model Company {
@@ -76,15 +110,52 @@ model Job {
   title  String
   status JobStatus @default(OPEN)
 
+  roleCategory        RoleCategory?
+  experienceRange     String?
+  location            String?
+  compensationRange   String?
+  targetHireDate      DateTime?
+  numberOfPositions   Int?
+  mustHaveRequirements String?
+  niceToHaveRequirements String?
+  jobDescription      String?
+  evaluationCriteria  String?
+  primarySkills       String?
+
+  requirementLifecycle RequirementLifecycle @default(REQUIREMENT_DRAFTED)
+  clientCompletedAt    DateTime?
+
+  sourcingDatabaseSource SourcingDatabaseSource?
+  sourcingAccessDetails  String?
+
+  sourcingAccessReceivedAt DateTime?
+  shortlistingDueAt        DateTime?
+  shortlistingCompletedAt  DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   companyId Int
+  assignedInterviewerId Int?
 
   company      Company        @relation(fields: [companyId], references: [id])
+  assignedInterviewer Interviewer? @relation(fields: [assignedInterviewerId], references: [id], onDelete: Restrict)
   applications Application[]
 
   @@index([companyId, status])
+  @@index([assignedInterviewerId])
+}
+
+model Interviewer {
+  id           Int                     @id @default(autoincrement())
+  name         String
+  category     InterviewerCategory
+  availability InterviewerAvailability @default(AVAILABLE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedJobs Job[]
 }
 
 model Candidate {
@@ -93,6 +164,10 @@ model Candidate {
   role            String
   experienceYears Int
   status          CandidateStatus
+  location        String?
+  currentEmployer String?
+  skills          String?
+  expectedCTC     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -108,7 +183,10 @@ model Candidate {
 model Application {
   id Int @id @default(autoincrement())
 
-  status ApplicationStatus @default(APPLIED)
+  status ApplicationPipelineStatus @default(CV_POOL)
+  source SourcingDatabaseSource?
+  expertScore Int?
+  rejectionReason String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -1,9 +1,20 @@
 import JobsClient from "@/components/jobs/JobsClient";
-import { getJobs } from "@/lib/repositories/job-repository";
 import { getCompanies } from "@/lib/repositories/company-repository";
+import { getInterviewers } from "@/lib/repositories/interviewer-repository";
+import { getJobs } from "@/lib/repositories/job-repository";
 
 export default async function JobsPage() {
-  const [jobs, companies] = await Promise.all([getJobs(), getCompanies()]);
+  const [jobs, companies, interviewers] = await Promise.all([
+    getJobs(),
+    getCompanies(),
+    getInterviewers(),
+  ]);
 
-  return <JobsClient initialJobs={jobs} companies={companies} />;
+  return (
+    <JobsClient
+      initialJobs={jobs}
+      companies={companies}
+      interviewers={interviewers}
+    />
+  );
 }
