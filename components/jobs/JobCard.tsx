@@ -4,6 +4,7 @@ import type {
   JobStatus,
   RequirementLifecycle,
   RoleCategory,
+  SourcingDatabaseSource,
 } from "@prisma/client";
 
 type InterviewerOption = {
@@ -12,6 +13,8 @@ type InterviewerOption = {
   category: InterviewerCategory;
   availability: InterviewerAvailability;
 };
+
+export type SlaStatus = "NOT_STARTED" | "ACTIVE" | "OVERDUE" | "COMPLETED";
 
 type JobCardProps = {
   id: number;
@@ -23,13 +26,22 @@ type JobCardProps = {
   location: string | null;
   compensationRange: string | null;
   numberOfPositions: number | null;
+  sourcingDatabaseSource: SourcingDatabaseSource | null;
+  sourcingAccessReceivedAt: Date | null;
+  shortlistingDueAt: Date | null;
+  shortlistingCompletedAt: Date | null;
+  applicationCount: number;
   assignedInterviewerId: number | null;
   assignedInterviewer: InterviewerOption | null;
   interviewers: InterviewerOption[];
   isAdvancing?: boolean;
   isAssigning?: boolean;
+  isRecordingAccess?: boolean;
+  isCompletingShortlisting?: boolean;
   onAdvanceLifecycle: (id: number, nextLifecycle: RequirementLifecycle) => void;
   onAssignInterviewer: (jobId: number, interviewerId: number | null) => void;
+  onMarkAccessReceived: (jobId: number) => void;
+  onCompleteShortlisting: (jobId: number) => void;
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
 };
@@ -49,11 +61,13 @@ const requirementLifecycleLabels: Record<RequirementLifecycle, string> = {
   BILLING_GENERATED: "Billing Generated",
 };
 
-const nextRequirementLifecycle: Partial<Record<RequirementLifecycle, RequirementLifecycle>> = {
+const nextRequirementLifecycle: Partial<
+  Record<RequirementLifecycle, RequirementLifecycle>
+> = {
   REQUIREMENT_DRAFTED: "CLIENT_NOTIFIED",
   CLIENT_NOTIFIED: "REQUIREMENT_POSTED",
   REQUIREMENT_POSTED: "INTERVIEWER_NOTIFIED",
-  INTERVIEWER_NOTIFIED: "SOURCING_SHORTLISTING",
+  // INTERVIEWER_NOTIFIED → SOURCING_SHORTLISTING happens via mark access received
 };
 
 const roleCategoryLabels: Record<RoleCategory, string> = {
@@ -75,6 +89,62 @@ const availabilityLabels: Record<InterviewerAvailability, string> = {
   NOT_AVAILABLE: "Not Available",
 };
 
+const sourcingDatabaseLabels: Record<SourcingDatabaseSource, string> = {
+  LINKEDIN: "LinkedIn",
+  NAUKRI: "Naukri",
+};
+
+const slaStatusLabels: Record<SlaStatus, string> = {
+  NOT_STARTED: "Not started",
+  ACTIVE: "Active",
+  OVERDUE: "Overdue",
+  COMPLETED: "Completed",
+};
+
+export function formatJobDateTime(value: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "short",
+    timeStyle: "medium",
+    hourCycle: "h23",
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(value));
+}
+
+export function getSourcingDatabaseLabel(
+  source: SourcingDatabaseSource | null,
+) {
+  if (!source) return "Not configured";
+  return sourcingDatabaseLabels[source];
+}
+
+export function getSlaStatus(params: {
+  shortlistingCompletedAt: Date | null;
+  shortlistingDueAt: Date | null;
+  now?: Date;
+}): SlaStatus {
+  if (params.shortlistingCompletedAt) {
+    return "COMPLETED";
+  }
+
+  if (!params.shortlistingDueAt) {
+    return "NOT_STARTED";
+  }
+
+  const now = params.now ?? new Date();
+
+  if (now.getTime() > new Date(params.shortlistingDueAt).getTime()) {
+    return "OVERDUE";
+  }
+
+  return "ACTIVE";
+}
+
+export function getSourceTargetLabel(applicationCount: number) {
+  if (applicationCount < 50) return "Below source target";
+  if (applicationCount <= 100) return "Within source target";
+  return "Above source target";
+}
+
 export default function JobCard({
   id,
   title,
@@ -85,18 +155,38 @@ export default function JobCard({
   location,
   compensationRange,
   numberOfPositions,
+  sourcingDatabaseSource,
+  sourcingAccessReceivedAt,
+  shortlistingDueAt,
+  shortlistingCompletedAt,
+  applicationCount,
   assignedInterviewerId,
   assignedInterviewer,
   interviewers,
   isAdvancing = false,
   isAssigning = false,
+  isRecordingAccess = false,
+  isCompletingShortlisting = false,
   onAdvanceLifecycle,
   onAssignInterviewer,
+  onMarkAccessReceived,
+  onCompleteShortlisting,
   onEdit,
   onDelete,
 }: JobCardProps) {
   const nextLifecycle = nextRequirementLifecycle[requirementLifecycle];
   const isBillingBlocked = requirementLifecycle === "SOURCING_SHORTLISTING";
+  const slaStatus = getSlaStatus({
+    shortlistingCompletedAt,
+    shortlistingDueAt,
+  });
+  const canMarkAccessReceived =
+    requirementLifecycle === "INTERVIEWER_NOTIFIED" &&
+    Boolean(sourcingDatabaseSource);
+  const canCompleteShortlisting =
+    requirementLifecycle === "SOURCING_SHORTLISTING" &&
+    Boolean(sourcingAccessReceivedAt) &&
+    !shortlistingCompletedAt;
 
   return (
     <article className="rounded-xl border border-zinc-200 bg-white p-6 transition hover:border-black">
@@ -145,8 +235,53 @@ export default function JobCard({
         )}
       </dl>
 
+      <div className="mt-6 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+        <p className="text-sm font-semibold text-black">Sourcing / SLA</p>
+        <dl className="mt-3 grid gap-3 text-sm text-zinc-600 sm:grid-cols-2">
+          <div>
+            <dt className="font-medium text-black">Database</dt>
+            <dd>{getSourcingDatabaseLabel(sourcingDatabaseSource)}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">Access</dt>
+            <dd>
+              {sourcingAccessReceivedAt ? "Received" : "Not received"}
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">SLA</dt>
+            <dd>{slaStatusLabels[slaStatus]}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">Profiles</dt>
+            <dd>
+              {applicationCount} ({getSourceTargetLabel(applicationCount)})
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">Target</dt>
+            <dd>50–100</dd>
+          </div>
+          {shortlistingDueAt && (
+            <div>
+              <dt className="font-medium text-black">Due</dt>
+              <dd>{formatJobDateTime(shortlistingDueAt)}</dd>
+            </div>
+          )}
+          {shortlistingCompletedAt && (
+            <div>
+              <dt className="font-medium text-black">Completed</dt>
+              <dd>{formatJobDateTime(shortlistingCompletedAt)}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
+
       <div className="mt-6 rounded-lg bg-zinc-50 p-4">
-        <label htmlFor={`job-${id}-interviewer`} className="block text-sm font-medium text-black">
+        <label
+          htmlFor={`job-${id}-interviewer`}
+          className="block text-sm font-medium text-black"
+        >
           Assigned Interviewer
         </label>
         <p className="mt-1 text-sm text-zinc-600">
@@ -167,7 +302,9 @@ export default function JobCard({
           <option value="">Not assigned</option>
           {interviewers.map((interviewer) => (
             <option key={interviewer.id} value={interviewer.id}>
-              {interviewer.name} — {interviewerCategoryLabels[interviewer.category]} — {availabilityLabels[interviewer.availability]}
+              {interviewer.name} —{" "}
+              {interviewerCategoryLabels[interviewer.category]} —{" "}
+              {availabilityLabels[interviewer.availability]}
             </option>
           ))}
         </select>
@@ -182,7 +319,44 @@ export default function JobCard({
               disabled={isAdvancing}
               className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
             >
-              {isAdvancing ? "Moving..." : `Move to ${requirementLifecycleLabels[nextLifecycle]}`}
+              {isAdvancing
+                ? "Moving..."
+                : `Move to ${requirementLifecycleLabels[nextLifecycle]}`}
+            </button>
+          )}
+
+          {canMarkAccessReceived && (
+            <button
+              type="button"
+              onClick={() => onMarkAccessReceived(id)}
+              disabled={isRecordingAccess}
+              className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+            >
+              {isRecordingAccess
+                ? "Recording..."
+                : "Mark Database Access Received"}
+            </button>
+          )}
+
+          {sourcingAccessReceivedAt &&
+            requirementLifecycle === "SOURCING_SHORTLISTING" &&
+            !canCompleteShortlisting &&
+            shortlistingCompletedAt && (
+              <span className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
+                Shortlisting Completed
+              </span>
+            )}
+
+          {canCompleteShortlisting && (
+            <button
+              type="button"
+              onClick={() => onCompleteShortlisting(id)}
+              disabled={isCompletingShortlisting}
+              className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+            >
+              {isCompletingShortlisting
+                ? "Completing..."
+                : "Complete Shortlisting"}
             </button>
           )}
 

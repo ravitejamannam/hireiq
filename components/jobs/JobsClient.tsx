@@ -10,8 +10,10 @@ import type { Company } from "@/types/company";
 import type { JobFormData } from "@/components/jobs/JobForm";
 import {
   assignInterviewerToJob,
+  completeJobShortlisting,
   createJob,
   deleteJob,
+  markJobSourcingAccessReceived,
   transitionJobLifecycle,
   updateJob,
 } from "@/app/actions/job-actions";
@@ -46,6 +48,11 @@ export default function JobsClient({
   const [isSaving, setIsSaving] = useState(false);
   const [advancingJobId, setAdvancingJobId] = useState<number | null>(null);
   const [assigningJobId, setAssigningJobId] = useState<number | null>(null);
+  const [recordingAccessJobId, setRecordingAccessJobId] = useState<
+    number | null
+  >(null);
+  const [completingShortlistingJobId, setCompletingShortlistingJobId] =
+    useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [actionError, setActionError] = useState("");
@@ -116,6 +123,34 @@ export default function JobsClient({
     }
   }
 
+  async function handleMarkAccessReceived(jobId: number) {
+    setActionError("");
+    setRecordingAccessJobId(jobId);
+
+    try {
+      await markJobSourcingAccessReceived(jobId);
+      router.refresh();
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setRecordingAccessJobId(null);
+    }
+  }
+
+  async function handleCompleteShortlisting(jobId: number) {
+    setActionError("");
+    setCompletingShortlistingJobId(jobId);
+
+    try {
+      await completeJobShortlisting(jobId);
+      router.refresh();
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setCompletingShortlistingJobId(null);
+    }
+  }
+
   function openCreateModal() {
     setEditingJob(null);
     setActionError("");
@@ -156,6 +191,10 @@ export default function JobsClient({
       value?.toLowerCase().includes(normalizedSearch),
     );
   });
+
+  const activeEditingJob = editingJob
+    ? (initialJobs.find((job) => job.id === editingJob.id) ?? editingJob)
+    : null;
 
   return (
     <DashboardLayout>
@@ -232,13 +271,22 @@ export default function JobsClient({
               location={job.location}
               compensationRange={job.compensationRange}
               numberOfPositions={job.numberOfPositions}
+              sourcingDatabaseSource={job.sourcingDatabaseSource}
+              sourcingAccessReceivedAt={job.sourcingAccessReceivedAt}
+              shortlistingDueAt={job.shortlistingDueAt}
+              shortlistingCompletedAt={job.shortlistingCompletedAt}
+              applicationCount={job._count.applications}
               assignedInterviewerId={job.assignedInterviewerId}
               assignedInterviewer={job.assignedInterviewer}
               interviewers={interviewers}
               isAdvancing={advancingJobId === job.id}
               isAssigning={assigningJobId === job.id}
+              isRecordingAccess={recordingAccessJobId === job.id}
+              isCompletingShortlisting={completingShortlistingJobId === job.id}
               onAdvanceLifecycle={handleAdvanceLifecycle}
               onAssignInterviewer={handleAssignInterviewer}
+              onMarkAccessReceived={handleMarkAccessReceived}
+              onCompleteShortlisting={handleCompleteShortlisting}
               onEdit={handleEditJob}
               onDelete={handleDeleteJob}
             />
@@ -257,30 +305,54 @@ export default function JobsClient({
         companies={companies}
         errorMessage={actionError}
         isSaving={isSaving}
+        isRecordingAccess={
+          activeEditingJob
+            ? recordingAccessJobId === activeEditingJob.id
+            : false
+        }
+        isCompletingShortlisting={
+          activeEditingJob
+            ? completingShortlistingJobId === activeEditingJob.id
+            : false
+        }
+        onMarkAccessReceived={
+          activeEditingJob
+            ? () => handleMarkAccessReceived(activeEditingJob.id)
+            : undefined
+        }
+        onCompleteShortlisting={
+          activeEditingJob
+            ? () => handleCompleteShortlisting(activeEditingJob.id)
+            : undefined
+        }
         initialValues={
-          editingJob
+          activeEditingJob
             ? {
-                title: editingJob.title,
-                status: editingJob.status,
-                companyId: editingJob.companyId,
-                roleCategory: editingJob.roleCategory,
-                experienceRange: editingJob.experienceRange,
-                location: editingJob.location,
-                compensationRange: editingJob.compensationRange,
-                targetHireDate: editingJob.targetHireDate,
-                numberOfPositions: editingJob.numberOfPositions,
-                mustHaveRequirements: editingJob.mustHaveRequirements,
-                niceToHaveRequirements: editingJob.niceToHaveRequirements,
-                jobDescription: editingJob.jobDescription,
-                evaluationCriteria: editingJob.evaluationCriteria,
-                primarySkills: editingJob.primarySkills,
-                requirementLifecycle: editingJob.requirementLifecycle,
-                clientCompletedAt: editingJob.clientCompletedAt,
-                sourcingDatabaseSource: editingJob.sourcingDatabaseSource,
-                sourcingAccessDetails: editingJob.sourcingAccessDetails,
-                sourcingAccessReceivedAt: editingJob.sourcingAccessReceivedAt,
-                shortlistingDueAt: editingJob.shortlistingDueAt,
-                shortlistingCompletedAt: editingJob.shortlistingCompletedAt,
+                title: activeEditingJob.title,
+                status: activeEditingJob.status,
+                companyId: activeEditingJob.companyId,
+                roleCategory: activeEditingJob.roleCategory,
+                experienceRange: activeEditingJob.experienceRange,
+                location: activeEditingJob.location,
+                compensationRange: activeEditingJob.compensationRange,
+                targetHireDate: activeEditingJob.targetHireDate,
+                numberOfPositions: activeEditingJob.numberOfPositions,
+                mustHaveRequirements: activeEditingJob.mustHaveRequirements,
+                niceToHaveRequirements:
+                  activeEditingJob.niceToHaveRequirements,
+                jobDescription: activeEditingJob.jobDescription,
+                evaluationCriteria: activeEditingJob.evaluationCriteria,
+                primarySkills: activeEditingJob.primarySkills,
+                requirementLifecycle: activeEditingJob.requirementLifecycle,
+                clientCompletedAt: activeEditingJob.clientCompletedAt,
+                sourcingDatabaseSource:
+                  activeEditingJob.sourcingDatabaseSource,
+                sourcingAccessDetails: activeEditingJob.sourcingAccessDetails,
+                sourcingAccessReceivedAt:
+                  activeEditingJob.sourcingAccessReceivedAt,
+                shortlistingDueAt: activeEditingJob.shortlistingDueAt,
+                shortlistingCompletedAt:
+                  activeEditingJob.shortlistingCompletedAt,
               }
             : undefined
         }

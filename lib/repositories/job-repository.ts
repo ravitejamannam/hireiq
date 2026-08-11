@@ -41,6 +41,11 @@ const jobSelect = {
       availability: true,
     },
   },
+  _count: {
+    select: {
+      applications: true,
+    },
+  },
 } satisfies Prisma.JobSelect;
 
 export async function getJobs() {

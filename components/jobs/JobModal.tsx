@@ -12,6 +12,10 @@ type JobModalProps = {
   initialValues?: Parameters<typeof JobForm>[0]["initialValues"];
   errorMessage?: string;
   isSaving?: boolean;
+  isRecordingAccess?: boolean;
+  isCompletingShortlisting?: boolean;
+  onMarkAccessReceived?: () => void;
+  onCompleteShortlisting?: () => void;
 };
 
 export default function JobModal({
@@ -22,6 +26,10 @@ export default function JobModal({
   initialValues,
   errorMessage,
   isSaving,
+  isRecordingAccess,
+  isCompletingShortlisting,
+  onMarkAccessReceived,
+  onCompleteShortlisting,
 }: JobModalProps) {
   if (!isOpen) return null;
 
@@ -49,12 +57,26 @@ export default function JobModal({
         </div>
 
         <JobForm
+          key={
+            initialValues
+              ? [
+                  initialValues.requirementLifecycle,
+                  initialValues.sourcingAccessReceivedAt?.toString() ?? "no-access",
+                  initialValues.shortlistingCompletedAt?.toString() ??
+                    "incomplete",
+                ].join(":")
+              : "create-job"
+          }
           onCreate={onCreate}
           onCancel={onClose}
           companies={companies}
           initialValues={initialValues}
           errorMessage={errorMessage}
           isSaving={isSaving}
+          isRecordingAccess={isRecordingAccess}
+          isCompletingShortlisting={isCompletingShortlisting}
+          onMarkAccessReceived={onMarkAccessReceived}
+          onCompleteShortlisting={onCompleteShortlisting}
         />
       </div>
     </div>

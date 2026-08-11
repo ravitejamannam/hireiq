@@ -208,6 +208,73 @@ function validateSourcingDatabaseSource(sourcingDatabaseSource: unknown) {
   return sourcingDatabaseSource as SourcingDatabaseSource;
 }
 
+export async function ensureJobExists(id: number) {
+  const job = await prisma.job.findUnique({
+    where: {
+      id,
+    },
+    select: {
+      id: true,
+      requirementLifecycle: true,
+      sourcingDatabaseSource: true,
+      sourcingAccessReceivedAt: true,
+      shortlistingDueAt: true,
+      shortlistingCompletedAt: true,
+    },
+  });
+
+  if (!job) {
+    throw new JobValidationError("Job not found.");
+  }
+
+  return job;
+}
+
+export function requireConfiguredSourcingDatabaseSource(
+  sourcingDatabaseSource: SourcingDatabaseSource | null,
+) {
+  if (!sourcingDatabaseSource) {
+    throw new JobValidationError("Sourcing database source is required.");
+  }
+
+  return sourcingDatabaseSource;
+}
+
+export function assertSourcingAccessCanBeRecorded(
+  requirementLifecycle: RequirementLifecycle,
+  sourcingAccessReceivedAt: Date | null,
+) {
+  if (sourcingAccessReceivedAt) {
+    return "ALREADY_RECORDED" as const;
+  }
+
+  if (requirementLifecycle !== "INTERVIEWER_NOTIFIED") {
+    throw new JobValidationError("Invalid sourcing workflow state.");
+  }
+
+  return "READY" as const;
+}
+
+export function assertShortlistingCanBeCompleted(
+  requirementLifecycle: RequirementLifecycle,
+  sourcingAccessReceivedAt: Date | null,
+  shortlistingCompletedAt: Date | null,
+) {
+  if (shortlistingCompletedAt) {
+    return "ALREADY_COMPLETED" as const;
+  }
+
+  if (!sourcingAccessReceivedAt) {
+    throw new JobValidationError("Sourcing access has not been received.");
+  }
+
+  if (requirementLifecycle !== "SOURCING_SHORTLISTING") {
+    throw new JobValidationError("Invalid sourcing workflow state.");
+  }
+
+  return "READY" as const;
+}
+
 function hasField(
   requirementFields: JobRequirementInput,
   field: keyof JobRequirementInput,

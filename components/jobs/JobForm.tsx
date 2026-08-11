@@ -76,6 +76,10 @@ type JobFormProps = {
   initialValues?: JobFormInitialValues;
   errorMessage?: string;
   isSaving?: boolean;
+  isRecordingAccess?: boolean;
+  isCompletingShortlisting?: boolean;
+  onMarkAccessReceived?: () => void;
+  onCompleteShortlisting?: () => void;
 };
 
 function formatDateInputValue(value: Date | string | null | undefined) {
@@ -131,6 +135,10 @@ export default function JobForm({
   initialValues,
   errorMessage,
   isSaving = false,
+  isRecordingAccess = false,
+  isCompletingShortlisting = false,
+  onMarkAccessReceived,
+  onCompleteShortlisting,
 }: JobFormProps) {
   const [title, setTitle] = useState(initialValues?.title ?? "");
   const [status, setStatus] = useState<JobStatus | "">(
@@ -610,6 +618,68 @@ export default function JobForm({
             />
           </div>
         </div>
+
+        {initialValues && (
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+            <p className="text-sm font-semibold text-black">
+              Sourcing Workflow
+            </p>
+            <p className="mt-1 text-sm text-zinc-600">
+              {initialValues.sourcingAccessReceivedAt
+                ? "Access Received"
+                : "Access Not Received"}
+              {initialValues.shortlistingCompletedAt
+                ? " · Shortlisting Completed"
+                : ""}
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              {currentRequirementLifecycle === "INTERVIEWER_NOTIFIED" &&
+                Boolean(sourcingDatabaseSource) &&
+                !initialValues.sourcingAccessReceivedAt &&
+                onMarkAccessReceived && (
+                  <button
+                    type="button"
+                    onClick={onMarkAccessReceived}
+                    disabled={isRecordingAccess || isSaving}
+                    className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+                  >
+                    {isRecordingAccess
+                      ? "Recording..."
+                      : "Mark Database Access Received"}
+                  </button>
+                )}
+
+              {initialValues.sourcingAccessReceivedAt && (
+                <span className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700">
+                  Access Received
+                </span>
+              )}
+
+              {currentRequirementLifecycle === "SOURCING_SHORTLISTING" &&
+                initialValues.sourcingAccessReceivedAt &&
+                !initialValues.shortlistingCompletedAt &&
+                onCompleteShortlisting && (
+                  <button
+                    type="button"
+                    onClick={onCompleteShortlisting}
+                    disabled={isCompletingShortlisting || isSaving}
+                    className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+                  >
+                    {isCompletingShortlisting
+                      ? "Completing..."
+                      : "Complete Shortlisting"}
+                  </button>
+                )}
+
+              {initialValues.shortlistingCompletedAt && (
+                <span className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
+                  Shortlisting Completed
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="space-y-4">
