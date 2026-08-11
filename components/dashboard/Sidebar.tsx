@@ -19,6 +19,7 @@ import {
   ClipboardPen,
   ListChecks,
   Search,
+  Star,
   Settings,
 } from "lucide-react";
 
@@ -63,6 +64,11 @@ const links = [
     icon: ListChecks,
     label: "Technical Evaluations",
     href: "/dashboard/technical-evaluations",
+  },
+  {
+    icon: Star,
+    label: "Shortlist",
+    href: "/dashboard/shortlist",
   },
   {
     icon: Users,

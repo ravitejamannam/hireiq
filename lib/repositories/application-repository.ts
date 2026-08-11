@@ -151,3 +151,42 @@ export async function getTechnicalEvaluationApplications() {
     },
   });
 }
+
+export async function getShortlistApplications() {
+  return prisma.application.findMany({
+    where: {
+      status: {
+        in: ["TECH_EVALUATION", "SHORTLISTED"],
+      },
+    },
+    select: {
+      ...applicationSelect,
+      job: {
+        select: {
+          ...applicationSelect.job.select,
+          shortlistingCompletedAt: true,
+        },
+      },
+      evaluations: {
+        select: {
+          id: true,
+          overallScore: true,
+          recommendation: true,
+          hireProbability: true,
+          fitDecision: true,
+          evaluatedAt: true,
+          notes: true,
+          recordingUrl: true,
+          interviewerId: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: "asc" as const,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
