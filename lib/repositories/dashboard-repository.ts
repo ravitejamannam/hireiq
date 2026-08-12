@@ -1,8 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { ApplicationPipelineStatus, JobStatus } from "@prisma/client";
 
+import {
+  applicationScopeWhere,
+  jobScopeWhere,
+  requireUser,
+} from "@/lib/auth/authorization";
+
 export async function getDashboardStats() {
+  const user = await requireUser();
   const now = new Date();
+  const jobScope = jobScopeWhere(user);
+  const applicationScope = applicationScopeWhere(user);
 
   const [
     companies,
@@ -16,49 +25,88 @@ export async function getDashboardStats() {
     slaAtRisk,
     openRequirements,
   ] = await Promise.all([
-    prisma.company.count(),
-    prisma.candidate.count(),
-    prisma.interview.count(),
-    prisma.codingTest.count(),
-    prisma.job.count({
-      where: {
-        status: JobStatus.OPEN,
-      },
+    user.role === "ADMIN"
+      ? prisma.company.count()
+      : user.role === "CLIENT" && user.companyId !== null
+        ? prisma.company.count({ where: { id: user.companyId } })
+        : Promise.resolve(0),
+    prisma.candidate.count({
+      where:
+        user.role === "ADMIN"
+          ? undefined
+          : user.role === "CLIENT" && user.companyId !== null
+            ? { companyId: user.companyId }
+            : {
+                applications: {
+                  some: {
+                    job: {
+                      assignedInterviewerId: user.interviewerId ?? -1,
+                    },
+                  },
+                },
+              },
     }),
-    prisma.application.count({
-      where: {
-        status: {
-          in: [
-            ApplicationPipelineStatus.CV_POOL,
-            ApplicationPipelineStatus.EXPERT_REVIEW,
-            ApplicationPipelineStatus.TECH_EVALUATION,
-            ApplicationPipelineStatus.SHORTLISTED,
-            ApplicationPipelineStatus.SELECTED,
-          ],
-        },
-      },
+    prisma.interview.count({
+      where: { application: applicationScope },
     }),
-    prisma.application.count({
-      where: {
-        status: ApplicationPipelineStatus.SHORTLISTED,
-      },
-    }),
-    prisma.application.count({
-      where: {
-        status: ApplicationPipelineStatus.SELECTED,
-      },
+    prisma.codingTest.count({
+      where: { application: applicationScope },
     }),
     prisma.job.count({
       where: {
-        shortlistingDueAt: {
-          lt: now,
-        },
-        shortlistingCompletedAt: null,
+        AND: [jobScope, { status: JobStatus.OPEN }],
+      },
+    }),
+    prisma.application.count({
+      where: {
+        AND: [
+          applicationScope,
+          {
+            status: {
+              in: [
+                ApplicationPipelineStatus.CV_POOL,
+                ApplicationPipelineStatus.EXPERT_REVIEW,
+                ApplicationPipelineStatus.TECH_EVALUATION,
+                ApplicationPipelineStatus.SHORTLISTED,
+                ApplicationPipelineStatus.SELECTED,
+              ],
+            },
+          },
+        ],
+      },
+    }),
+    prisma.application.count({
+      where: {
+        AND: [
+          applicationScope,
+          { status: ApplicationPipelineStatus.SHORTLISTED },
+        ],
+      },
+    }),
+    prisma.application.count({
+      where: {
+        AND: [
+          applicationScope,
+          { status: ApplicationPipelineStatus.SELECTED },
+        ],
+      },
+    }),
+    prisma.job.count({
+      where: {
+        AND: [
+          jobScope,
+          {
+            shortlistingDueAt: {
+              lt: now,
+            },
+            shortlistingCompletedAt: null,
+          },
+        ],
       },
     }),
     prisma.job.findMany({
       where: {
-        status: JobStatus.OPEN,
+        AND: [jobScope, { status: JobStatus.OPEN }],
       },
       select: {
         id: true,

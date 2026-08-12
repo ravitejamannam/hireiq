@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 
+import {
+  evaluationScopeWhere,
+  requireApplicationAccess,
+  requireUser,
+} from "@/lib/auth/authorization";
+
 const evaluationSelect = {
   id: true,
   overallScore: true,
@@ -77,7 +83,10 @@ const evaluationSelect = {
 } satisfies Prisma.EvaluationSelect;
 
 export async function getEvaluations() {
+  const user = await requireUser();
+
   return prisma.evaluation.findMany({
+    where: evaluationScopeWhere(user),
     select: evaluationSelect,
     orderBy: {
       createdAt: "desc",
@@ -86,9 +95,12 @@ export async function getEvaluations() {
 }
 
 export async function getEvaluationById(id: number) {
-  return prisma.evaluation.findUnique({
+  const user = await requireUser();
+
+  return prisma.evaluation.findFirst({
     where: {
       id,
+      ...evaluationScopeWhere(user),
     },
     select: evaluationSelect,
   });
@@ -98,6 +110,8 @@ export async function getEvaluationForApplication(
   applicationId: number,
   interviewerId: number,
 ) {
+  await requireApplicationAccess(applicationId);
+
   return prisma.evaluation.findFirst({
     where: {
       applicationId,
@@ -111,11 +125,18 @@ export async function getEvaluationForApplication(
 }
 
 export async function getEvaluationsByJobId(jobId: number) {
+  const user = await requireUser();
+
   return prisma.evaluation.findMany({
     where: {
-      application: {
-        jobId,
-      },
+      AND: [
+        evaluationScopeWhere(user),
+        {
+          application: {
+            jobId,
+          },
+        },
+      ],
     },
     select: evaluationSelect,
     orderBy: {

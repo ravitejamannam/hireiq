@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/authorization";
 import { prisma } from "@/lib/prisma";
 import {
   assertApplicationIsInExpertReview,
@@ -31,6 +32,7 @@ export async function createApplication(
   expertScore: number | null = null,
   rejectionReason: string | null = null,
 ) {
+  await requireAdmin();
   const applicationInput = await validateApplicationInput(
     candidateId,
     jobId,
@@ -62,6 +64,7 @@ export async function updateApplication(
   expertScore: number | null = null,
   rejectionReason: string | null = null,
 ) {
+  await requireAdmin();
   const applicationId = validateApplicationId(id);
   await ensureApplicationExists(applicationId);
 
@@ -91,6 +94,7 @@ export async function updateApplication(
 }
 
 export async function deleteApplication(id: number) {
+  await requireAdmin();
   const applicationId = validateApplicationId(id);
   await ensureApplicationExists(applicationId);
 
@@ -154,6 +158,7 @@ export async function createSourcedApplication(
   candidateInput: SourcedCandidateInput,
   source: SourcingDatabaseSource,
 ) {
+  await requireAdmin();
   const validatedJobId = validateSourcingJobId(jobId);
   const validatedCandidate = validateSourcedCandidateInput(candidateInput);
   const validatedSource = validateRequiredApplicationSource(source);
@@ -245,6 +250,7 @@ export async function saveExpertReview(
   expertScore: number | null,
   notes: string | null,
 ) {
+  await requireAdmin();
   const validatedApplicationId = validateApplicationId(applicationId);
   const validatedExpertScore = validateExpertReviewScore(expertScore);
   const validatedNotes = validateExpertReviewNotes(notes);
@@ -379,6 +385,7 @@ export async function transitionApplicationStatus(
   id: number,
   nextStatus: ApplicationPipelineStatus,
 ) {
+  await requireAdmin();
   const applicationId = validateApplicationId(id);
 
   if (!isApplicationPipelineStatus(nextStatus)) {

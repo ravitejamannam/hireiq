@@ -1,5 +1,9 @@
 "use server";
 
+import {
+  requireAdmin,
+  requireApplicationAccess,
+} from "@/lib/auth/authorization";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
@@ -27,6 +31,7 @@ export async function createEvaluation(
   interviewerId: number,
   fields: EvaluationFieldsInput = {},
 ) {
+  await requireAdmin();
   const evaluationInput = await validateEvaluationInput(
     applicationId,
     interviewerId,
@@ -48,6 +53,7 @@ export async function updateEvaluation(
   interviewerId: number,
   fields: EvaluationFieldsInput = {},
 ) {
+  await requireAdmin();
   const evaluationId = validateEvaluationId(id);
   await ensureEvaluationExists(evaluationId);
 
@@ -70,6 +76,7 @@ export async function updateEvaluation(
 }
 
 export async function deleteEvaluation(id: number) {
+  await requireAdmin();
   const evaluationId = validateEvaluationId(id);
   await ensureEvaluationExists(evaluationId);
 
@@ -89,6 +96,7 @@ export async function createEvaluationQuestion(
   question: string,
   fields: EvaluationQuestionFieldsInput = {},
 ) {
+  await requireAdmin();
   const evaluationQuestionInput = await validateEvaluationQuestionInput(
     evaluationId,
     question,
@@ -119,6 +127,7 @@ export async function updateEvaluationQuestion(
   question: string,
   fields: EvaluationQuestionFieldsInput = {},
 ) {
+  await requireAdmin();
   const evaluationQuestionId = validateEvaluationQuestionId(id);
   await ensureEvaluationQuestionExists(evaluationQuestionId);
 
@@ -150,6 +159,7 @@ export async function updateEvaluationQuestion(
 }
 
 export async function deleteEvaluationQuestion(id: number) {
+  await requireAdmin();
   const evaluationQuestionId = validateEvaluationQuestionId(id);
   await ensureEvaluationQuestionExists(evaluationQuestionId);
 
@@ -175,6 +185,7 @@ export async function saveTechnicalEvaluation(
   applicationId: number,
   fields: EvaluationFieldsInput = {},
 ) {
+  await requireAdmin();
   if (
     typeof applicationId !== "number" ||
     !Number.isFinite(applicationId) ||
@@ -266,6 +277,8 @@ export async function getTechnicalEvaluationForApplication(
       "Application ID must be a positive integer.",
     );
   }
+
+  await requireApplicationAccess(applicationId);
 
   const { application, interviewerId } =
     await resolveAssignedInterviewerForApplication(applicationId);

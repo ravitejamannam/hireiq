@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import type { ApplicationPipelineStatus, Prisma } from "@prisma/client";
 
+import {
+  applicationScopeWhere,
+  requireUser,
+} from "@/lib/auth/authorization";
+
 const applicationSelect = {
   id: true,
   status: true,
@@ -68,7 +73,10 @@ const applicationSelect = {
 } satisfies Prisma.ApplicationSelect;
 
 export async function getApplications() {
+  const user = await requireUser();
+
   return prisma.application.findMany({
+    where: applicationScopeWhere(user),
     select: applicationSelect,
     orderBy: {
       createdAt: "desc",
@@ -77,18 +85,26 @@ export async function getApplications() {
 }
 
 export async function getApplicationById(id: number) {
-  return prisma.application.findUnique({
+  const user = await requireUser();
+
+  return prisma.application.findFirst({
     where: {
       id,
+      ...applicationScopeWhere(user),
     },
     select: applicationSelect,
   });
 }
 
 export async function getApplicationsByJobId(jobId: number) {
+  const user = await requireUser();
+
   return prisma.application.findMany({
     where: {
-      jobId,
+      AND: [
+        { jobId },
+        applicationScopeWhere(user),
+      ],
     },
     select: applicationSelect,
     orderBy: {
@@ -100,11 +116,18 @@ export async function getApplicationsByJobId(jobId: number) {
 export async function getApplicationsByStatuses(
   statuses: ApplicationPipelineStatus[],
 ) {
+  const user = await requireUser();
+
   return prisma.application.findMany({
     where: {
-      status: {
-        in: statuses,
-      },
+      AND: [
+        applicationScopeWhere(user),
+        {
+          status: {
+            in: statuses,
+          },
+        },
+      ],
     },
     select: applicationSelect,
     orderBy: {
@@ -121,11 +144,18 @@ export async function getExpertReviewApplications() {
 }
 
 export async function getTechnicalEvaluationApplications() {
+  const user = await requireUser();
+
   return prisma.application.findMany({
     where: {
-      status: {
-        in: ["EXPERT_REVIEW", "TECH_EVALUATION"],
-      },
+      AND: [
+        applicationScopeWhere(user),
+        {
+          status: {
+            in: ["EXPERT_REVIEW", "TECH_EVALUATION"],
+          },
+        },
+      ],
     },
     select: {
       ...applicationSelect,
@@ -153,11 +183,18 @@ export async function getTechnicalEvaluationApplications() {
 }
 
 export async function getShortlistApplications() {
+  const user = await requireUser();
+
   return prisma.application.findMany({
     where: {
-      status: {
-        in: ["TECH_EVALUATION", "SHORTLISTED"],
-      },
+      AND: [
+        applicationScopeWhere(user),
+        {
+          status: {
+            in: ["TECH_EVALUATION", "SHORTLISTED"],
+          },
+        },
+      ],
     },
     select: {
       ...applicationSelect,

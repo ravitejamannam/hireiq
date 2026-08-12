@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/authorization";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { CandidateStatus } from "@prisma/client";
@@ -11,6 +12,7 @@ export async function createCandidate(
   status: CandidateStatus,
   companyId: number,
 ) {
+  await requireAdmin();
   const candidate = await prisma.candidate.create({
     data: {
       name,
@@ -34,6 +36,7 @@ export async function updateCandidate(
   status: CandidateStatus,
   companyId: number,
 ) {
+  await requireAdmin();
   const candidate = await prisma.candidate.update({
     where: {
       id,
@@ -53,6 +56,7 @@ export async function updateCandidate(
 }
 
 export async function deleteCandidate(id: number) {
+  await requireAdmin();
   await prisma.candidate.delete({
     where: {
       id,

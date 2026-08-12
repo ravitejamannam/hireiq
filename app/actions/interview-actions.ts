@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/authorization";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { InterviewResult, InterviewType } from "@prisma/client";
@@ -10,6 +11,7 @@ export async function createInterview(
   interviewAt: Date,
   result: InterviewResult,
 ) {
+  await requireAdmin();
   const interview = await prisma.interview.create({
     data: {
       applicationId,
@@ -31,6 +33,7 @@ export async function updateInterview(
   interviewAt: Date,
   result: InterviewResult,
 ) {
+  await requireAdmin();
   const interview = await prisma.interview.update({
     where: {
       id,
@@ -49,6 +52,7 @@ export async function updateInterview(
 }
 
 export async function deleteInterview(id: number) {
+  await requireAdmin();
   await prisma.interview.delete({
     where: {
       id,

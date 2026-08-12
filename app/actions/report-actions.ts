@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/authorization";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { Recommendation } from "@prisma/client";
@@ -9,6 +10,7 @@ export async function createReport(
   recommendation: Recommendation,
   notes: string | null,
 ) {
+  await requireAdmin();
   const report = await prisma.report.create({
     data: {
       applicationId,
@@ -28,6 +30,7 @@ export async function updateReport(
   recommendation: Recommendation,
   notes: string | null,
 ) {
+  await requireAdmin();
   const report = await prisma.report.update({
     where: {
       id,
@@ -45,6 +48,7 @@ export async function updateReport(
 }
 
 export async function deleteReport(id: number) {
+  await requireAdmin();
   await prisma.report.delete({
     where: {
       id,

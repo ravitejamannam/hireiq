@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/authorization";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
@@ -29,6 +30,7 @@ export async function createJob(
   companyId: number,
   requirementFields: JobRequirementInput = {},
 ) {
+  await requireAdmin();
   const validatedJob = await validateJobInput(
     title,
     status,
@@ -56,6 +58,7 @@ export async function updateJob(
   companyId: number,
   requirementFields: JobRequirementInput = {},
 ) {
+  await requireAdmin();
   const jobId = validateJobId(id);
 
   const existingJob = await prisma.job.findUnique({
@@ -91,6 +94,7 @@ export async function updateJob(
 }
 
 export async function deleteJob(id: number) {
+  await requireAdmin();
   const jobId = validateJobId(id);
 
   const existingJob = await prisma.job.findUnique({
@@ -119,6 +123,7 @@ export async function transitionJobLifecycle(
   id: number,
   nextLifecycle: RequirementLifecycle,
 ) {
+  await requireAdmin();
   const jobId = validateJobId(id);
   const validatedNextLifecycle =
     validateRequirementLifecycleValue(nextLifecycle);
@@ -164,6 +169,7 @@ export async function assignInterviewerToJob(
   jobId: number,
   interviewerId: number | null,
 ) {
+  await requireAdmin();
   const validatedJobId = validateJobId(jobId);
   const validatedInterviewerId = validateNullableInterviewerId(interviewerId);
 
@@ -200,6 +206,7 @@ export async function assignInterviewerToJob(
 }
 
 export async function completeJobRequirement(jobId: number) {
+  await requireAdmin();
   const validatedJobId = validateJobId(jobId);
 
   const existingJob = await prisma.job.findUnique({
@@ -261,6 +268,7 @@ export async function completeJobRequirement(jobId: number) {
 }
 
 export async function notifyAssignedInterviewer(jobId: number) {
+  await requireAdmin();
   const validatedJobId = validateJobId(jobId);
 
   const existingJob = await prisma.job.findUnique({
@@ -347,6 +355,7 @@ export async function notifyAssignedInterviewer(jobId: number) {
 }
 
 export async function markJobSourcingAccessReceived(jobId: number) {
+  await requireAdmin();
   const validatedJobId = validateJobId(jobId);
   const existingJob = await ensureJobExists(validatedJobId);
 
@@ -391,6 +400,7 @@ export async function markJobSourcingAccessReceived(jobId: number) {
 }
 
 export async function completeJobShortlisting(jobId: number) {
+  await requireAdmin();
   const validatedJobId = validateJobId(jobId);
   const existingJob = await ensureJobExists(validatedJobId);
 

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { PortalRole } from "@prisma/client";
+import { useSession } from "next-auth/react";
 
 import {
   LayoutDashboard,
@@ -13,6 +15,12 @@ import {
   CreditCard,
   Settings,
 } from "lucide-react";
+
+const portalRoleLabels: Record<PortalRole, string> = {
+  ADMIN: "Admin",
+  CLIENT: "Client",
+  INTERVIEWER: "Interviewer",
+};
 
 type NavLink = {
   icon: typeof LayoutDashboard;
@@ -97,14 +105,20 @@ function isActivePath(pathname: string, href: string) {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const roleLabel = session?.user?.role
+    ? portalRoleLabels[session.user.role]
+    : null;
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r border-zinc-200 bg-white">
       <div className="border-b border-zinc-200 p-6">
         <h2 className="text-2xl font-bold text-black">HireIQ</h2>
-        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
-          Admin
-        </p>
+        {roleLabel ? (
+          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
+            {roleLabel}
+          </p>
+        ) : null}
       </div>
 
       <nav className="flex-1 overflow-y-auto p-4" aria-label="Admin navigation">

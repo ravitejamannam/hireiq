@@ -1,10 +1,26 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
+
+import {
+  companyScopeWhere,
+  requireUser,
+} from "@/lib/auth/authorization";
+
+const companyInclude = {
+  candidates: true,
+} satisfies Prisma.CompanyInclude;
 
 export async function getCompanies() {
+  const user = await requireUser();
+  const scope = companyScopeWhere(user);
+
+  if (scope === null) {
+    return [];
+  }
+
   return prisma.company.findMany({
-    include: {
-      candidates: true,
-    },
+    where: scope,
+    include: companyInclude,
     orderBy: {
       createdAt: "desc",
     },
@@ -12,12 +28,18 @@ export async function getCompanies() {
 }
 
 export async function getCompanyById(id: number) {
-  return prisma.company.findUnique({
+  const user = await requireUser();
+  const scope = companyScopeWhere(user);
+
+  if (scope === null) {
+    return null;
+  }
+
+  return prisma.company.findFirst({
     where: {
       id,
+      ...scope,
     },
-    include: {
-      candidates: true,
-    },
+    include: companyInclude,
   });
 }

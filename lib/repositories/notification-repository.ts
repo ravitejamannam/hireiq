@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 
+import {
+  notificationScopeWhere,
+  requireUser,
+} from "@/lib/auth/authorization";
+
 const notificationSelect = {
   id: true,
   type: true,
@@ -27,7 +32,10 @@ const notificationSelect = {
 } satisfies Prisma.NotificationSelect;
 
 export async function getNotifications() {
+  const user = await requireUser();
+
   return prisma.notification.findMany({
+    where: notificationScopeWhere(user),
     select: notificationSelect,
     orderBy: {
       createdAt: "desc",
@@ -36,9 +44,12 @@ export async function getNotifications() {
 }
 
 export async function getNotificationById(id: number) {
-  return prisma.notification.findUnique({
+  const user = await requireUser();
+
+  return prisma.notification.findFirst({
     where: {
       id,
+      ...notificationScopeWhere(user),
     },
     select: notificationSelect,
   });

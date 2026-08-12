@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/prisma";
 
+import {
+  interviewerScopeWhere,
+  requireUser,
+} from "@/lib/auth/authorization";
+
 const interviewerSelect = {
   id: true,
   name: true,
@@ -21,7 +26,15 @@ const interviewerSelect = {
 };
 
 export async function getInterviewers() {
+  const user = await requireUser();
+  const scope = interviewerScopeWhere(user);
+
+  if (scope === null) {
+    return [];
+  }
+
   return prisma.interviewer.findMany({
+    where: scope,
     select: interviewerSelect,
     orderBy: {
       createdAt: "desc",
@@ -30,9 +43,17 @@ export async function getInterviewers() {
 }
 
 export async function getInterviewerById(id: number) {
-  return prisma.interviewer.findUnique({
+  const user = await requireUser();
+  const scope = interviewerScopeWhere(user);
+
+  if (scope === null) {
+    return null;
+  }
+
+  return prisma.interviewer.findFirst({
     where: {
       id,
+      ...scope,
     },
     select: interviewerSelect,
   });

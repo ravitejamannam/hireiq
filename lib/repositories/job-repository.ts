@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 
+import { jobScopeWhere, requireUser } from "@/lib/auth/authorization";
+
 const jobSelect = {
   id: true,
   title: true,
@@ -54,7 +56,10 @@ const jobSelect = {
 } satisfies Prisma.JobSelect;
 
 export async function getJobs() {
+  const user = await requireUser();
+
   return prisma.job.findMany({
+    where: jobScopeWhere(user),
     select: jobSelect,
     orderBy: {
       createdAt: "desc",
@@ -63,9 +68,12 @@ export async function getJobs() {
 }
 
 export async function getJobById(id: number) {
-  return prisma.job.findUnique({
+  const user = await requireUser();
+
+  return prisma.job.findFirst({
     where: {
       id,
+      ...jobScopeWhere(user),
     },
     select: jobSelect,
   });

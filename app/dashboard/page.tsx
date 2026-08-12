@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PortalRole } from "@prisma/client";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import StatCard from "@/components/dashboard/StatCard";
@@ -7,16 +8,26 @@ import {
   getSlaStatus,
   requirementLifecycleLabels,
 } from "@/components/jobs/JobCard";
+import { requireUser } from "@/lib/auth/authorization";
 import { getDashboardStats } from "@/lib/repositories/dashboard-repository";
 
+const portalRoleLabels: Record<PortalRole, string> = {
+  ADMIN: "Admin",
+  CLIENT: "Client",
+  INTERVIEWER: "Interviewer",
+};
+
 export default async function DashboardPage() {
-  const stats = await getDashboardStats();
+  const [user, stats] = await Promise.all([
+    requireUser(),
+    getDashboardStats(),
+  ]);
 
   return (
     <DashboardLayout>
       <div>
         <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-          Admin
+          {portalRoleLabels[user.role]}
         </p>
         <h1 className="mt-2 text-3xl font-bold text-black">Command Center</h1>
         <p className="mt-2 text-zinc-600">

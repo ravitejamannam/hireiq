@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/authorization";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { CodingTestStatus } from "@prisma/client";
@@ -12,6 +13,7 @@ export async function createCodingTest(
   status: CodingTestStatus,
   takenAt: Date,
 ) {
+  await requireAdmin();
   const codingTest = await prisma.codingTest.create({
     data: {
       applicationId,
@@ -37,6 +39,7 @@ export async function updateCodingTest(
   status: CodingTestStatus,
   takenAt: Date,
 ) {
+  await requireAdmin();
   const codingTest = await prisma.codingTest.update({
     where: {
       id,
@@ -57,6 +60,7 @@ export async function updateCodingTest(
 }
 
 export async function deleteCodingTest(id: number) {
+  await requireAdmin();
   await prisma.codingTest.delete({
     where: {
       id,

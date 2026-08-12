@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth/authorization";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
@@ -20,6 +21,7 @@ export async function createInterviewer(
   category: InterviewerCategory,
   availability: InterviewerAvailability,
 ) {
+  await requireAdmin();
   const validatedInterviewer = validateInterviewerInput(
     name,
     category,
@@ -41,6 +43,7 @@ export async function updateInterviewer(
   category: InterviewerCategory,
   availability: InterviewerAvailability,
 ) {
+  await requireAdmin();
   const interviewerId = validateInterviewerId(id);
 
   await ensureInterviewerExists(interviewerId);
@@ -65,6 +68,7 @@ export async function updateInterviewer(
 }
 
 export async function deleteInterviewer(id: number) {
+  await requireAdmin();
   const interviewerId = validateInterviewerId(id);
 
   await ensureInterviewerExists(interviewerId);
