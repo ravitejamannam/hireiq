@@ -28,9 +28,12 @@ Bootstrap the first Admin user (idempotent; does not run on app startup):
 pnpm db:bootstrap-admin
 ```
 
-Then sign in at `/login`. Dashboard routes under `/dashboard` require an authenticated session.
+Then sign in at `/login`.
 
-Role-based authorization is not implemented yet.
+- Admin users land on `/dashboard`
+- Client users land on `/client`
+
+Dashboard and client routes require an authenticated session. Resource access is authorized server-side by portal role and tenant boundaries.
 
 ## Learn More
 

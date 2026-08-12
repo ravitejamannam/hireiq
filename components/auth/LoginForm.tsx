@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { PortalRole } from "@prisma/client";
 
+import { homePathForRole } from "@/lib/auth/routes";
 import AuthButton from "./AuthButton";
 import AuthInput from "./AuthInput";
 
@@ -52,7 +54,12 @@ export default function LoginForm() {
         return;
       }
 
-      router.push("/dashboard");
+      const sessionResponse = await fetch("/api/auth/session");
+      const session = (await sessionResponse.json()) as {
+        user?: { role?: PortalRole };
+      };
+      const role = session.user?.role ?? PortalRole.ADMIN;
+      router.push(homePathForRole(role));
       router.refresh();
     } catch {
       setFormError(GENERIC_AUTH_ERROR);

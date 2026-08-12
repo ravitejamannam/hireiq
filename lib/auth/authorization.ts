@@ -105,6 +105,38 @@ export async function requireClient(): Promise<AuthUser> {
   return user;
 }
 
+export type ClientPortalContext = AuthUser & {
+  companyId: number;
+  company: {
+    id: number;
+    name: string;
+  };
+};
+
+/**
+ * Client portal entry: authenticated CLIENT with company boundary loaded
+ * from the database (never from URL/query input).
+ */
+export async function requireClientPortal(): Promise<ClientPortalContext> {
+  const user = await requireClient();
+  const companyId = requireClientCompanyId(user);
+
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { id: true, name: true },
+  });
+
+  if (!company) {
+    throw new AuthorizationError("Unauthorized.");
+  }
+
+  return {
+    ...user,
+    companyId,
+    company,
+  };
+}
+
 export async function requireInterviewer(): Promise<AuthUser> {
   const user = await requireRole(PortalRole.INTERVIEWER);
   requireInterviewerProfileId(user);
