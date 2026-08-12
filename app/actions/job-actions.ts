@@ -1,7 +1,13 @@
 "use server";
 
-import { requireAdmin } from "@/lib/auth/authorization";
-import { Prisma } from "@prisma/client";
+import {
+  AuthorizationError,
+  requireAdmin,
+  requireClientPortal,
+  requireJobAccess,
+  requireUser,
+} from "@/lib/auth/authorization";
+import { PortalRole, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { JobStatus, RequirementLifecycle } from "@prisma/client";
@@ -22,6 +28,34 @@ import {
   ensureInterviewerExists,
   validateNullableInterviewerId,
 } from "@/lib/validation/interviewer-validation";
+
+/** Client-editable requirement fields only (never lifecycle/status/sourcing/SLA). */
+export type ClientRequirementEditableInput = {
+  roleCategory?: unknown;
+  experienceRange?: unknown;
+  location?: unknown;
+  compensationRange?: unknown;
+  targetHireDate?: unknown;
+  numberOfPositions?: unknown;
+  mustHaveRequirements?: unknown;
+  niceToHaveRequirements?: unknown;
+  jobDescription?: unknown;
+  evaluationCriteria?: unknown;
+  primarySkills?: unknown;
+};
+
+function revalidateClientRequirementPaths(jobId: number) {
+  try {
+    revalidatePath("/dashboard/jobs");
+    revalidatePath("/dashboard/requirements");
+    revalidatePath(`/dashboard/requirements/${jobId}`);
+    revalidatePath("/client");
+    revalidatePath("/client/requirements");
+    revalidatePath(`/client/requirements/${jobId}`);
+  } catch {
+    // revalidatePath requires a Next.js request context
+  }
+}
 
 const SHORTLISTING_SLA_HOURS = 24;
 export async function createJob(
@@ -205,9 +239,21 @@ export async function assignInterviewerToJob(
   return job;
 }
 
+/**
+ * Complete requirement: CLIENT_NOTIFIED → REQUIREMENT_POSTED.
+ * Admin may complete any requirement; Client may complete only their own.
+ */
 export async function completeJobRequirement(jobId: number) {
-  await requireAdmin();
+  const user = await requireUser();
   const validatedJobId = validateJobId(jobId);
+
+  if (user.role === PortalRole.ADMIN) {
+    // Admin may complete any requirement in the existing workflow.
+  } else if (user.role === PortalRole.CLIENT) {
+    await requireJobAccess(validatedJobId);
+  } else {
+    throw new AuthorizationError("Unauthorized.");
+  }
 
   const existingJob = await prisma.job.findUnique({
     where: {
@@ -233,7 +279,7 @@ export async function completeJobRequirement(jobId: number) {
   });
 
   if (!existingJob) {
-    throw new JobValidationError("Job not found.");
+    throw new JobValidationError("Requirement not found.");
   }
 
   if (existingJob.requirementLifecycle === "REQUIREMENT_POSTED") {
@@ -258,11 +304,88 @@ export async function completeJobRequirement(jobId: number) {
     },
   });
 
-  try {
-    revalidatePath("/dashboard/jobs");
-  } catch {
-    // revalidatePath requires a Next.js request context
+  revalidateClientRequirementPaths(validatedJobId);
+
+  return job;
+}
+
+/**
+ * Client draft save: updates editable requirement fields only.
+ * Does not change lifecycle, status, clientCompletedAt, sourcing, or SLA.
+ * Allowed only while lifecycle is CLIENT_NOTIFIED and Job belongs to Client's company.
+ */
+export async function updateClientRequirement(
+  jobId: number,
+  title: string,
+  fields: ClientRequirementEditableInput,
+) {
+  const client = await requireClientPortal();
+  const validatedJobId = validateJobId(jobId);
+
+  const existingJob = await prisma.job.findFirst({
+    where: {
+      id: validatedJobId,
+      companyId: client.companyId,
+    },
+    select: {
+      id: true,
+      status: true,
+      companyId: true,
+      requirementLifecycle: true,
+    },
+  });
+
+  if (!existingJob) {
+    throw new JobValidationError("Requirement not found.");
   }
+
+  if (existingJob.requirementLifecycle !== "CLIENT_NOTIFIED") {
+    throw new JobValidationError("Requirement is not editable.");
+  }
+
+  // Explicit allow-list — never accept lifecycle, status, sourcing, or SLA fields.
+  const allowedFields: JobRequirementInput = {
+    roleCategory: fields.roleCategory,
+    experienceRange: fields.experienceRange,
+    location: fields.location,
+    compensationRange: fields.compensationRange,
+    targetHireDate: fields.targetHireDate,
+    numberOfPositions: fields.numberOfPositions,
+    mustHaveRequirements: fields.mustHaveRequirements,
+    niceToHaveRequirements: fields.niceToHaveRequirements,
+    jobDescription: fields.jobDescription,
+    evaluationCriteria: fields.evaluationCriteria,
+    primarySkills: fields.primarySkills,
+  };
+
+  const validated = await validateJobInput(
+    title,
+    existingJob.status,
+    existingJob.companyId,
+    allowedFields,
+  );
+
+  const job = await prisma.job.update({
+    where: {
+      id: validatedJobId,
+    },
+    data: {
+      title: validated.title,
+      roleCategory: validated.roleCategory ?? null,
+      experienceRange: validated.experienceRange ?? null,
+      location: validated.location ?? null,
+      compensationRange: validated.compensationRange ?? null,
+      targetHireDate: validated.targetHireDate ?? null,
+      numberOfPositions: validated.numberOfPositions ?? null,
+      mustHaveRequirements: validated.mustHaveRequirements ?? null,
+      niceToHaveRequirements: validated.niceToHaveRequirements ?? null,
+      jobDescription: validated.jobDescription ?? null,
+      evaluationCriteria: validated.evaluationCriteria ?? null,
+      primarySkills: validated.primarySkills ?? null,
+    },
+  });
+
+  revalidateClientRequirementPaths(validatedJobId);
 
   return job;
 }
