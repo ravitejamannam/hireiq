@@ -5,20 +5,32 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 First, run the development server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Authentication
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+HireIQ uses Auth.js (`next-auth` v5) with email/password credentials and JWT sessions.
+
+Copy `.env.example` to `.env` and set:
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `AUTH_SECRET` | Required secret for signing session tokens (`openssl rand -base64 32`) |
+| `ADMIN_EMAIL` / `ADMIN_NAME` / `ADMIN_PASSWORD` | Used only by the admin bootstrap script |
+
+Bootstrap the first Admin user (idempotent; does not run on app startup):
+
+```bash
+pnpm db:bootstrap-admin
+```
+
+Then sign in at `/login`. Dashboard routes under `/dashboard` require an authenticated session.
+
+Role-based authorization is not implemented yet.
 
 ## Learn More
 

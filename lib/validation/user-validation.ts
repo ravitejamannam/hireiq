@@ -60,6 +60,51 @@ function validateEmail(email: unknown) {
   return normalized;
 }
 
+export type LoginCredentialsInput = {
+  email: unknown;
+  password: unknown;
+};
+
+export type ValidatedLoginCredentials = {
+  email: string;
+  password: string;
+};
+
+const MIN_PASSWORD_LENGTH = 8;
+
+export function validateLoginCredentials(
+  input: LoginCredentialsInput,
+): ValidatedLoginCredentials {
+  const email = validateEmail(input.email);
+
+  if (typeof input.password !== "string" || !input.password) {
+    throw new UserValidationError("Invalid email or password.");
+  }
+
+  if (input.password.length < MIN_PASSWORD_LENGTH) {
+    throw new UserValidationError("Invalid email or password.");
+  }
+
+  return {
+    email,
+    password: input.password,
+  };
+}
+
+export function validateBootstrapPassword(password: unknown) {
+  if (typeof password !== "string" || !password) {
+    throw new UserValidationError("Password is required.");
+  }
+
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    throw new UserValidationError(
+      `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+    );
+  }
+
+  return password;
+}
+
 function validatePortalRole(role: unknown) {
   if (
     typeof role !== "string" ||

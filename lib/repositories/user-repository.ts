@@ -44,3 +44,31 @@ export async function getUserById(id: number) {
     select: userSelect,
   });
 }
+
+export async function getUserByEmail(email: string) {
+  return prisma.user.findUnique({
+    where: {
+      email,
+    },
+    select: userSelect,
+  });
+}
+
+/**
+ * Server-only credential lookup for authentication.
+ * Do not call from client components or return results to the browser.
+ */
+export async function getUserCredentialsByEmail(email: string) {
+  return prisma.user.findUnique({
+    where: {
+      email,
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      passwordHash: true,
+    },
+  });
+}

@@ -1,17 +1,20 @@
 "use client";
 
 import { useState } from "react";
-
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 import AuthButton from "./AuthButton";
 import AuthInput from "./AuthInput";
+
+const GENERIC_AUTH_ERROR = "Invalid email or password.";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [formError, setFormError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
@@ -20,24 +23,16 @@ export default function LoginForm() {
     let valid = true;
 
     setEmailError("");
-
     setPasswordError("");
+    setFormError("");
 
-    if (!email) {
+    if (!email.trim()) {
       setEmailError("Email is required.");
-
       valid = false;
     }
 
     if (!password) {
       setPasswordError("Password is required.");
-
-      valid = false;
-    }
-
-    if (password && password.length < 8) {
-      setPasswordError("Password must be at least 8 characters.");
-
       valid = false;
     }
 
@@ -45,29 +40,25 @@ export default function LoginForm() {
 
     setIsLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      const result = await signIn("credentials", {
+        email: email.trim(),
+        password,
+        redirect: false,
+      });
 
-    const fakeResponse = {
-      success: email === "admin@hireiq.com" && password === "password123",
-      message: "Login successful",
-      user: {
-        id: 1,
-        email,
-      },
+      if (!result || result.error) {
+        setFormError(GENERIC_AUTH_ERROR);
+        return;
       }
 
-    setIsLoading(false);
-    if (fakeResponse.success) {
-        router.push("/dashboard");
-    } else {
-        alert("Invalid email or password. Please try again."); 
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setFormError(GENERIC_AUTH_ERROR);
+    } finally {
+      setIsLoading(false);
     }
-
-    //console.log(fakeResponse);
-
-    //console.log(email);
-
-    //console.log(password);
   }
 
   return (
@@ -91,16 +82,16 @@ export default function LoginForm() {
         showToggle
       />
 
-      <AuthButton label="Sign In" type="submit" isLoading={isLoading}  />
+      {formError ? (
+        <p className="text-sm text-red-600" role="alert">
+          {formError}
+        </p>
+      ) : null}
 
-      <div className="flex justify-between text-sm">
-        <a href="#" className="text-zinc-600 hover:text-black">
-          Forgot password?
-        </a>
+      <AuthButton label="Sign In" type="submit" isLoading={isLoading} />
 
-        <a href="/signup" className="font-medium text-black">
-          Create account
-        </a>
+      <div className="text-center text-sm text-zinc-600">
+        Accounts are provisioned by an administrator.
       </div>
     </form>
   );
