@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApplicationPipelineStatus } from "@prisma/client";
 
@@ -9,6 +9,9 @@ import {
   transitionApplicationStatus,
 } from "@/app/actions/application-actions";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import WorkflowRequirementNav, {
+  useRequirementIdFilter,
+} from "@/components/dashboard/WorkflowRequirementNav";
 import ExpertReviewCard from "@/components/expert-review/ExpertReviewCard";
 import ExpertReviewModal from "@/components/expert-review/ExpertReviewModal";
 import type { getExpertReviewApplications } from "@/lib/repositories/application-repository";
@@ -45,10 +48,11 @@ function getAssignedInterviewerEvaluation(
   );
 }
 
-export default function ExpertReviewClient({
+function ExpertReviewClientInner({
   initialApplications,
 }: ExpertReviewClientProps) {
   const router = useRouter();
+  const requirementIdFilter = useRequirementIdFilter();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
@@ -62,6 +66,18 @@ export default function ExpertReviewClient({
   const [isSavingReview, setIsSavingReview] = useState(false);
   const [reviewError, setReviewError] = useState("");
 
+  const requirementOptions = Array.from(
+    new Map(
+      initialApplications.map((application) => [
+        application.jobId,
+        {
+          id: application.jobId,
+          title: application.job.title,
+        },
+      ]),
+    ).values(),
+  );
+
   const reviewingApplication = useMemo(
     () =>
       initialApplications.find(
@@ -71,6 +87,13 @@ export default function ExpertReviewClient({
   );
 
   const filteredApplications = initialApplications.filter((application) => {
+    if (
+      requirementIdFilter !== null &&
+      application.jobId !== requirementIdFilter
+    ) {
+      return false;
+    }
+
     if (statusFilter !== "ALL" && application.status !== statusFilter) {
       return false;
     }
@@ -155,6 +178,7 @@ export default function ExpertReviewClient({
 
   return (
     <DashboardLayout>
+      <WorkflowRequirementNav requirements={requirementOptions} />
       <div>
         <h1 className="text-3xl font-bold text-black">Expert Review</h1>
         <p className="mt-2 text-zinc-600">
@@ -288,5 +312,13 @@ export default function ExpertReviewClient({
         />
       )}
     </DashboardLayout>
+  );
+}
+
+export default function ExpertReviewClient(props: ExpertReviewClientProps) {
+  return (
+    <Suspense fallback={null}>
+      <ExpertReviewClientInner {...props} />
+    </Suspense>
   );
 }

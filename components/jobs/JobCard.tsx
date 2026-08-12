@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type {
   InterviewerAvailability,
   InterviewerCategory,
@@ -31,6 +32,8 @@ type JobCardProps = {
   shortlistingDueAt: Date | null;
   shortlistingCompletedAt: Date | null;
   applicationCount: number;
+  shortlistedCount: number;
+  selectedCount: number;
   assignedInterviewerId: number | null;
   assignedInterviewer: InterviewerOption | null;
   interviewers: InterviewerOption[];
@@ -65,6 +68,8 @@ const requirementLifecycleLabels: Record<RequirementLifecycle, string> = {
   SOURCING_SHORTLISTING: "Sourcing & Shortlisting",
   BILLING_GENERATED: "Billing Generated",
 };
+
+export { requirementLifecycleLabels };
 
 const nextRequirementLifecycle: Partial<
   Record<RequirementLifecycle, RequirementLifecycle>
@@ -165,6 +170,8 @@ export default function JobCard({
   shortlistingDueAt,
   shortlistingCompletedAt,
   applicationCount,
+  shortlistedCount,
+  selectedCount,
   assignedInterviewerId,
   assignedInterviewer,
   interviewers,
@@ -212,7 +219,7 @@ export default function JobCard({
             Requirement / Role
           </p>
           <h3 className="mt-2 text-xl font-bold text-black">{title}</h3>
-          <p className="mt-1 text-zinc-500">{company}</p>
+          <p className="mt-1 text-zinc-500">Client: {company}</p>
         </div>
         <div className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-black">
           {jobStatusLabels[status]}
@@ -287,6 +294,14 @@ export default function JobCard({
             </dd>
           </div>
           <div>
+            <dt className="font-medium text-black">Shortlisted</dt>
+            <dd>{shortlistedCount}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">Selected</dt>
+            <dd>{selectedCount}</dd>
+          </div>
+          <div>
             <dt className="font-medium text-black">Target</dt>
             <dd>50–100</dd>
           </div>
@@ -340,6 +355,13 @@ export default function JobCard({
 
       <div className="mt-8 border-t border-zinc-200 pt-4">
         <div className="flex flex-wrap justify-end gap-3">
+          <Link
+            href={`/dashboard/requirements/${id}`}
+            className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800"
+          >
+            Open Workspace
+          </Link>
+
           {nextLifecycle && (
             <button
               type="button"

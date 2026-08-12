@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -17,6 +17,9 @@ import {
 import EvaluationCard from "@/components/evaluations/EvaluationCard";
 import EvaluationModal from "@/components/evaluations/EvaluationModal";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import WorkflowRequirementNav, {
+  useRequirementIdFilter,
+} from "@/components/dashboard/WorkflowRequirementNav";
 import type { getApplications } from "@/lib/repositories/application-repository";
 import type { getEvaluations } from "@/lib/repositories/evaluation-repository";
 import type { getInterviewers } from "@/lib/repositories/interviewer-repository";
@@ -37,12 +40,13 @@ function getErrorMessage(error: unknown) {
     : "Something went wrong. Please try again.";
 }
 
-export default function EvaluationsClient({
+function EvaluationsClientInner({
   initialEvaluations,
   applications,
   interviewers,
 }: EvaluationsClientProps) {
   const router = useRouter();
+  const requirementIdFilter = useRequirementIdFilter();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -53,6 +57,18 @@ export default function EvaluationsClient({
   const [actionError, setActionError] = useState("");
   const [editingEvaluation, setEditingEvaluation] =
     useState<Evaluation | null>(null);
+
+  const requirementOptions = Array.from(
+    new Map(
+      applications.map((application) => [
+        application.jobId,
+        {
+          id: application.jobId,
+          title: application.job.title,
+        },
+      ]),
+    ).values(),
+  );
 
   function openCreateModal() {
     setEditingEvaluation(null);
@@ -136,6 +152,13 @@ export default function EvaluationsClient({
   }
 
   const filteredEvaluations = initialEvaluations.filter((evaluation) => {
+    if (
+      requirementIdFilter !== null &&
+      evaluation.application.jobId !== requirementIdFilter
+    ) {
+      return false;
+    }
+
     const query = search.trim().toLowerCase();
 
     if (!query) return true;
@@ -160,6 +183,7 @@ export default function EvaluationsClient({
 
   return (
     <DashboardLayout>
+      <WorkflowRequirementNav requirements={requirementOptions} />
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-black">Evaluations</h1>
@@ -292,5 +316,13 @@ export default function EvaluationsClient({
         }
       />
     </DashboardLayout>
+  );
+}
+
+export default function EvaluationsClient(props: EvaluationsClientProps) {
+  return (
+    <Suspense fallback={null}>
+      <EvaluationsClientInner {...props} />
+    </Suspense>
   );
 }

@@ -46,6 +46,11 @@ const jobSelect = {
       applications: true,
     },
   },
+  applications: {
+    select: {
+      status: true,
+    },
+  },
 } satisfies Prisma.JobSelect;
 
 export async function getJobs() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ApplicationPipelineStatus,
@@ -13,6 +13,9 @@ import {
   getApplicationPipelineStatusLabel,
 } from "@/components/applications/ApplicationForm";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import WorkflowRequirementNav, {
+  useRequirementIdFilter,
+} from "@/components/dashboard/WorkflowRequirementNav";
 import {
   getSlaStatus,
   getSourceTargetLabel,
@@ -53,11 +56,20 @@ function getErrorMessage(error: unknown) {
     : "Something went wrong. Please try again.";
 }
 
-export default function SourcingClient({
+export default function SourcingClient(props: SourcingClientProps) {
+  return (
+    <Suspense fallback={null}>
+      <SourcingClientInner {...props} />
+    </Suspense>
+  );
+}
+
+function SourcingClientInner({
   initialJobs,
   initialApplications,
 }: SourcingClientProps) {
   const router = useRouter();
+  const requirementIdFilter = useRequirementIdFilter();
 
   const sourcingJobs = useMemo(
     () =>
@@ -67,7 +79,7 @@ export default function SourcingClient({
     [initialJobs],
   );
 
-  const [selectedJobId, setSelectedJobId] = useState<number | null>(
+  const [manualSelectedJobId, setManualSelectedJobId] = useState<number | null>(
     sourcingJobs[0]?.id ?? null,
   );
   const [search, setSearch] = useState("");
@@ -77,6 +89,17 @@ export default function SourcingClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  const selectedJobId =
+    requirementIdFilter !== null &&
+    sourcingJobs.some((job) => job.id === requirementIdFilter)
+      ? requirementIdFilter
+      : manualSelectedJobId;
+
+  const requirementOptions = sourcingJobs.map((job) => ({
+    id: job.id,
+    title: job.title,
+  }));
 
   const selectedJob =
     sourcingJobs.find((job) => job.id === selectedJobId) ?? null;
@@ -168,6 +191,7 @@ export default function SourcingClient({
 
   return (
     <DashboardLayout>
+      <WorkflowRequirementNav requirements={requirementOptions} />
       <div>
         <h1 className="text-3xl font-bold text-black">Sourcing</h1>
         <p className="mt-2 text-zinc-600">
@@ -198,7 +222,7 @@ export default function SourcingClient({
               id="sourcing-job"
               value={selectedJobId ?? ""}
               onChange={(event) => {
-                setSelectedJobId(Number(event.target.value));
+                setManualSelectedJobId(Number(event.target.value));
                 setActionError("");
                 setSuccessMessage("");
               }}

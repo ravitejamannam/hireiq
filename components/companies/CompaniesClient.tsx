@@ -80,10 +80,10 @@ export default function CompaniesClient({
     <DashboardLayout>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-black">Companies</h1>
+          <h1 className="text-3xl font-bold text-black">Clients</h1>
 
           <p className="mt-2 text-zinc-600">
-            Manage all companies using HireIQ.
+            Manage all clients using HireIQ.
           </p>
         </div>
 
@@ -92,7 +92,7 @@ export default function CompaniesClient({
         <div className="mt-8">
           <input
             type="text"
-            placeholder="Search companies..."
+            placeholder="Search clients..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="

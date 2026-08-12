@@ -31,6 +31,7 @@ type PipelineCardProps = {
   status: ApplicationPipelineStatus;
   moveOptions: PipelineMoveOption[];
   isMoving?: boolean;
+  requirementHref?: string | null;
   onMove: (id: number, nextStatus: ApplicationPipelineStatus) => void;
 };
 
@@ -58,6 +59,7 @@ export default function PipelineCard({
   status,
   moveOptions,
   isMoving = false,
+  requirementHref = null,
   onMove,
 }: PipelineCardProps) {
   return (
@@ -108,6 +110,14 @@ export default function PipelineCard({
       </dl>
 
       <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-200 pt-3">
+        {requirementHref && (
+          <Link
+            href={requirementHref}
+            className="rounded-lg border border-black px-3 py-1.5 text-xs font-medium text-black hover:bg-zinc-100"
+          >
+            Open Requirement
+          </Link>
+        )}
         <Link
           href="/dashboard/applications"
           className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-black hover:bg-zinc-100"

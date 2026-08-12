@@ -109,3 +109,17 @@ export async function getEvaluationForApplication(
     },
   });
 }
+
+export async function getEvaluationsByJobId(jobId: number) {
+  return prisma.evaluation.findMany({
+    where: {
+      application: {
+        jobId,
+      },
+    },
+    select: evaluationSelect,
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}

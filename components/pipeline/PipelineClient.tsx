@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApplicationPipelineStatus } from "@prisma/client";
 
@@ -13,6 +13,9 @@ import {
   getApplicationSourceLabel,
 } from "@/components/applications/ApplicationForm";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import WorkflowRequirementNav, {
+  useRequirementIdFilter,
+} from "@/components/dashboard/WorkflowRequirementNav";
 import PipelineCard from "@/components/pipeline/PipelineCard";
 import type { getApplications } from "@/lib/repositories/application-repository";
 
@@ -78,16 +81,29 @@ function getMoveLabel(status: ApplicationPipelineStatus) {
   return `Move to ${getApplicationPipelineStatusLabel(status)}`;
 }
 
-export default function PipelineClient({
+function PipelineClientInner({
   initialApplications,
 }: PipelineClientProps) {
   const router = useRouter();
+  const requirementIdFilter = useRequirementIdFilter();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [actionError, setActionError] = useState("");
   const [movingApplicationId, setMovingApplicationId] = useState<number | null>(
     null,
+  );
+
+  const requirementOptions = Array.from(
+    new Map(
+      initialApplications.map((application) => [
+        application.jobId,
+        {
+          id: application.jobId,
+          title: application.job.title,
+        },
+      ]),
+    ).values(),
   );
 
   async function handleMove(
@@ -110,6 +126,13 @@ export default function PipelineClient({
   }
 
   const filteredApplications = initialApplications.filter((application) => {
+    if (
+      requirementIdFilter !== null &&
+      application.jobId !== requirementIdFilter
+    ) {
+      return false;
+    }
+
     if (statusFilter !== "ALL" && application.status !== statusFilter) {
       return false;
     }
@@ -154,6 +177,7 @@ export default function PipelineClient({
 
   return (
     <DashboardLayout>
+      <WorkflowRequirementNav requirements={requirementOptions} />
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-black">Pipeline</h1>
@@ -288,6 +312,7 @@ export default function PipelineClient({
                           label: getMoveLabel(nextStatus),
                         }))}
                         isMoving={movingApplicationId === application.id}
+                        requirementHref={`/dashboard/requirements/${application.jobId}`}
                         onMove={handleMove}
                       />
                     ))
@@ -299,5 +324,13 @@ export default function PipelineClient({
         </div>
       )}
     </DashboardLayout>
+  );
+}
+
+export default function PipelineClient(props: PipelineClientProps) {
+  return (
+    <Suspense fallback={null}>
+      <PipelineClientInner {...props} />
+    </Suspense>
   );
 }

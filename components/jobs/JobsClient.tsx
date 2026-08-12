@@ -237,16 +237,13 @@ export default function JobsClient({
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-            Requirement / Post Role
+            Requirements
           </p>
-          <h1 className="mt-2 text-3xl font-bold text-black">
-            Requirements / Roles
-          </h1>
+          <h1 className="mt-2 text-3xl font-bold text-black">Requirements</h1>
 
           <p className="mt-2 max-w-2xl text-zinc-600">
-            Draft client hiring requirements, capture role details, and move
-            each requirement through the source-defined lifecycle one stage at a
-            time.
+            Manage client hiring requirements, assign interviewers, and open a
+            requirement workspace to follow candidates through the pipeline.
           </p>
         </div>
 
@@ -266,7 +263,7 @@ export default function JobsClient({
         <input
           id="requirements-search"
           type="text"
-          placeholder="Search by role, company, location, or category..."
+          placeholder="Search by role, client, location, or category..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-black placeholder:text-zinc-400 outline-none transition focus:border-black"
@@ -312,6 +309,16 @@ export default function JobsClient({
               shortlistingDueAt={job.shortlistingDueAt}
               shortlistingCompletedAt={job.shortlistingCompletedAt}
               applicationCount={job._count.applications}
+              shortlistedCount={
+                job.applications.filter(
+                  (application) => application.status === "SHORTLISTED",
+                ).length
+              }
+              selectedCount={
+                job.applications.filter(
+                  (application) => application.status === "SELECTED",
+                ).length
+              }
               assignedInterviewerId={job.assignedInterviewerId}
               assignedInterviewer={job.assignedInterviewer}
               interviewers={interviewers}

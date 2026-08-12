@@ -1,72 +1,178 @@
+import Link from "next/link";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import StatCard from "@/components/dashboard/StatCard";
-import ActivityItem from "@/components/dashboard/ActivityItem";
-import InterviewItem from "@/components/dashboard/InterviewItem";
+import {
+  formatJobDateTime,
+  getSlaStatus,
+  requirementLifecycleLabels,
+} from "@/components/jobs/JobCard";
+import { getDashboardStats } from "@/lib/repositories/dashboard-repository";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const stats = await getDashboardStats();
+
   return (
     <DashboardLayout>
       <div>
-        <h2 className="text-3xl font-bold text-black">Welcome back 👋</h2>
-
-        <p className="mt-2 text-zinc-600">Here&apos;s what&apos;s happening today.</p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+          Admin
+        </p>
+        <h1 className="mt-2 text-3xl font-bold text-black">Command Center</h1>
+        <p className="mt-2 text-zinc-600">
+          Operational overview across requirements, candidates, and sourcing
+          SLA.
+        </p>
       </div>
 
-      <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Companies" value={12} />
-
-        <StatCard title="Candidates" value={184} />
-
-        <StatCard title="Interviews" value={27} />
-
-        <StatCard title="Evaluations" value={96} />
+      <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-5">
+        <StatCard title="Active Requirements" value={stats.activeRequirements} />
+        <StatCard
+          title="Candidates in Pipeline"
+          value={stats.pipelineCandidates}
+        />
+        <StatCard title="Shortlisted" value={stats.shortlisted} />
+        <StatCard title="Selected" value={stats.selected} />
+        <StatCard title="SLA At Risk" value={stats.slaAtRisk} />
       </div>
 
       <section className="mt-12">
-        <h3 className="text-2xl font-bold text-black">Recent Activity</h3>
-
-        <div className="mt-6 space-y-4">
-          <ActivityItem
-            title="John completed the React interview."
-            time="2 minutes ago"
-          />
-
-          <ActivityItem
-            title="Acme Inc. invited three candidates."
-            time="15 minutes ago"
-          />
-
-          <ActivityItem
-            title="Sarah scheduled a backend interview."
-            time="1 hour ago"
-          />
-
-          <ActivityItem title="Technical evaluation submitted." time="Today" />
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-black">Active Requirements</h2>
+            <p className="mt-2 text-sm text-zinc-600">
+              Open roles currently moving through the hiring workflow.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/requirements"
+            className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100"
+          >
+            View all requirements
+          </Link>
         </div>
+
+        {stats.openRequirements.length === 0 ? (
+          <div className="mt-6 rounded-2xl border border-dashed border-zinc-300 bg-white py-16 text-center">
+            <p className="text-lg font-medium text-black">No open requirements</p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Post a role to start recruiting from the Requirements workspace.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            {stats.openRequirements.map((requirement) => {
+              const slaStatus = getSlaStatus({
+                shortlistingCompletedAt: requirement.shortlistingCompletedAt,
+                shortlistingDueAt: requirement.shortlistingDueAt,
+              });
+
+              return (
+                <article
+                  key={requirement.id}
+                  className="rounded-xl border border-zinc-200 bg-white p-5 transition hover:border-black"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-black">
+                        {requirement.title}
+                      </h3>
+                      <p className="mt-1 text-sm text-zinc-600">
+                        {requirement.company.name}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-black">
+                      {requirementLifecycleLabels[requirement.requirementLifecycle]}
+                    </span>
+                  </div>
+
+                  <dl className="mt-4 grid gap-3 text-sm text-zinc-600 sm:grid-cols-2">
+                    <div>
+                      <dt className="font-medium text-black">Profiles</dt>
+                      <dd>{requirement._count.applications}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-medium text-black">Interviewer</dt>
+                      <dd>
+                        {requirement.assignedInterviewer?.name ?? "Not assigned"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="font-medium text-black">SLA</dt>
+                      <dd>
+                        {slaStatus === "OVERDUE"
+                          ? "At risk"
+                          : slaStatus === "COMPLETED"
+                            ? "Completed"
+                            : slaStatus === "ACTIVE"
+                              ? "Active"
+                              : "Not started"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="font-medium text-black">Due</dt>
+                      <dd>
+                        {requirement.shortlistingDueAt
+                          ? formatJobDateTime(requirement.shortlistingDueAt)
+                          : "Not set"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="mt-5">
+                    <Link
+                      href={`/dashboard/requirements/${requirement.id}`}
+                      className="text-sm font-semibold text-black underline underline-offset-2"
+                    >
+                      Open requirement workspace
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <section className="mt-12">
-        <h3 className="text-2xl font-bold text-black">Today Interviews</h3>
-
-        <div className="mt-6 space-y-4">
-          <InterviewItem
-            time="09:00 AM"
-            candidate="Reddy"
-            status="Scheduled"
-          />
-
-          <InterviewItem
-            time="11:30 AM"
-            candidate="Raviteja"
-            status="In Progress"
-          />
-
-          <InterviewItem
-            time="02:00 PM"
-            candidate="Prasanth"
-            status="Scheduled"
-          />
+        <h2 className="text-2xl font-bold text-black">Quick Links</h2>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link
+            href="/dashboard/sourcing"
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+          >
+            Sourcing
+          </Link>
+          <Link
+            href="/dashboard/expert-review"
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+          >
+            Expert Review
+          </Link>
+          <Link
+            href="/dashboard/technical-evaluations"
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+          >
+            Technical Evaluations
+          </Link>
+          <Link
+            href="/dashboard/shortlist"
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+          >
+            Shortlist
+          </Link>
+          <Link
+            href="/dashboard/pipeline"
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+          >
+            Pipeline
+          </Link>
+          <Link
+            href="/dashboard/notifications"
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+          >
+            Notifications
+          </Link>
         </div>
       </section>
     </DashboardLayout>

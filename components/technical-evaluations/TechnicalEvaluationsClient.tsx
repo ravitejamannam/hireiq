@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApplicationPipelineStatus } from "@prisma/client";
 
@@ -10,6 +10,9 @@ import {
   saveTechnicalEvaluation,
 } from "@/app/actions/evaluation-actions";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import WorkflowRequirementNav, {
+  useRequirementIdFilter,
+} from "@/components/dashboard/WorkflowRequirementNav";
 import TechnicalEvaluationCard from "@/components/technical-evaluations/TechnicalEvaluationCard";
 import type { TechnicalEvaluationState } from "@/components/technical-evaluations/TechnicalEvaluationCard";
 import TechnicalEvaluationModal from "@/components/technical-evaluations/TechnicalEvaluationModal";
@@ -75,10 +78,11 @@ function normalizeScorecard(scorecard: unknown): ScorecardEntry[] | null {
     .filter((entry): entry is ScorecardEntry => entry !== null);
 }
 
-export default function TechnicalEvaluationsClient({
+function TechnicalEvaluationsClientInner({
   initialApplications,
 }: TechnicalEvaluationsClientProps) {
   const router = useRouter();
+  const requirementIdFilter = useRequirementIdFilter();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
@@ -95,6 +99,18 @@ export default function TechnicalEvaluationsClient({
   const [isLoadingEvaluation, setIsLoadingEvaluation] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [modalError, setModalError] = useState("");
+
+  const requirementOptions = Array.from(
+    new Map(
+      initialApplications.map((application) => [
+        application.jobId,
+        {
+          id: application.jobId,
+          title: application.job.title,
+        },
+      ]),
+    ).values(),
+  );
 
   const selectedApplication = useMemo(
     () =>
@@ -143,6 +159,13 @@ export default function TechnicalEvaluationsClient({
   }
 
   const filteredApplications = initialApplications.filter((application) => {
+    if (
+      requirementIdFilter !== null &&
+      application.jobId !== requirementIdFilter
+    ) {
+      return false;
+    }
+
     if (statusFilter !== "ALL" && application.status !== statusFilter) {
       return false;
     }
@@ -206,6 +229,7 @@ export default function TechnicalEvaluationsClient({
 
   return (
     <DashboardLayout>
+      <WorkflowRequirementNav requirements={requirementOptions} />
       <div>
         <h1 className="text-3xl font-bold text-black">Technical Evaluations</h1>
         <p className="mt-2 text-zinc-600">
@@ -362,5 +386,13 @@ export default function TechnicalEvaluationsClient({
         />
       )}
     </DashboardLayout>
+  );
+}
+
+export default function TechnicalEvaluationsClient(props: TechnicalEvaluationsClientProps) {
+  return (
+    <Suspense fallback={null}>
+      <TechnicalEvaluationsClientInner {...props} />
+    </Suspense>
   );
 }

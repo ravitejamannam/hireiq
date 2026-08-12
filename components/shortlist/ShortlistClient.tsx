@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApplicationPipelineStatus } from "@prisma/client";
 
 import { transitionApplicationStatus } from "@/app/actions/application-actions";
 import { getTechnicalEvaluationForApplication } from "@/app/actions/evaluation-actions";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import WorkflowRequirementNav, {
+  useRequirementIdFilter,
+} from "@/components/dashboard/WorkflowRequirementNav";
 import {
   getFitDecisionLabel,
   getRecommendationLabel,
@@ -45,10 +48,11 @@ function getAssignedEvaluationSummary(application: Application) {
   );
 }
 
-export default function ShortlistClient({
+function ShortlistClientInner({
   initialApplications,
 }: ShortlistClientProps) {
   const router = useRouter();
+  const requirementIdFilter = useRequirementIdFilter();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
@@ -64,6 +68,18 @@ export default function ShortlistClient({
     useState<EvaluationDetail | null>(null);
   const [isLoadingEvaluation, setIsLoadingEvaluation] = useState(false);
   const [modalError, setModalError] = useState("");
+
+  const requirementOptions = Array.from(
+    new Map(
+      initialApplications.map((application) => [
+        application.jobId,
+        {
+          id: application.jobId,
+          title: application.job.title,
+        },
+      ]),
+    ).values(),
+  );
 
   const selectedApplication = useMemo(
     () =>
@@ -83,6 +99,13 @@ export default function ShortlistClient({
   ).length;
 
   const filteredApplications = initialApplications.filter((application) => {
+    if (
+      requirementIdFilter !== null &&
+      application.jobId !== requirementIdFilter
+    ) {
+      return false;
+    }
+
     if (statusFilter !== "ALL" && application.status !== statusFilter) {
       return false;
     }
@@ -183,6 +206,7 @@ export default function ShortlistClient({
 
   return (
     <DashboardLayout>
+      <WorkflowRequirementNav requirements={requirementOptions} />
       <div>
         <h1 className="text-3xl font-bold text-black">Shortlist</h1>
         <p className="mt-2 text-zinc-600">
@@ -357,5 +381,13 @@ export default function ShortlistClient({
         />
       )}
     </DashboardLayout>
+  );
+}
+
+export default function ShortlistClient(props: ShortlistClientProps) {
+  return (
+    <Suspense fallback={null}>
+      <ShortlistClientInner {...props} />
+    </Suspense>
   );
 }

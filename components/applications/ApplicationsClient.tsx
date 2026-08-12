@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { getApplications } from "@/lib/repositories/application-repository";
@@ -19,6 +19,9 @@ import {
 import type { ApplicationPipelineStatus } from "@prisma/client";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import WorkflowRequirementNav, {
+  useRequirementIdFilter,
+} from "@/components/dashboard/WorkflowRequirementNav";
 import ApplicationCard from "@/components/applications/ApplicationCard";
 import ApplicationModal from "@/components/applications/ApplicationModal";
 
@@ -42,12 +45,13 @@ function getErrorMessage(error: unknown) {
     : "Something went wrong. Please try again.";
 }
 
-export default function ApplicationsClient({
+function ApplicationsClientInner({
   initialApplications,
   candidates,
   jobs,
 }: ApplicationsClientProps) {
   const router = useRouter();
+  const requirementIdFilter = useRequirementIdFilter();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -55,6 +59,11 @@ export default function ApplicationsClient({
   const [actionError, setActionError] = useState("");
   const [editingApplication, setEditingApplication] =
     useState<Application | null>(null);
+
+  const requirementOptions = jobs.map((job) => ({
+    id: job.id,
+    title: job.title,
+  }));
 
   async function handleSaveApplication(application: ApplicationFormData) {
     setActionError("");
@@ -120,6 +129,13 @@ export default function ApplicationsClient({
   }
 
   const filteredApplications = initialApplications.filter((application) => {
+    if (
+      requirementIdFilter !== null &&
+      application.jobId !== requirementIdFilter
+    ) {
+      return false;
+    }
+
     if (statusFilter !== "ALL" && application.status !== statusFilter) {
       return false;
     }
@@ -144,6 +160,7 @@ export default function ApplicationsClient({
 
   return (
     <DashboardLayout>
+      <WorkflowRequirementNav requirements={requirementOptions} />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-black">Applications</h1>
@@ -298,5 +315,13 @@ export default function ApplicationsClient({
         errorMessage={actionError}
       />
     </DashboardLayout>
+  );
+}
+
+export default function ApplicationsClient(props: ApplicationsClientProps) {
+  return (
+    <Suspense fallback={null}>
+      <ApplicationsClientInner {...props} />
+    </Suspense>
   );
 }
