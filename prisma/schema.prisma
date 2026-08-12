@@ -101,6 +101,12 @@ enum NotificationType {
   INTERVIEWER_REQUIREMENT_READY
 }
 
+enum PortalRole {
+  ADMIN
+  CLIENT
+  INTERVIEWER
+}
+
 model Company {
   id        Int    @id @default(autoincrement())
   name      String
@@ -112,6 +118,7 @@ model Company {
 
   candidates Candidate[]
   jobs       Job[]
+  users      User[]
 }
 
 model Job {
@@ -168,6 +175,7 @@ model Interviewer {
   assignedJobs Job[]
   evaluations  Evaluation[]
   notifications Notification[]
+  users         User[]
 }
 
 model Candidate {
@@ -337,4 +345,23 @@ model Notification {
   @@index([jobId])
   @@index([interviewerId])
   @@index([type])
+}
+
+model User {
+  id    Int        @id @default(autoincrement())
+  email String     @unique
+  name  String
+  role  PortalRole
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId     Int?
+  interviewerId Int? @unique
+
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  interviewer Interviewer? @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
+  @@index([role])
 }
