@@ -287,6 +287,7 @@ export async function ensureEvaluationQuestionExists(id: number) {
     },
     select: {
       id: true,
+      evaluationId: true,
     },
   });
 
@@ -304,11 +305,31 @@ async function ensureApplicationExists(id: number) {
     },
     select: {
       id: true,
+      job: {
+        select: {
+          assignedInterviewerId: true,
+        },
+      },
     },
   });
 
   if (!application) {
     throw new EvaluationValidationError("Application not found.");
+  }
+
+  return application;
+}
+
+async function ensureInterviewerAssignedToApplication(
+  applicationId: number,
+  interviewerId: number,
+) {
+  const application = await ensureApplicationExists(applicationId);
+
+  if (application.job.assignedInterviewerId !== interviewerId) {
+    throw new EvaluationValidationError(
+      "Interviewer must be assigned to the application's requirement.",
+    );
   }
 
   return application;
@@ -393,7 +414,10 @@ export async function validateEvaluationInput(
   const validatedInterviewerId = validateInterviewerId(interviewerId);
 
   await Promise.all([
-    ensureApplicationExists(validatedApplicationId),
+    ensureInterviewerAssignedToApplication(
+      validatedApplicationId,
+      validatedInterviewerId,
+    ),
     ensureInterviewerExists(validatedInterviewerId),
   ]);
 

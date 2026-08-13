@@ -131,7 +131,9 @@ export async function updateEvaluationQuestion(
 ) {
   await requireAdmin();
   const evaluationQuestionId = validateEvaluationQuestionId(id);
-  await ensureEvaluationQuestionExists(evaluationQuestionId);
+  const existingQuestion = await ensureEvaluationQuestionExists(
+    evaluationQuestionId,
+  );
 
   const evaluationQuestionInput = await validateEvaluationQuestionInput(
     evaluationId,
@@ -139,12 +141,25 @@ export async function updateEvaluationQuestion(
     fields,
   );
 
+  if (existingQuestion.evaluationId !== evaluationQuestionInput.evaluationId) {
+    throw new EvaluationValidationError(
+      "Evaluation question does not belong to the specified evaluation.",
+    );
+  }
+
   try {
     const question = await prisma.evaluationQuestion.update({
       where: {
         id: evaluationQuestionId,
       },
-      data: evaluationQuestionInput,
+      data: {
+        question: evaluationQuestionInput.question,
+        answer: evaluationQuestionInput.answer,
+        expertComment: evaluationQuestionInput.expertComment,
+        score: evaluationQuestionInput.score,
+        difficulty: evaluationQuestionInput.difficulty,
+        weight: evaluationQuestionInput.weight,
+      },
     });
 
     try {
@@ -217,34 +232,15 @@ export async function saveTechnicalEvaluation(
   let evaluation;
 
   try {
-    evaluation = await prisma.$transaction(async (tx) => {
-      const existing = await tx.evaluation.findFirst({
-        where: {
+    evaluation = await prisma.evaluation.upsert({
+      where: {
+        applicationId_interviewerId: {
           applicationId: application.id,
           interviewerId,
         },
-        orderBy: {
-          createdAt: "asc",
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      const data = toEvaluationData(evaluationInput);
-
-      if (existing) {
-        return tx.evaluation.update({
-          where: {
-            id: existing.id,
-          },
-          data,
-        });
-      }
-
-      return tx.evaluation.create({
-        data,
-      });
+      },
+      create: toEvaluationData(evaluationInput),
+      update: toEvaluationUpdateData(evaluationInput),
     });
   } catch (error) {
     if (error instanceof EvaluationValidationError) {
@@ -383,34 +379,15 @@ export async function saveInterviewerEvaluation(
   let evaluation;
 
   try {
-    evaluation = await prisma.$transaction(async (tx) => {
-      const existing = await tx.evaluation.findFirst({
-        where: {
+    evaluation = await prisma.evaluation.upsert({
+      where: {
+        applicationId_interviewerId: {
           applicationId: application.id,
           interviewerId: interviewer.interviewerId,
         },
-        orderBy: {
-          createdAt: "asc",
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      const data = toEvaluationData(evaluationInput);
-
-      if (existing) {
-        return tx.evaluation.update({
-          where: {
-            id: existing.id,
-          },
-          data,
-        });
-      }
-
-      return tx.evaluation.create({
-        data,
-      });
+      },
+      create: toEvaluationData(evaluationInput),
+      update: toEvaluationUpdateData(evaluationInput),
     });
   } catch (error) {
     if (error instanceof EvaluationValidationError) {
@@ -558,6 +535,22 @@ function toEvaluationData(evaluationInput: ValidatedEvaluationInput) {
       evaluationInput.scorecard === null
         ? Prisma.DbNull
         : evaluationInput.scorecard,
+  };
+}
+
+function toEvaluationUpdateData(evaluationInput: ValidatedEvaluationInput) {
+  return {
+    overallScore: evaluationInput.overallScore,
+    scorecard:
+      evaluationInput.scorecard === null
+        ? Prisma.DbNull
+        : evaluationInput.scorecard,
+    notes: evaluationInput.notes,
+    recordingUrl: evaluationInput.recordingUrl,
+    recommendation: evaluationInput.recommendation,
+    hireProbability: evaluationInput.hireProbability,
+    fitDecision: evaluationInput.fitDecision,
+    evaluatedAt: evaluationInput.evaluatedAt,
   };
 }
 

@@ -242,22 +242,32 @@ export async function assignInterviewerToJob(
 /**
  * Complete requirement: CLIENT_NOTIFIED → REQUIREMENT_POSTED.
  * Admin may complete any requirement; Client may complete only their own.
+ * Lifecycle transition is conditional so concurrent requests cannot both win.
  */
 export async function completeJobRequirement(jobId: number) {
   const user = await requireUser();
   const validatedJobId = validateJobId(jobId);
 
+  let companyIdFilter: number | undefined;
+
   if (user.role === PortalRole.ADMIN) {
     // Admin may complete any requirement in the existing workflow.
   } else if (user.role === PortalRole.CLIENT) {
     await requireJobAccess(validatedJobId);
+    if (user.companyId === null) {
+      throw new AuthorizationError("Unauthorized.");
+    }
+    companyIdFilter = user.companyId;
   } else {
     throw new AuthorizationError("Unauthorized.");
   }
 
-  const existingJob = await prisma.job.findUnique({
+  const existingJob = await prisma.job.findFirst({
     where: {
       id: validatedJobId,
+      ...(companyIdFilter !== undefined
+        ? { companyId: companyIdFilter }
+        : {}),
     },
     select: {
       id: true,
@@ -294,13 +304,29 @@ export async function completeJobRequirement(jobId: number) {
 
   validateJobRequirementCompletion(existingJob);
 
-  const job = await prisma.job.update({
+  const transition = await prisma.job.updateMany({
     where: {
       id: validatedJobId,
+      requirementLifecycle: "CLIENT_NOTIFIED",
+      ...(companyIdFilter !== undefined
+        ? { companyId: companyIdFilter }
+        : {}),
     },
     data: {
       clientCompletedAt: new Date(),
       requirementLifecycle: "REQUIREMENT_POSTED",
+    },
+  });
+
+  if (transition.count !== 1) {
+    throw new JobValidationError(
+      "Requirement is no longer available for completion.",
+    );
+  }
+
+  const job = await prisma.job.findUniqueOrThrow({
+    where: {
+      id: validatedJobId,
     },
   });
 
@@ -433,35 +459,60 @@ export async function notifyAssignedInterviewer(jobId: number) {
   }
 
   const message = `Requirement ready for interviewer: ${existingJob.title}`;
+  const assignedInterviewerId = existingJob.assignedInterviewerId;
 
   let updatedJob;
 
   try {
     updatedJob = await prisma.$transaction(async (tx) => {
-      await tx.notification.create({
-        data: {
-          type: "INTERVIEWER_REQUIREMENT_READY",
-          message,
-          jobId: existingJob.id,
-          interviewerId: existingJob.assignedInterviewerId!,
-        },
-      });
-
-      return tx.job.update({
+      // Lifecycle transition is the concurrency gate.
+      const transition = await tx.job.updateMany({
         where: {
           id: existingJob.id,
+          requirementLifecycle: "REQUIREMENT_POSTED",
+          assignedInterviewerId,
         },
         data: {
           requirementLifecycle: "INTERVIEWER_NOTIFIED",
         },
       });
+
+      if (transition.count !== 1) {
+        throw new JobValidationError(
+          "Requirement is no longer available for interviewer notification.",
+        );
+      }
+
+      await tx.notification.create({
+        data: {
+          type: "INTERVIEWER_REQUIREMENT_READY",
+          message,
+          jobId: existingJob.id,
+          interviewerId: assignedInterviewerId,
+        },
+      });
+
+      return tx.job.findUniqueOrThrow({
+        where: {
+          id: existingJob.id,
+        },
+      });
     });
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2003"
-    ) {
-      throw new JobValidationError("Interviewer not found.");
+    if (error instanceof JobValidationError) {
+      throw error;
+    }
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2003") {
+        throw new JobValidationError("Interviewer not found.");
+      }
+
+      if (error.code === "P2002") {
+        throw new JobValidationError(
+          "Interviewer has already been notified.",
+        );
+      }
     }
 
     throw error;
@@ -502,14 +553,37 @@ export async function markJobSourcingAccessReceived(jobId: number) {
     sourcingAccessReceivedAt.getTime() + SHORTLISTING_SLA_HOURS * 60 * 60 * 1000,
   );
 
-  const job = await prisma.job.update({
+  const transition = await prisma.job.updateMany({
     where: {
       id: validatedJobId,
+      requirementLifecycle: "INTERVIEWER_NOTIFIED",
+      sourcingAccessReceivedAt: null,
     },
     data: {
       sourcingAccessReceivedAt,
       shortlistingDueAt,
       requirementLifecycle: "SOURCING_SHORTLISTING",
+    },
+  });
+
+  if (transition.count !== 1) {
+    const currentJob = await prisma.job.findUniqueOrThrow({
+      where: {
+        id: validatedJobId,
+      },
+    });
+
+    // Preserve existing already-recorded behavior if a concurrent request won.
+    if (currentJob.sourcingAccessReceivedAt) {
+      return currentJob;
+    }
+
+    throw new JobValidationError("Invalid sourcing workflow state.");
+  }
+
+  const job = await prisma.job.findUniqueOrThrow({
+    where: {
+      id: validatedJobId,
     },
   });
 
@@ -541,12 +615,38 @@ export async function completeJobShortlisting(jobId: number) {
     });
   }
 
-  const job = await prisma.job.update({
+  const transition = await prisma.job.updateMany({
     where: {
       id: validatedJobId,
+      requirementLifecycle: "SOURCING_SHORTLISTING",
+      sourcingAccessReceivedAt: {
+        not: null,
+      },
+      shortlistingCompletedAt: null,
     },
     data: {
       shortlistingCompletedAt: new Date(),
+    },
+  });
+
+  if (transition.count !== 1) {
+    const currentJob = await prisma.job.findUniqueOrThrow({
+      where: {
+        id: validatedJobId,
+      },
+    });
+
+    // Preserve existing already-completed behavior if a concurrent request won.
+    if (currentJob.shortlistingCompletedAt) {
+      return currentJob;
+    }
+
+    throw new JobValidationError("Invalid sourcing workflow state.");
+  }
+
+  const job = await prisma.job.findUniqueOrThrow({
+    where: {
+      id: validatedJobId,
     },
   });
 

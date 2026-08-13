@@ -280,6 +280,7 @@ model Evaluation {
   interviewer Interviewer @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
   questions   EvaluationQuestion[]
 
+  @@unique([applicationId, interviewerId])
   @@index([applicationId])
   @@index([interviewerId])
 }
@@ -374,6 +375,7 @@ model Notification {
   job Job @relation(fields: [jobId], references: [id], onDelete: Restrict)
   interviewer Interviewer @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
 
+  @@unique([jobId, interviewerId, type])
   @@index([jobId])
   @@index([interviewerId])
   @@index([type])
