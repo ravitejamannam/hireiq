@@ -1,9 +1,15 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
+import type { ClientCandidateCardData } from "@/components/client/ClientCandidateCard";
 import ClientRequirementWorkspace from "@/components/client/ClientRequirementWorkspace";
-import { countPipelineStatuses } from "@/components/client/client-labels";
+import {
+  countPipelineStatuses,
+  getClientTechnicalEvaluationStatus,
+  selectPrimaryClientEvaluation,
+} from "@/components/client/client-labels";
 import { requireClientPortal } from "@/lib/auth/authorization";
+import { getClientApplicationsForRequirement } from "@/lib/repositories/application-repository";
 import { getJobById } from "@/lib/repositories/job-repository";
 
 type ClientRequirementDetailPageProps = {
@@ -17,12 +23,15 @@ export default async function ClientRequirementDetailPage({
   params,
   searchParams,
 }: ClientRequirementDetailPageProps) {
-  // Explicitly ignore tenant query params — company comes from the session User.
-  void searchParams;
-
   await requireClientPortal();
 
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  // Ignore tenant query params — company comes from the session User only.
+  const sectionParam = resolvedSearchParams.section;
+  const initialSection =
+    sectionParam === "candidates" ? "candidates" : "overview";
+
   const requirementId = Number(id);
 
   if (!Number.isInteger(requirementId) || requirementId <= 0) {
@@ -35,8 +44,38 @@ export default async function ClientRequirementDetailPage({
     notFound();
   }
 
+  const applications = await getClientApplicationsForRequirement(requirementId);
+
   const pipelineCounts = countPipelineStatuses(
-    requirement.applications.map((application) => application.status),
+    applications.map((application) => application.status),
+  );
+
+  const shortlistedCount = applications.filter(
+    (application) => application.status === "SHORTLISTED",
+  ).length;
+
+  const candidates: ClientCandidateCardData[] = applications.map(
+    (application) => {
+      const evaluation = selectPrimaryClientEvaluation(application.evaluations);
+
+      return {
+        applicationId: application.id,
+        requirementId,
+        name: application.candidate.name,
+        role: application.candidate.role,
+        currentEmployer: application.candidate.currentEmployer,
+        location: application.candidate.location,
+        experienceYears: application.candidate.experienceYears,
+        skills: application.candidate.skills,
+        expectedCTC: application.candidate.expectedCTC,
+        status: application.status,
+        expertScore: application.expertScore,
+        technicalEvaluationStatus:
+          getClientTechnicalEvaluationStatus(evaluation),
+        recommendation: evaluation?.recommendation ?? null,
+        fitDecision: evaluation?.fitDecision ?? null,
+      };
+    },
   );
 
   return (
@@ -57,7 +96,7 @@ export default async function ClientRequirementDetailPage({
       </div>
 
       <ClientRequirementWorkspace
-        key={`${requirement.id}-${requirement.requirementLifecycle}-${requirement.updatedAt.toISOString()}`}
+        key={`${requirement.id}-${requirement.requirementLifecycle}-${requirement.updatedAt.toISOString()}-${initialSection}`}
         requirement={{
           id: requirement.id,
           title: requirement.title,
@@ -80,9 +119,12 @@ export default async function ClientRequirementDetailPage({
           clientCompletedAt: requirement.clientCompletedAt
             ? requirement.clientCompletedAt.toISOString()
             : null,
-          applicationCount: requirement._count.applications,
+          applicationCount: applications.length,
           pipelineCounts,
         }}
+        candidates={candidates}
+        shortlistedCount={shortlistedCount}
+        initialSection={initialSection}
       />
     </div>
   );

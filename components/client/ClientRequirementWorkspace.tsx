@@ -18,6 +18,9 @@ import {
   formatClientDate,
   type ClientPipelineCounts,
 } from "@/components/client/client-labels";
+import ClientRequirementCandidates from "@/components/client/ClientRequirementCandidates";
+import ClientRequirementNav from "@/components/client/ClientRequirementNav";
+import type { ClientCandidateCardData } from "@/components/client/ClientCandidateCard";
 
 const roleCategoryOptions = [
   { value: "ENGINEERING", label: "Engineering" },
@@ -72,6 +75,9 @@ type FormState = {
 
 type ClientRequirementWorkspaceProps = {
   requirement: ClientRequirementWorkspaceData;
+  candidates: ClientCandidateCardData[];
+  shortlistedCount: number;
+  initialSection?: "overview" | "candidates";
 };
 
 function getErrorMessage(error: unknown) {
@@ -157,8 +163,14 @@ function displayValue(value: string | number | null | undefined) {
 
 export default function ClientRequirementWorkspace({
   requirement,
+  candidates,
+  shortlistedCount,
+  initialSection = "overview",
 }: ClientRequirementWorkspaceProps) {
   const router = useRouter();
+  const [section, setSection] = useState<"overview" | "candidates">(
+    initialSection,
+  );
   const [form, setForm] = useState(() => toFormState(requirement));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -265,6 +277,21 @@ export default function ClientRequirementWorkspace({
         ) : null}
       </div>
 
+      <ClientRequirementNav
+        requirementId={requirement.id}
+        candidateCount={candidates.length}
+        shortlistedCount={shortlistedCount}
+        active={section}
+        onSelectSection={setSection}
+      />
+
+      {section === "candidates" ? (
+        <ClientRequirementCandidates
+          requirementId={requirement.id}
+          candidates={candidates}
+        />
+      ) : (
+        <>
       {errorMessage ? (
         <div
           role="alert"
@@ -682,6 +709,8 @@ export default function ClientRequirementWorkspace({
           </dl>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }

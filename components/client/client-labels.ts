@@ -50,6 +50,189 @@ export function countPipelineStatuses(
   };
 }
 
+export type ClientScorecardEntry = {
+  skill: string;
+  score: number;
+  comment: string | null;
+};
+
+export const clientPipelineStatusLabels: Record<
+  ApplicationPipelineStatus,
+  string
+> = {
+  CV_POOL: "CV Pool",
+  EXPERT_REVIEW: "Expert Review",
+  TECH_EVALUATION: "Tech Evaluation",
+  SHORTLISTED: "Shortlisted",
+  SELECTED: "Selected",
+  REJECTED: "Rejected",
+  HIRED: "Hired",
+};
+
+export const clientRecommendationLabels: Record<string, string> = {
+  STRONG_HIRE: "Strong Hire",
+  HIRE: "Hire",
+  NO_HIRE: "No Hire",
+  STRONG_NO_HIRE: "Strong No Hire",
+};
+
+export const clientFitDecisionLabels: Record<string, string> = {
+  RIGHT_FIT: "Right Fit",
+  NOT_FIT: "Not Fit",
+};
+
+export const clientSourceLabels: Record<string, string> = {
+  LINKEDIN: "LinkedIn",
+  NAUKRI: "Naukri",
+};
+
+export function formatClientOptional(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") {
+    return "Not set";
+  }
+
+  return String(value);
+}
+
+export function getClientPipelineStatusLabel(
+  status: ApplicationPipelineStatus,
+) {
+  return clientPipelineStatusLabels[status] ?? status;
+}
+
+export function getClientRecommendationLabel(
+  recommendation: string | null | undefined,
+) {
+  if (!recommendation) return "Not set";
+  return clientRecommendationLabels[recommendation] ?? recommendation;
+}
+
+export function getClientFitDecisionLabel(
+  fitDecision: string | null | undefined,
+) {
+  if (!fitDecision) return "Not set";
+  return clientFitDecisionLabels[fitDecision] ?? fitDecision;
+}
+
+export function getClientSourceLabel(source: string | null | undefined) {
+  if (!source) return "Not set";
+  return clientSourceLabels[source] ?? source;
+}
+
+export function getClientTechnicalEvaluationStatus(evaluation: {
+  evaluatedAt: Date | string | null;
+  overallScore: number | null;
+} | null) {
+  if (!evaluation) {
+    return "Not started";
+  }
+
+  if (evaluation.evaluatedAt || evaluation.overallScore !== null) {
+    return "Completed";
+  }
+
+  return "In progress";
+}
+
+/**
+ * Prefer the most recent completed evaluation (evaluatedAt set).
+ * If none are completed, fall back to the most recently created evaluation.
+ */
+export function selectPrimaryClientEvaluation<
+  T extends {
+    evaluatedAt: Date | string | null;
+    createdAt: Date | string;
+  },
+>(evaluations: T[]): T | null {
+  if (evaluations.length === 0) {
+    return null;
+  }
+
+  const toTime = (value: Date | string) => new Date(value).getTime();
+
+  const completed = evaluations.filter((evaluation) => evaluation.evaluatedAt);
+
+  const pool = completed.length > 0 ? completed : evaluations;
+
+  return [...pool].sort((left, right) => {
+    const leftTime = toTime(left.evaluatedAt ?? left.createdAt);
+    const rightTime = toTime(right.evaluatedAt ?? right.createdAt);
+    return rightTime - leftTime;
+  })[0];
+}
+
+export function parseClientScorecard(
+  scorecard: unknown,
+): ClientScorecardEntry[] | null {
+  if (!scorecard) {
+    return null;
+  }
+
+  let value: unknown = scorecard;
+
+  if (typeof scorecard === "string") {
+    const trimmed = scorecard.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    try {
+      value = JSON.parse(trimmed);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const entries = value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const record = entry as Record<string, unknown>;
+      if (typeof record.skill !== "string" || typeof record.score !== "number") {
+        return null;
+      }
+
+      return {
+        skill: record.skill,
+        score: record.score,
+        comment: typeof record.comment === "string" ? record.comment : null,
+      };
+    })
+    .filter((entry): entry is ClientScorecardEntry => entry !== null);
+
+  return entries.length > 0 ? entries : null;
+}
+
+export function matchesClientCandidateSearch(
+  candidate: {
+    name: string;
+    role: string;
+    currentEmployer: string | null;
+    location: string | null;
+    skills: string | null;
+  },
+  query: string,
+) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  return (
+    candidate.name.toLowerCase().includes(normalized) ||
+    candidate.role.toLowerCase().includes(normalized) ||
+    (candidate.currentEmployer ?? "").toLowerCase().includes(normalized) ||
+    (candidate.location ?? "").toLowerCase().includes(normalized) ||
+    (candidate.skills ?? "").toLowerCase().includes(normalized)
+  );
+}
+
 export function matchesClientRequirementSearch(
   requirement: {
     title: string;

@@ -1,6 +1,10 @@
 "use server";
 
-import { requireAdmin } from "@/lib/auth/authorization";
+import {
+  AuthorizationError,
+  requireAdmin,
+  requireClientPortal,
+} from "@/lib/auth/authorization";
 import { prisma } from "@/lib/prisma";
 import {
   assertApplicationIsInExpertReview,
@@ -431,6 +435,84 @@ export async function transitionApplicationStatus(
 
   try {
     revalidatePath("/dashboard/pipeline");
+    revalidatePath("/dashboard/applications");
+  } catch {
+    // revalidatePath requires a Next.js request context
+  }
+
+  return updatedApplication;
+}
+
+/**
+ * Client-only selection: SHORTLISTED → SELECTED for an Application
+ * owned by the Client's company. Does not accept nextStatus from the browser.
+ */
+export async function selectClientCandidate(applicationId: number) {
+  const client = await requireClientPortal();
+  const validatedApplicationId = validateApplicationId(applicationId);
+
+  const application = await prisma.application.findFirst({
+    where: {
+      id: validatedApplicationId,
+      job: {
+        companyId: client.companyId,
+      },
+    },
+    select: {
+      id: true,
+      status: true,
+      jobId: true,
+    },
+  });
+
+  if (!application) {
+    throw new AuthorizationError("Resource not found.");
+  }
+
+  if (application.status !== ApplicationPipelineStatus.SHORTLISTED) {
+    throw new ApplicationValidationError(
+      "Candidate is no longer shortlisted.",
+    );
+  }
+
+  // Conditional update prevents double-submit races from selecting twice.
+  const updateResult = await prisma.application.updateMany({
+    where: {
+      id: application.id,
+      status: ApplicationPipelineStatus.SHORTLISTED,
+      job: {
+        companyId: client.companyId,
+      },
+    },
+    data: {
+      status: ApplicationPipelineStatus.SELECTED,
+    },
+  });
+
+  if (updateResult.count !== 1) {
+    throw new ApplicationValidationError(
+      "Candidate is no longer shortlisted.",
+    );
+  }
+
+  const updatedApplication = await prisma.application.findUnique({
+    where: { id: application.id },
+  });
+
+  if (!updatedApplication) {
+    throw new AuthorizationError("Resource not found.");
+  }
+
+  try {
+    revalidatePath("/client");
+    revalidatePath("/client/requirements");
+    revalidatePath(`/client/requirements/${application.jobId}`);
+    revalidatePath(`/client/requirements/${application.jobId}/shortlist`);
+    revalidatePath(
+      `/client/requirements/${application.jobId}/candidates/${application.id}`,
+    );
+    revalidatePath("/dashboard/pipeline");
+    revalidatePath("/dashboard/shortlist");
     revalidatePath("/dashboard/applications");
   } catch {
     // revalidatePath requires a Next.js request context

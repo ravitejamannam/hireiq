@@ -1,0 +1,351 @@
+import type {
+  ApplicationPipelineStatus,
+  EvaluationFitDecision,
+  JobStatus,
+  Recommendation,
+} from "@prisma/client";
+
+import {
+  clientJobStatusLabels,
+  formatClientDate,
+  formatClientOptional,
+  getClientFitDecisionLabel,
+  getClientPipelineStatusLabel,
+  getClientRecommendationLabel,
+  getClientSourceLabel,
+  parseClientScorecard,
+  type ClientScorecardEntry,
+} from "@/components/client/client-labels";
+
+export type ClientCandidateQuestion = {
+  question: string;
+  answer: string | null;
+  expertComment: string | null;
+  score: number | null;
+  difficulty: string | null;
+  weight: string | null;
+};
+
+export type ClientCandidateEvaluation = {
+  overallScore: number | null;
+  scorecard: unknown;
+  notes: string | null;
+  recordingUrl: string | null;
+  recommendation: Recommendation | null;
+  hireProbability: string | null;
+  fitDecision: EvaluationFitDecision | null;
+  evaluatedAt: string | null;
+  questions: ClientCandidateQuestion[];
+};
+
+export type ClientCandidateProfileData = {
+  name: string;
+  role: string;
+  currentEmployer: string | null;
+  location: string | null;
+  experienceYears: number;
+  skills: string | null;
+  expectedCTC: string | null;
+  pipelineStatus: ApplicationPipelineStatus;
+  source: string | null;
+  expertScore: number | null;
+  requirementTitle: string;
+  companyName: string;
+  requirementStatus: JobStatus;
+  evaluation: ClientCandidateEvaluation | null;
+};
+
+type ClientCandidateProfileProps = {
+  candidate: ClientCandidateProfileData;
+};
+
+function ScorecardTable({ entries }: { entries: ClientScorecardEntry[] }) {
+  return (
+    <div className="mt-4 overflow-x-auto rounded-xl border border-zinc-200">
+      <table className="min-w-full text-left text-sm text-zinc-600">
+        <thead className="bg-zinc-50 text-black">
+          <tr>
+            <th className="px-4 py-3 font-medium">Skill</th>
+            <th className="px-4 py-3 font-medium">Score</th>
+            <th className="px-4 py-3 font-medium">Comment</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => (
+            <tr key={`${entry.skill}-${entry.score}`} className="border-t border-zinc-200">
+              <td className="px-4 py-3">{entry.skill}</td>
+              <td className="px-4 py-3">{entry.score}</td>
+              <td className="px-4 py-3">
+                {formatClientOptional(entry.comment)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default function ClientCandidateProfile({
+  candidate,
+}: ClientCandidateProfileProps) {
+  const evaluation = candidate.evaluation;
+  const scorecard = evaluation
+    ? parseClientScorecard(evaluation.scorecard)
+    : null;
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+          Candidate
+        </p>
+        <h1 className="mt-2 text-3xl font-bold text-black">{candidate.name}</h1>
+        <p className="mt-2 text-zinc-600">{candidate.role}</p>
+      </div>
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-6">
+        <h2 className="text-lg font-bold text-black">Candidate Profile</h2>
+        <dl className="mt-4 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2">
+          <div>
+            <dt className="font-medium text-black">Current Role</dt>
+            <dd>{candidate.role}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">Current Employer</dt>
+            <dd>{formatClientOptional(candidate.currentEmployer)}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">Location</dt>
+            <dd>{formatClientOptional(candidate.location)}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">Experience</dt>
+            <dd>{candidate.experienceYears} years</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">Expected CTC</dt>
+            <dd>{formatClientOptional(candidate.expectedCTC)}</dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="font-medium text-black">Skills</dt>
+            <dd className="mt-1 whitespace-pre-wrap">
+              {formatClientOptional(candidate.skills)}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-6">
+        <h2 className="text-lg font-bold text-black">Requirement Context</h2>
+        <dl className="mt-4 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2">
+          <div>
+            <dt className="font-medium text-black">Role</dt>
+            <dd>{candidate.requirementTitle}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">Company</dt>
+            <dd>{candidate.companyName}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">Requirement status</dt>
+            <dd>{clientJobStatusLabels[candidate.requirementStatus]}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">Pipeline stage</dt>
+            <dd>{getClientPipelineStatusLabel(candidate.pipelineStatus)}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">Source</dt>
+            <dd>{getClientSourceLabel(candidate.source)}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-6">
+        <h2 className="text-lg font-bold text-black">Expert Review</h2>
+        <dl className="mt-4 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2">
+          <div>
+            <dt className="font-medium text-black">Expert Score</dt>
+            <dd>{formatClientOptional(candidate.expertScore)}</dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="font-medium text-black">Expert Notes</dt>
+            <dd className="mt-1 whitespace-pre-wrap">
+              {evaluation?.notes
+                ? evaluation.notes
+                : "Evaluation not available yet."}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-6">
+        <h2 className="text-lg font-bold text-black">Evaluation Summary</h2>
+        {!evaluation ? (
+          <p className="mt-4 text-sm text-zinc-600">
+            Technical evaluation has not been completed yet.
+          </p>
+        ) : (
+          <dl className="mt-4 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2">
+            <div>
+              <dt className="font-medium text-black">Overall Score</dt>
+              <dd>{formatClientOptional(evaluation.overallScore)}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-black">Recommendation</dt>
+              <dd>
+                {getClientRecommendationLabel(evaluation.recommendation)}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-black">Hire Probability</dt>
+              <dd>{formatClientOptional(evaluation.hireProbability)}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-black">Fit Decision</dt>
+              <dd>{getClientFitDecisionLabel(evaluation.fitDecision)}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-black">Evaluation Date</dt>
+              <dd>
+                {formatClientDate(
+                  evaluation.evaluatedAt
+                    ? new Date(evaluation.evaluatedAt)
+                    : null,
+                )}
+              </dd>
+            </div>
+          </dl>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-6">
+        <h2 className="text-lg font-bold text-black">Technical Evaluation</h2>
+        {!evaluation ? (
+          <p className="mt-4 text-sm text-zinc-600">
+            Evaluation not available yet.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-6">
+            <dl className="grid gap-4 text-sm text-zinc-600 sm:grid-cols-2">
+              <div>
+                <dt className="font-medium text-black">Overall Score</dt>
+                <dd>{formatClientOptional(evaluation.overallScore)}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-black">Recommendation</dt>
+                <dd>
+                  {getClientRecommendationLabel(evaluation.recommendation)}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-black">Hire Probability</dt>
+                <dd>{formatClientOptional(evaluation.hireProbability)}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-black">Fit Decision</dt>
+                <dd>{getClientFitDecisionLabel(evaluation.fitDecision)}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-black">Evaluated At</dt>
+                <dd>
+                  {formatClientDate(
+                    evaluation.evaluatedAt
+                      ? new Date(evaluation.evaluatedAt)
+                      : null,
+                  )}
+                </dd>
+              </div>
+            </dl>
+
+            <div>
+              <h3 className="text-sm font-medium text-black">Scorecard</h3>
+              {scorecard ? (
+                <ScorecardTable entries={scorecard} />
+              ) : (
+                <p className="mt-2 text-sm text-zinc-600">
+                  No scorecard recorded.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-black">Expert Notes</h3>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-600">
+                {formatClientOptional(evaluation.notes)}
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-black">Recording</h3>
+              {evaluation.recordingUrl ? (
+                <a
+                  href={evaluation.recordingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex text-sm font-semibold text-black underline underline-offset-2"
+                >
+                  View Recording
+                </a>
+              ) : (
+                <p className="mt-2 text-sm text-zinc-600">
+                  Recording not available.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-6">
+        <h2 className="text-lg font-bold text-black">Questions & Answers</h2>
+        {!evaluation || evaluation.questions.length === 0 ? (
+          <p className="mt-4 text-sm text-zinc-600">
+            No technical questions recorded.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-4">
+            {evaluation.questions.map((question, index) => (
+              <article
+                key={`${question.question}-${index}`}
+                className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"
+              >
+                <p className="text-sm font-semibold text-black">
+                  Question {index + 1}
+                </p>
+                <p className="mt-2 text-sm text-zinc-700">{question.question}</p>
+                <dl className="mt-4 grid gap-3 text-sm text-zinc-600 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <dt className="font-medium text-black">Candidate Answer</dt>
+                    <dd className="mt-1 whitespace-pre-wrap">
+                      {formatClientOptional(question.answer)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-black">Score</dt>
+                    <dd>{formatClientOptional(question.score)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-black">Difficulty</dt>
+                    <dd>{formatClientOptional(question.difficulty)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-black">Weight</dt>
+                    <dd>{formatClientOptional(question.weight)}</dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="font-medium text-black">Expert Comment</dt>
+                    <dd className="mt-1 whitespace-pre-wrap">
+                      {formatClientOptional(question.expertComment)}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
