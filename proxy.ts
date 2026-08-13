@@ -6,6 +6,8 @@ export const config = {
     "/dashboard/:path*",
     "/client",
     "/client/:path*",
+    "/interviewer",
+    "/interviewer/:path*",
     "/login",
   ],
 };

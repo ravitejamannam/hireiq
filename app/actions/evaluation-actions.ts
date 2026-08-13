@@ -1,8 +1,10 @@
 "use server";
 
 import {
+  AuthorizationError,
   requireAdmin,
   requireApplicationAccess,
+  requireInterviewerPortal,
 } from "@/lib/auth/authorization";
 import { Prisma } from "@prisma/client";
 
@@ -284,6 +286,269 @@ export async function getTechnicalEvaluationForApplication(
     await resolveAssignedInterviewerForApplication(applicationId);
 
   return getEvaluationForApplication(application.id, interviewerId);
+}
+
+async function assertInterviewerOwnsEvaluation(evaluationId: number) {
+  const interviewer = await requireInterviewerPortal();
+
+  const evaluation = await prisma.evaluation.findFirst({
+    where: {
+      id: evaluationId,
+      interviewerId: interviewer.interviewerId,
+      application: {
+        job: {
+          assignedInterviewerId: interviewer.interviewerId,
+        },
+      },
+    },
+    select: {
+      id: true,
+      applicationId: true,
+      interviewerId: true,
+      application: {
+        select: {
+          jobId: true,
+        },
+      },
+    },
+  });
+
+  if (!evaluation) {
+    throw new AuthorizationError("Resource not found.");
+  }
+
+  return { interviewer, evaluation };
+}
+
+async function assertInterviewerOwnsApplication(applicationId: number) {
+  const interviewer = await requireInterviewerPortal();
+
+  const application = await prisma.application.findFirst({
+    where: {
+      id: applicationId,
+      job: {
+        assignedInterviewerId: interviewer.interviewerId,
+      },
+    },
+    select: {
+      id: true,
+      jobId: true,
+      status: true,
+    },
+  });
+
+  if (!application) {
+    throw new AuthorizationError("Resource not found.");
+  }
+
+  return { interviewer, application };
+}
+
+function revalidateInterviewerEvaluationPaths(
+  jobId: number,
+  applicationId: number,
+) {
+  try {
+    revalidatePath("/interviewer");
+    revalidatePath("/interviewer/requirements");
+    revalidatePath(`/interviewer/requirements/${jobId}`);
+    revalidatePath(
+      `/interviewer/requirements/${jobId}/candidates/${applicationId}`,
+    );
+    revalidatePath("/interviewer/evaluations");
+    revalidatePath("/dashboard/evaluations");
+    revalidatePath("/dashboard/technical-evaluations");
+  } catch {
+    // revalidatePath requires a Next.js request context
+  }
+}
+
+/**
+ * Interviewer upsert of their own Evaluation for an assigned Application.
+ * Does not accept interviewerId from the browser.
+ */
+export async function saveInterviewerEvaluation(
+  applicationId: number,
+  fields: EvaluationFieldsInput = {},
+) {
+  const { interviewer, application } =
+    await assertInterviewerOwnsApplication(applicationId);
+
+  const evaluationInput = await validateEvaluationInput(
+    application.id,
+    interviewer.interviewerId,
+    fields,
+  );
+
+  let evaluation;
+
+  try {
+    evaluation = await prisma.$transaction(async (tx) => {
+      const existing = await tx.evaluation.findFirst({
+        where: {
+          applicationId: application.id,
+          interviewerId: interviewer.interviewerId,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      const data = toEvaluationData(evaluationInput);
+
+      if (existing) {
+        return tx.evaluation.update({
+          where: {
+            id: existing.id,
+          },
+          data,
+        });
+      }
+
+      return tx.evaluation.create({
+        data,
+      });
+    });
+  } catch (error) {
+    if (error instanceof EvaluationValidationError) {
+      throw error;
+    }
+
+    throw translateEvaluationSaveError(error);
+  }
+
+  revalidateInterviewerEvaluationPaths(application.jobId, application.id);
+
+  return evaluation;
+}
+
+export async function createInterviewerEvaluationQuestion(
+  evaluationId: number,
+  question: string,
+  fields: EvaluationQuestionFieldsInput = {},
+) {
+  const { evaluation } = await assertInterviewerOwnsEvaluation(evaluationId);
+
+  const evaluationQuestionInput = await validateEvaluationQuestionInput(
+    evaluation.id,
+    question,
+    fields,
+  );
+
+  try {
+    const created = await prisma.evaluationQuestion.create({
+      data: evaluationQuestionInput,
+    });
+
+    revalidateInterviewerEvaluationPaths(
+      evaluation.application.jobId,
+      evaluation.applicationId,
+    );
+
+    return created;
+  } catch (error) {
+    throw translateEvaluationQuestionSaveError(error);
+  }
+}
+
+export async function updateInterviewerEvaluationQuestion(
+  id: number,
+  evaluationId: number,
+  question: string,
+  fields: EvaluationQuestionFieldsInput = {},
+) {
+  const { evaluation } = await assertInterviewerOwnsEvaluation(evaluationId);
+  const evaluationQuestionId = validateEvaluationQuestionId(id);
+
+  const ownedQuestion = await prisma.evaluationQuestion.findFirst({
+    where: {
+      id: evaluationQuestionId,
+      evaluationId: evaluation.id,
+    },
+    select: { id: true },
+  });
+
+  if (!ownedQuestion) {
+    throw new AuthorizationError("Resource not found.");
+  }
+
+  const evaluationQuestionInput = await validateEvaluationQuestionInput(
+    evaluation.id,
+    question,
+    fields,
+  );
+
+  try {
+    const updated = await prisma.evaluationQuestion.update({
+      where: {
+        id: evaluationQuestionId,
+      },
+      data: evaluationQuestionInput,
+    });
+
+    revalidateInterviewerEvaluationPaths(
+      evaluation.application.jobId,
+      evaluation.applicationId,
+    );
+
+    return updated;
+  } catch (error) {
+    throw translateEvaluationQuestionSaveError(error);
+  }
+}
+
+export async function deleteInterviewerEvaluationQuestion(id: number) {
+  const interviewer = await requireInterviewerPortal();
+  const evaluationQuestionId = validateEvaluationQuestionId(id);
+
+  const ownedQuestion = await prisma.evaluationQuestion.findFirst({
+    where: {
+      id: evaluationQuestionId,
+      evaluation: {
+        interviewerId: interviewer.interviewerId,
+        application: {
+          job: {
+            assignedInterviewerId: interviewer.interviewerId,
+          },
+        },
+      },
+    },
+    select: {
+      id: true,
+      evaluation: {
+        select: {
+          applicationId: true,
+          application: {
+            select: {
+              jobId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!ownedQuestion) {
+    throw new AuthorizationError("Resource not found.");
+  }
+
+  try {
+    await prisma.evaluationQuestion.delete({
+      where: {
+        id: evaluationQuestionId,
+      },
+    });
+  } catch (error) {
+    throw translateEvaluationQuestionDeleteError(error);
+  }
+
+  revalidateInterviewerEvaluationPaths(
+    ownedQuestion.evaluation.application.jobId,
+    ownedQuestion.evaluation.applicationId,
+  );
 }
 
 function toEvaluationData(evaluationInput: ValidatedEvaluationInput) {

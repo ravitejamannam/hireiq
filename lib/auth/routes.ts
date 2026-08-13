@@ -5,5 +5,9 @@ export function homePathForRole(role: PortalRole) {
     return "/client";
   }
 
+  if (role === PortalRole.INTERVIEWER) {
+    return "/interviewer";
+  }
+
   return "/dashboard";
 }

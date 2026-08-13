@@ -1,5 +1,20 @@
 import type { NextAuthConfig } from "next-auth";
 
+import { homePathForRole } from "@/lib/auth/routes";
+import { PortalRole } from "@prisma/client";
+
+function homePathFromSessionRole(role: string | undefined) {
+  if (role === PortalRole.CLIENT) {
+    return homePathForRole(PortalRole.CLIENT);
+  }
+
+  if (role === PortalRole.INTERVIEWER) {
+    return homePathForRole(PortalRole.INTERVIEWER);
+  }
+
+  return homePathForRole(PortalRole.ADMIN);
+}
+
 export const authConfig = {
   pages: {
     signIn: "/login",
@@ -12,24 +27,39 @@ export const authConfig = {
       const pathname = nextUrl.pathname;
       const isOnDashboard = pathname.startsWith("/dashboard");
       const isOnClient = pathname.startsWith("/client");
+      const isOnInterviewer = pathname.startsWith("/interviewer");
 
-      if (isOnDashboard || isOnClient) {
+      if (isOnDashboard || isOnClient || isOnInterviewer) {
         if (!isLoggedIn) {
           return false;
         }
       }
 
       if (isLoggedIn && pathname === "/login") {
-        const destination = role === "CLIENT" ? "/client" : "/dashboard";
-        return Response.redirect(new URL(destination, nextUrl));
+        return Response.redirect(
+          new URL(homePathFromSessionRole(role), nextUrl),
+        );
       }
 
-      if (isLoggedIn && isOnDashboard && role === "CLIENT") {
-        return Response.redirect(new URL("/client", nextUrl));
+      if (isLoggedIn && isOnDashboard) {
+        if (role === PortalRole.CLIENT) {
+          return Response.redirect(new URL("/client", nextUrl));
+        }
+        if (role === PortalRole.INTERVIEWER) {
+          return Response.redirect(new URL("/interviewer", nextUrl));
+        }
       }
 
-      if (isLoggedIn && isOnClient && role !== "CLIENT") {
-        return Response.redirect(new URL("/dashboard", nextUrl));
+      if (isLoggedIn && isOnClient && role !== PortalRole.CLIENT) {
+        return Response.redirect(
+          new URL(homePathFromSessionRole(role), nextUrl),
+        );
+      }
+
+      if (isLoggedIn && isOnInterviewer && role !== PortalRole.INTERVIEWER) {
+        return Response.redirect(
+          new URL(homePathFromSessionRole(role), nextUrl),
+        );
       }
 
       return true;

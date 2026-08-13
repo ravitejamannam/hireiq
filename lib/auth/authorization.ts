@@ -143,6 +143,43 @@ export async function requireInterviewer(): Promise<AuthUser> {
   return user;
 }
 
+export type InterviewerPortalContext = AuthUser & {
+  interviewerId: number;
+  interviewer: {
+    id: number;
+    name: string;
+    category: string;
+  };
+};
+
+/**
+ * Interviewer portal entry: authenticated INTERVIEWER with profile boundary
+ * loaded from the database (never from URL/query input).
+ */
+export async function requireInterviewerPortal(): Promise<InterviewerPortalContext> {
+  const user = await requireInterviewer();
+  const interviewerId = requireInterviewerProfileId(user);
+
+  const interviewer = await prisma.interviewer.findUnique({
+    where: { id: interviewerId },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+    },
+  });
+
+  if (!interviewer) {
+    throw new AuthorizationError("Unauthorized.");
+  }
+
+  return {
+    ...user,
+    interviewerId,
+    interviewer,
+  };
+}
+
 export function assertAdmin(user: AuthUser) {
   if (user.role !== PortalRole.ADMIN) {
     throw new AuthorizationError();
@@ -291,6 +328,13 @@ export function applicationScopeWhere(
 export function evaluationScopeWhere(
   user: AuthUser,
 ): Prisma.EvaluationWhereInput {
+  if (user.role === PortalRole.INTERVIEWER) {
+    return {
+      interviewerId: requireInterviewerProfileId(user),
+      application: applicationScopeWhere(user),
+    };
+  }
+
   return {
     application: applicationScopeWhere(user),
   };
