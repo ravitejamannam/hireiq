@@ -18,6 +18,7 @@ import {
   validateSourcedCandidateInput,
   validateSourcingJobId,
   ApplicationValidationError,
+  ApplicationTenantIntegrityError,
   type SourcedCandidateInput,
 } from "@/lib/validation/application-validation";
 import { revalidatePath } from "next/cache";
@@ -207,6 +208,7 @@ export async function createSourcedApplication(
         data: {
           candidateId: candidate.id,
           jobId: job.id,
+          companyId: job.companyId,
           status: ApplicationPipelineStatus.CV_POOL,
           source: validatedSource,
           expertScore: null,
@@ -528,9 +530,8 @@ function translateApplicationSaveError(error: unknown) {
     }
 
     if (error.code === "P2003") {
-      return new Error(
-        "Cannot modify or delete this application because related records exist.",
-      );
+      // Composite FKs reject Candidate/Job company mismatches as FK violations.
+      return new ApplicationTenantIntegrityError();
     }
 
     if (error.code === "P2025") {

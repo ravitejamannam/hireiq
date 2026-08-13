@@ -22,6 +22,7 @@ export class ApplicationTenantIntegrityError extends ApplicationValidationError 
 export type ValidatedApplicationInput = {
   candidateId: number;
   jobId: number;
+  companyId: number;
   status: ApplicationPipelineStatus;
   source: SourcingDatabaseSource | null;
   expertScore: number | null;
@@ -224,11 +225,15 @@ export async function validateApplicationInput(
   const validatedExpertScore = validateExpertScore(expertScore);
   const validatedRejectionReason = validateRejectionReason(rejectionReason);
 
-  await validateApplicationTenant(validatedCandidateId, validatedJobId);
+  const tenant = await validateApplicationTenant(
+    validatedCandidateId,
+    validatedJobId,
+  );
 
   return {
     candidateId: validatedCandidateId,
     jobId: validatedJobId,
+    companyId: tenant.job.companyId,
     status: validatedStatus,
     source: validatedSource,
     expertScore: validatedExpertScore,
