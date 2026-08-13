@@ -1,9 +1,13 @@
+"use client";
+
 import Link from "next/link";
 import type {
+  ApplicationPipelineStatus,
   EvaluationFitDecision,
   Recommendation,
 } from "@prisma/client";
 
+import ClientHireConfirmation from "@/components/client/ClientHireConfirmation";
 import {
   formatClientOptional,
   getClientFitDecisionLabel,
@@ -33,6 +37,7 @@ export type ClientShortlistCardData = {
   hireProbability: string | null;
   fitDecision: EvaluationFitDecision | null;
   hasEvaluation: boolean;
+  status: ApplicationPipelineStatus;
   compareSelected?: boolean;
   onToggleCompare?: () => void;
   onSelectCandidate?: () => void;
@@ -52,13 +57,19 @@ export default function ClientShortlistCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Shortlisted Candidate
+            {candidate.status === "SHORTLISTED"
+              ? "Recommended candidate"
+              : candidate.status === "SELECTED"
+                ? "Selected candidate"
+                : candidate.status === "HIRED"
+                  ? "Hired candidate"
+                  : "Candidate"}
           </p>
           <h3 className="mt-2 text-xl font-bold text-black">{candidate.name}</h3>
           <p className="mt-1 text-sm text-zinc-600">{candidate.role}</p>
         </div>
         <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-black">
-          {getClientPipelineStatusLabel("SHORTLISTED")}
+          {getClientPipelineStatusLabel(candidate.status)}
         </span>
       </div>
 
@@ -140,7 +151,7 @@ export default function ClientShortlistCard({
         >
           View Candidate
         </Link>
-        {candidate.onSelectCandidate ? (
+        {candidate.status === "SHORTLISTED" && candidate.onSelectCandidate ? (
           <button
             type="button"
             onClick={candidate.onSelectCandidate}
@@ -165,6 +176,16 @@ export default function ClientShortlistCard({
           </button>
         ) : null}
       </div>
+
+      {candidate.status === "SELECTED" || candidate.status === "HIRED" ? (
+        <div className="mt-4">
+          <ClientHireConfirmation
+            applicationId={candidate.applicationId}
+            candidateName={candidate.name}
+            status={candidate.status}
+          />
+        </div>
+      ) : null}
     </article>
   );
 }

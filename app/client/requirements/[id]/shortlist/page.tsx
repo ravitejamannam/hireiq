@@ -52,6 +52,9 @@ export default async function ClientShortlistPage({
   const selectedCount = applications.filter(
     (application) => application.status === "SELECTED",
   ).length;
+  const hiredCount = applications.filter(
+    (application) => application.status === "HIRED",
+  ).length;
 
   const items: ClientShortlistItem[] = shortlisted.map((application) => {
     const evaluation = selectPrimaryClientEvaluation(application.evaluations);
@@ -77,6 +80,7 @@ export default async function ClientShortlistPage({
       hireProbability: evaluation?.hireProbability ?? null,
       fitDecision: evaluation?.fitDecision ?? null,
       hasEvaluation: evaluation !== null,
+      status: application.status,
       updatedAt: application.updatedAt.toISOString(),
       evaluatedAt: evaluation?.evaluatedAt
         ? evaluation.evaluatedAt.toISOString()
@@ -111,6 +115,7 @@ export default async function ClientShortlistPage({
         }}
         candidateCount={applications.length}
         selectedCount={selectedCount}
+        hiredCount={hiredCount}
         items={items}
       />
     </div>

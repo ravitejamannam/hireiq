@@ -49,6 +49,12 @@ export async function createApplication(
     rejectionReason,
   );
 
+  if (applicationInput.status === ApplicationPipelineStatus.HIRED) {
+    throw new ApplicationValidationError(
+      "Hiring must be confirmed by the client who owns this requirement.",
+    );
+  }
+
   try {
     const application = await prisma.application.create({
       data: applicationInput,
@@ -75,6 +81,15 @@ export async function updateApplication(
   const applicationId = validateApplicationId(id);
   await ensureApplicationExists(applicationId);
 
+  const existingApplication = await prisma.application.findUnique({
+    where: { id: applicationId },
+    select: { status: true },
+  });
+
+  if (!existingApplication) {
+    throw new ApplicationValidationError("Application not found.");
+  }
+
   const applicationInput = await validateApplicationInput(
     candidateId,
     jobId,
@@ -83,6 +98,15 @@ export async function updateApplication(
     expertScore,
     rejectionReason,
   );
+
+  if (
+    applicationInput.status === ApplicationPipelineStatus.HIRED &&
+    existingApplication.status !== ApplicationPipelineStatus.HIRED
+  ) {
+    throw new ApplicationValidationError(
+      "Hiring must be confirmed by the client who owns this requirement.",
+    );
+  }
 
   try {
     const application = await prisma.application.update({
@@ -138,7 +162,8 @@ const APPLICATION_STATUS_TRANSITIONS: Record<
     ApplicationPipelineStatus.SELECTED,
     ApplicationPipelineStatus.REJECTED,
   ],
-  [ApplicationPipelineStatus.SELECTED]: [ApplicationPipelineStatus.HIRED],
+  // SELECTED → HIRED is Client-owned (confirmClientCandidateHire), not Admin.
+  [ApplicationPipelineStatus.SELECTED]: [],
   [ApplicationPipelineStatus.REJECTED]: [],
   [ApplicationPipelineStatus.HIRED]: [],
 };
@@ -415,6 +440,15 @@ export async function transitionApplicationStatus(
     throw new Error("Application not found.");
   }
 
+  if (
+    application.status === ApplicationPipelineStatus.SELECTED &&
+    nextStatus === ApplicationPipelineStatus.HIRED
+  ) {
+    throw new ApplicationValidationError(
+      "Hiring must be confirmed by the client who owns this requirement.",
+    );
+  }
+
   const allowedTransitions = getValidApplicationStatusTransitions(
     application.status,
   );
@@ -426,39 +460,11 @@ export async function transitionApplicationStatus(
   const isSelectionTransition =
     application.status === ApplicationPipelineStatus.SHORTLISTED &&
     nextStatus === ApplicationPipelineStatus.SELECTED;
-  const isHireTransition =
-    application.status === ApplicationPipelineStatus.SELECTED &&
-    nextStatus === ApplicationPipelineStatus.HIRED;
 
   let updatedApplication;
 
   try {
-    if (isHireTransition) {
-      // SELECTED → HIRED + billing + BILLING_GENERATED must commit atomically.
-      updatedApplication = await prisma.$transaction(async (tx) => {
-        const updateResult = await tx.application.updateMany({
-          where: {
-            id: application.id,
-            status: ApplicationPipelineStatus.SELECTED,
-          },
-          data: {
-            status: ApplicationPipelineStatus.HIRED,
-          },
-        });
-
-        if (updateResult.count !== 1) {
-          throw new ApplicationValidationError(
-            "Candidate is no longer selected.",
-          );
-        }
-
-        await generateBillingForHiredApplication(tx, application.id);
-
-        return tx.application.findUniqueOrThrow({
-          where: { id: application.id },
-        });
-      });
-    } else if (isSelectionTransition) {
+    if (isSelectionTransition) {
       // SHORTLISTED → SELECTED is a decision only — no billing.
       updatedApplication = await prisma.$transaction(async (tx) => {
         const updateResult = await tx.application.updateMany({
@@ -521,7 +527,7 @@ export async function transitionApplicationStatus(
 /**
  * Client-only selection: SHORTLISTED → SELECTED for an Application
  * owned by the Client's company. Does not accept nextStatus from the browser.
- * Selection is a decision only — billing is generated on SELECTED → HIRED.
+ * Selection is a decision only — billing is generated when the Client confirms hire.
  */
 export async function selectClientCandidate(applicationId: number) {
   const client = await requireClientPortal();
@@ -602,6 +608,106 @@ export async function selectClientCandidate(applicationId: number) {
     revalidatePath("/dashboard/pipeline");
     revalidatePath("/dashboard/shortlist");
     revalidatePath("/dashboard/applications");
+    revalidatePath(`/dashboard/requirements/${application.jobId}`);
+  } catch {
+    // revalidatePath requires a Next.js request context
+  }
+
+  return updatedApplication;
+}
+
+/**
+ * Client-only hire confirmation: SELECTED → HIRED for an Application
+ * owned by the Client's company. Does not accept nextStatus from the browser.
+ * Hire + billing + BILLING_GENERATED commit atomically.
+ */
+export async function confirmClientCandidateHire(applicationId: number) {
+  const client = await requireClientPortal();
+  const validatedApplicationId = validateApplicationId(applicationId);
+
+  const application = await prisma.application.findFirst({
+    where: {
+      id: validatedApplicationId,
+      companyId: client.companyId,
+      job: {
+        companyId: client.companyId,
+      },
+    },
+    select: {
+      id: true,
+      status: true,
+      jobId: true,
+      companyId: true,
+    },
+  });
+
+  if (!application) {
+    throw new AuthorizationError("Resource not found.");
+  }
+
+  if (application.status !== ApplicationPipelineStatus.SELECTED) {
+    throw new ApplicationValidationError(
+      "Candidate must be selected before hire can be confirmed.",
+    );
+  }
+
+  let updatedApplication;
+
+  try {
+    updatedApplication = await prisma.$transaction(async (tx) => {
+      const updateResult = await tx.application.updateMany({
+        where: {
+          id: application.id,
+          status: ApplicationPipelineStatus.SELECTED,
+          companyId: client.companyId,
+          job: {
+            companyId: client.companyId,
+          },
+        },
+        data: {
+          status: ApplicationPipelineStatus.HIRED,
+        },
+      });
+
+      if (updateResult.count !== 1) {
+        throw new ApplicationValidationError(
+          "Candidate is no longer selected.",
+        );
+      }
+
+      await generateBillingForHiredApplication(tx, application.id);
+
+      return tx.application.findUniqueOrThrow({
+        where: { id: application.id },
+      });
+    });
+  } catch (error) {
+    if (error instanceof ApplicationValidationError) {
+      throw error;
+    }
+    if (error instanceof BillingValidationError) {
+      throw error;
+    }
+    if (error instanceof AuthorizationError) {
+      throw error;
+    }
+    throw translateApplicationSaveError(error);
+  }
+
+  try {
+    revalidatePath("/client");
+    revalidatePath("/client/requirements");
+    revalidatePath(`/client/requirements/${application.jobId}`);
+    revalidatePath(`/client/requirements/${application.jobId}/shortlist`);
+    revalidatePath(
+      `/client/requirements/${application.jobId}/candidates/${application.id}`,
+    );
+    revalidatePath(`/client/requirements/${application.jobId}/billing`);
+    revalidatePath("/client/billing");
+    revalidatePath("/dashboard/pipeline");
+    revalidatePath("/dashboard/shortlist");
+    revalidatePath("/dashboard/applications");
+    revalidatePath("/dashboard/billing");
     revalidatePath(`/dashboard/requirements/${application.jobId}`);
   } catch {
     // revalidatePath requires a Next.js request context

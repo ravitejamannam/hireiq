@@ -90,10 +90,9 @@ const APPLICATION_STATUS_TRANSITIONS: Record<
     ApplicationPipelineStatus.REJECTED,
   ],
   [ApplicationPipelineStatus.SHORTLISTED]: [
-    ApplicationPipelineStatus.SELECTED,
     ApplicationPipelineStatus.REJECTED,
   ],
-  [ApplicationPipelineStatus.SELECTED]: [ApplicationPipelineStatus.HIRED],
+  [ApplicationPipelineStatus.SELECTED]: [],
   [ApplicationPipelineStatus.REJECTED]: [],
   [ApplicationPipelineStatus.HIRED]: [],
 };
@@ -120,6 +119,22 @@ function getMoveLabel(status: ApplicationPipelineStatus) {
   }
 
   return `Move to ${getApplicationPipelineStatusLabel(status)}`;
+}
+
+function getMonitorNote(status: ApplicationPipelineStatus) {
+  if (status === ApplicationPipelineStatus.SELECTED) {
+    return "Client decision: Selected. Hiring status: Awaiting confirmation.";
+  }
+
+  if (status === ApplicationPipelineStatus.HIRED) {
+    return "Hire confirmed by client. Billing generated.";
+  }
+
+  if (status === ApplicationPipelineStatus.SHORTLISTED) {
+    return "Interviewer recommendation. Client selects from the Client portal.";
+  }
+
+  return null;
 }
 
 function countByStatus(
@@ -593,6 +608,7 @@ export default function RequirementWorkspaceClient({
                     expertScore={application.expertScore}
                     status={application.status}
                     moveOptions={moveOptions}
+                    monitorNote={getMonitorNote(application.status)}
                     isMoving={movingApplicationId === application.id}
                     requirementHref={`/dashboard/requirements/${requirement.id}`}
                     onMove={handleMove}

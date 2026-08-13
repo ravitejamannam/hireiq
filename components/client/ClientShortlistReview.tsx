@@ -49,6 +49,7 @@ type ClientShortlistReviewProps = {
   };
   candidateCount: number;
   selectedCount: number;
+  hiredCount: number;
   items: ClientShortlistItem[];
 };
 
@@ -96,6 +97,7 @@ export default function ClientShortlistReview({
   requirement,
   candidateCount,
   selectedCount,
+  hiredCount,
   items,
 }: ClientShortlistReviewProps) {
   const router = useRouter();
@@ -216,17 +218,21 @@ export default function ClientShortlistReview({
             }
           </span>
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-black">
-            Shortlisted · {items.length}
+            Shortlisted ·{" "}
+            {items.filter((item) => item.status === "SHORTLISTED").length}
           </span>
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-black">
             Selected · {selectedCount}
+          </span>
+          <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-black">
+            Hired · {hiredCount}
           </span>
         </div>
       </div>
 
       <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-        Review shortlisted candidates for this requirement. Selecting a
-        candidate moves them to Selected.
+        Interviewer recommendations appear as Shortlisted. Select a candidate,
+        then confirm hire. Billing is generated only after hire is confirmed.
       </div>
 
       {actionError ? (
@@ -451,7 +457,7 @@ export default function ClientShortlistReview({
                       setConfirmingItem(item);
                     },
                     isSelecting: selectingId === item.applicationId,
-                    selectDisabled: isPending,
+                    selectDisabled: isPending || item.status !== "SHORTLISTED",
                   }}
                 />
               ))}
@@ -476,7 +482,8 @@ export default function ClientShortlistReview({
             </h2>
             <p className="mt-3 text-sm text-zinc-600">
               Selecting <span className="font-medium text-black">{confirmingItem.name}</span>{" "}
-              will move them to Selected.
+              will mark them Selected. Billing is not generated until you confirm
+              hire.
             </p>
             <div className="mt-6 flex flex-wrap justify-end gap-3">
               <button

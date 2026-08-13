@@ -30,6 +30,7 @@ type PipelineCardProps = {
   expertScore: number | null;
   status: ApplicationPipelineStatus;
   moveOptions: PipelineMoveOption[];
+  monitorNote?: string | null;
   isMoving?: boolean;
   requirementHref?: string | null;
   onMove: (id: number, nextStatus: ApplicationPipelineStatus) => void;
@@ -58,6 +59,7 @@ export default function PipelineCard({
   expertScore,
   status,
   moveOptions,
+  monitorNote = null,
   isMoving = false,
   requirementHref = null,
   onMove,
@@ -108,6 +110,12 @@ export default function PipelineCard({
           <dd>{formatOptional(expertScore)}</dd>
         </div>
       </dl>
+
+      {monitorNote ? (
+        <p className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+          {monitorNote}
+        </p>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-200 pt-3">
         {requirementHref && (

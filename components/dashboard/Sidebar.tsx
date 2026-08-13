@@ -14,6 +14,8 @@ import {
   Bell,
   CreditCard,
   Settings,
+  Kanban,
+  Link2,
 } from "lucide-react";
 
 const portalRoleLabels: Record<PortalRole, string> = {
@@ -52,6 +54,11 @@ const sections: NavSection[] = [
         href: "/dashboard/requirements",
       },
       {
+        icon: Kanban,
+        label: "Pipeline",
+        href: "/dashboard/pipeline",
+      },
+      {
         icon: Building2,
         label: "Clients",
         href: "/dashboard/companies",
@@ -82,6 +89,24 @@ const sections: NavSection[] = [
         href: "/dashboard/reports",
       },
     ],
+  },
+];
+
+const quickLinks: NavLink[] = [
+  {
+    icon: Briefcase,
+    label: "Requirements",
+    href: "/dashboard/requirements",
+  },
+  {
+    icon: Kanban,
+    label: "Pipeline",
+    href: "/dashboard/pipeline",
+  },
+  {
+    icon: CreditCard,
+    label: "Billing",
+    href: "/dashboard/billing",
   },
 ];
 
@@ -195,6 +220,36 @@ export default function Sidebar() {
             </ul>
           </div>
         ))}
+
+        <div className="mt-8">
+          <p className="px-4 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Quick Links
+          </p>
+          <ul className="mt-2 space-y-2">
+            {quickLinks.map((link) => {
+              const isActive = isActivePath(pathname, link.href);
+
+              return (
+                <li key={`quick-${link.href}`}>
+                  <Link
+                    href={link.href}
+                    className={`flex w-full items-center gap-3 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-zinc-900 text-white"
+                        : "text-zinc-600 hover:bg-zinc-100 hover:text-black"
+                    }`}
+                  >
+                    <Link2
+                      size={16}
+                      className={isActive ? "text-white" : "text-zinc-500"}
+                    />
+                    <span>{link.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </nav>
 
       <div className="mt-auto border-t border-zinc-200 p-4">

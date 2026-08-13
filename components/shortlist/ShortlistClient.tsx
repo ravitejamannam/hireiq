@@ -210,7 +210,8 @@ function ShortlistClientInner({
       <div>
         <h1 className="text-3xl font-bold text-black">Shortlist</h1>
         <p className="mt-2 text-zinc-600">
-          Review shortlisted candidates and move strong profiles to Selected.
+          Review shortlisted candidates. Clients select and confirm hire from
+          the Client portal.
         </p>
         <p className="mt-3 text-sm text-zinc-500">
           Shortlisted: {shortlistedCount} · Tech Evaluation:{" "}
@@ -311,9 +312,6 @@ function ShortlistClientInner({
                 isMoving={movingApplicationId === application.id}
                 onMoveToShortlist={(id) =>
                   handleTransition(id, ApplicationPipelineStatus.SHORTLISTED)
-                }
-                onMoveToSelected={(id) =>
-                  handleTransition(id, ApplicationPipelineStatus.SELECTED)
                 }
                 onReject={handleReject}
                 onViewDetails={(id) => {

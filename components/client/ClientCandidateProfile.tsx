@@ -5,6 +5,7 @@ import type {
   Recommendation,
 } from "@prisma/client";
 
+import ClientHireConfirmation from "@/components/client/ClientHireConfirmation";
 import {
   clientJobStatusLabels,
   formatClientDate,
@@ -39,6 +40,7 @@ export type ClientCandidateEvaluation = {
 };
 
 export type ClientCandidateProfileData = {
+  applicationId: number;
   name: string;
   role: string;
   currentEmployer: string | null;
@@ -103,6 +105,12 @@ export default function ClientCandidateProfile({
         <h1 className="mt-2 text-3xl font-bold text-black">{candidate.name}</h1>
         <p className="mt-2 text-zinc-600">{candidate.role}</p>
       </div>
+
+      <ClientHireConfirmation
+        applicationId={candidate.applicationId}
+        candidateName={candidate.name}
+        status={candidate.pipelineStatus}
+      />
 
       <section className="rounded-xl border border-zinc-200 bg-white p-6">
         <h2 className="text-lg font-bold text-black">Candidate Profile</h2>

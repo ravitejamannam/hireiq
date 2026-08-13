@@ -424,7 +424,8 @@ const clientShortlistSelect = {
 } satisfies Prisma.ApplicationSelect;
 
 /**
- * Client portal shortlist: SHORTLISTED applications for a company-owned requirement.
+ * Client portal shortlist: SHORTLISTED, SELECTED, and HIRED applications
+ * for a company-owned requirement.
  * Authorization: CLIENT → User.companyId → Job.companyId → Application.jobId.
  */
 export async function getClientShortlistedApplicationsForRequirement(
@@ -435,7 +436,9 @@ export async function getClientShortlistedApplicationsForRequirement(
   return prisma.application.findMany({
     where: {
       jobId: requirementId,
-      status: "SHORTLISTED",
+      status: {
+        in: ["SHORTLISTED", "SELECTED", "HIRED"],
+      },
       job: {
         companyId: client.companyId,
       },

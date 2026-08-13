@@ -66,6 +66,7 @@ export default async function ClientCandidateDetailPage({
 
       <ClientCandidateProfile
         candidate={{
+          applicationId: application.id,
           name: application.candidate.name,
           role: application.candidate.role,
           currentEmployer: application.candidate.currentEmployer,

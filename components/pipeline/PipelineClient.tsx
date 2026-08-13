@@ -53,10 +53,9 @@ const APPLICATION_STATUS_TRANSITIONS: Record<
     ApplicationPipelineStatus.REJECTED,
   ],
   [ApplicationPipelineStatus.SHORTLISTED]: [
-    ApplicationPipelineStatus.SELECTED,
     ApplicationPipelineStatus.REJECTED,
   ],
-  [ApplicationPipelineStatus.SELECTED]: [ApplicationPipelineStatus.HIRED],
+  [ApplicationPipelineStatus.SELECTED]: [],
   [ApplicationPipelineStatus.REJECTED]: [],
   [ApplicationPipelineStatus.HIRED]: [],
 };
@@ -71,6 +70,22 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error
     ? error.message
     : "Something went wrong. Please try again.";
+}
+
+function getMonitorNote(status: ApplicationPipelineStatus) {
+  if (status === ApplicationPipelineStatus.SELECTED) {
+    return "Client decision: Selected. Hiring status: Awaiting confirmation.";
+  }
+
+  if (status === ApplicationPipelineStatus.HIRED) {
+    return "Hire confirmed by client. Billing generated.";
+  }
+
+  if (status === ApplicationPipelineStatus.SHORTLISTED) {
+    return "Interviewer recommendation. Client selects from the Client portal.";
+  }
+
+  return null;
 }
 
 function getMoveLabel(status: ApplicationPipelineStatus) {
@@ -183,7 +198,8 @@ function PipelineClientInner({
           <h1 className="text-3xl font-bold text-black">Pipeline</h1>
           <p className="mt-2 text-zinc-600">
             Move applications through CV Pool, Expert Review, Tech Evaluation,
-            Shortlisted, Selected, Hired, and Rejected.
+            and Shortlisted. Clients select and confirm hire; billing is
+            generated after hire.
           </p>
         </div>
       </div>
@@ -311,6 +327,7 @@ function PipelineClientInner({
                           status: nextStatus,
                           label: getMoveLabel(nextStatus),
                         }))}
+                        monitorNote={getMonitorNote(application.status)}
                         isMoving={movingApplicationId === application.id}
                         requirementHref={`/dashboard/requirements/${application.jobId}`}
                         onMove={handleMove}
