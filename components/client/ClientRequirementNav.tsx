@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 
-type ClientRequirementSection = "overview" | "candidates" | "shortlist";
+type ClientRequirementSection =
+  | "overview"
+  | "candidates"
+  | "shortlist"
+  | "billing";
 
 type ClientRequirementNavProps = {
   requirementId: number;
@@ -66,6 +70,12 @@ export default function ClientRequirementNav({
         className={navClassName(active === "shortlist")}
       >
         Shortlist · {shortlistedCount}
+      </Link>
+      <Link
+        href={`${basePath}/billing`}
+        className={navClassName(active === "billing")}
+      >
+        Billing
       </Link>
     </div>
   );

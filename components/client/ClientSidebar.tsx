@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Briefcase, LayoutDashboard } from "lucide-react";
+import { Briefcase, CreditCard, LayoutDashboard } from "lucide-react";
 
 type ClientSidebarProps = {
   companyName: string;
@@ -112,6 +112,26 @@ export default function ClientSidebar({
             Operations
           </p>
           <ul className="mt-2 space-y-2">
+            <li>
+              <Link
+                href="/client/billing"
+                className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 font-medium transition-colors ${
+                  isActivePath(pathname, "/client/billing")
+                    ? "bg-black text-white"
+                    : "text-zinc-700 hover:bg-zinc-100 hover:text-black"
+                }`}
+              >
+                <CreditCard
+                  size={18}
+                  className={
+                    isActivePath(pathname, "/client/billing")
+                      ? "text-white"
+                      : "text-zinc-600"
+                  }
+                />
+                <span>Billing</span>
+              </Link>
+            </li>
             <li>
               <button
                 type="button"

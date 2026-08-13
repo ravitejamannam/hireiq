@@ -26,6 +26,9 @@ import {
   getSourcingDatabaseLabel,
   requirementLifecycleLabels,
 } from "@/components/jobs/JobCard";
+import BillingRecordsPanel, {
+  type BillingRecordView,
+} from "@/components/billing/BillingRecordsPanel";
 import PipelineCard from "@/components/pipeline/PipelineCard";
 import type { getApplicationsByJobId } from "@/lib/repositories/application-repository";
 import type { getEvaluationsByJobId } from "@/lib/repositories/evaluation-repository";
@@ -57,6 +60,7 @@ type RequirementWorkspaceClientProps = {
   evaluations: Evaluation[];
   interviews: Interview[];
   interviewers: Interviewer[];
+  billingRecords: BillingRecordView[];
 };
 
 const PIPELINE_STAGES: ApplicationPipelineStatus[] = [
@@ -132,6 +136,7 @@ export default function RequirementWorkspaceClient({
   evaluations,
   interviews,
   interviewers,
+  billingRecords,
 }: RequirementWorkspaceClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("overview");
@@ -735,12 +740,19 @@ export default function RequirementWorkspaceClient({
       )}
 
       {activeTab === "billing" && (
-        <div className="mt-8 rounded-2xl border border-dashed border-zinc-300 bg-white py-16 text-center">
-          <h2 className="text-xl font-bold text-black">Billing</h2>
-          <p className="mt-3 text-sm text-zinc-600">
-            Billing is deferred to a later ticket. No invoices or billing
-            actions are available here.
-          </p>
+        <div className="mt-8">
+          <BillingRecordsPanel
+            mode="admin"
+            records={billingRecords}
+            fixedJobId={requirement.id}
+            showSearch={false}
+            title="Requirement billing"
+            description={
+              billingRecords.length === 0
+                ? "Billing is not configured for this requirement yet."
+                : "Internal billing status for this requirement. Payment processing is not available."
+            }
+          />
         </div>
       )}
     </DashboardLayout>

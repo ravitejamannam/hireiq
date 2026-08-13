@@ -410,6 +410,24 @@ export function interviewerScopeWhere(
   throw new AuthorizationError();
 }
 
+/**
+ * Billing is Admin-global or Client company-scoped.
+ * Interviewers have no billing access.
+ */
+export function billingScopeWhere(
+  user: AuthUser,
+): Prisma.BillingRecordWhereInput {
+  if (user.role === PortalRole.ADMIN) {
+    return {};
+  }
+
+  if (user.role === PortalRole.CLIENT) {
+    return { companyId: requireClientCompanyId(user) };
+  }
+
+  denyResource();
+}
+
 export async function requireCompanyAccess(companyId: number) {
   const user = await requireUser();
 

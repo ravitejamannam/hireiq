@@ -107,6 +107,16 @@ enum PortalRole {
   INTERVIEWER
 }
 
+/// Internal billing foundation states only.
+/// Payment processing is NOT implemented.
+enum BillingStatus {
+  PENDING
+  READY
+  INVOICED
+  PAID
+  CANCELLED
+}
+
 model Company {
   id        Int    @id @default(autoincrement())
   name      String
@@ -116,9 +126,10 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  candidates Candidate[]
-  jobs       Job[]
-  users      User[]
+  candidates     Candidate[]
+  jobs           Job[]
+  users          User[]
+  billingRecords BillingRecord[]
 }
 
 model Job {
@@ -158,9 +169,30 @@ model Job {
   assignedInterviewer Interviewer? @relation(fields: [assignedInterviewerId], references: [id], onDelete: Restrict)
   applications Application[]
   notifications Notification[]
+  billingRecords BillingRecord[]
 
   @@index([companyId, status])
   @@index([assignedInterviewerId])
+}
+
+/// Requirement-scoped billing foundation record.
+/// No payment amounts, currency, or gateway fields.
+model BillingRecord {
+  id     Int           @id @default(autoincrement())
+  status BillingStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId Int
+  jobId     Int
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job     Job     @relation(fields: [jobId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
+  @@index([jobId])
+  @@index([status])
 }
 
 model Interviewer {

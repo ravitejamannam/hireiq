@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import RequirementWorkspaceClient from "@/components/requirements/RequirementWorkspaceClient";
 import { getApplicationsByJobId } from "@/lib/repositories/application-repository";
+import { getBillingForRequirement } from "@/lib/repositories/billing-repository";
 import { getEvaluationsByJobId } from "@/lib/repositories/evaluation-repository";
 import { getInterviewsByJobId } from "@/lib/repositories/interview-repository";
 import { getInterviewers } from "@/lib/repositories/interviewer-repository";
@@ -23,14 +24,21 @@ export default async function RequirementWorkspacePage({
     notFound();
   }
 
-  const [requirement, applications, evaluations, interviews, interviewers] =
-    await Promise.all([
-      getJobById(requirementId),
-      getApplicationsByJobId(requirementId),
-      getEvaluationsByJobId(requirementId),
-      getInterviewsByJobId(requirementId),
-      getInterviewers(),
-    ]);
+  const [
+    requirement,
+    applications,
+    evaluations,
+    interviews,
+    interviewers,
+    billingRecords,
+  ] = await Promise.all([
+    getJobById(requirementId),
+    getApplicationsByJobId(requirementId),
+    getEvaluationsByJobId(requirementId),
+    getInterviewsByJobId(requirementId),
+    getInterviewers(),
+    getBillingForRequirement(requirementId),
+  ]);
 
   if (!requirement) {
     notFound();
@@ -43,6 +51,7 @@ export default async function RequirementWorkspacePage({
       evaluations={evaluations}
       interviews={interviews}
       interviewers={interviewers}
+      billingRecords={billingRecords}
     />
   );
 }

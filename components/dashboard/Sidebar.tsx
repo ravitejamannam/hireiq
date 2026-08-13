@@ -70,7 +70,6 @@ const sections: NavSection[] = [
         icon: CreditCard,
         label: "Billing",
         href: "/dashboard/billing",
-        disabled: true,
       },
       {
         icon: Bell,
