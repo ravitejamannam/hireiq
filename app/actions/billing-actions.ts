@@ -19,10 +19,10 @@ import {
 
 function revalidateBillingPaths(jobId: number) {
   try {
-    revalidatePath("/dashboard/billing");
+    revalidatePath("/dashboard/billing", "layout");
     revalidatePath("/dashboard/requirements");
     revalidatePath(`/dashboard/requirements/${jobId}`);
-    revalidatePath("/client/billing");
+    revalidatePath("/client/billing", "layout");
     revalidatePath(`/client/requirements/${jobId}`);
     revalidatePath(`/client/requirements/${jobId}/billing`);
   } catch {

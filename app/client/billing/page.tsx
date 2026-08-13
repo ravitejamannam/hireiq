@@ -1,4 +1,5 @@
 import BillingRecordsPanel from "@/components/billing/BillingRecordsPanel";
+import { BILLING_GENERATED_AFTER_HIRE } from "@/components/billing/billing-labels";
 import { requireClientPortal } from "@/lib/auth/authorization";
 import { getClientBillingRecords } from "@/lib/repositories/billing-repository";
 
@@ -13,9 +14,7 @@ export default async function ClientBillingPage() {
           Client portal
         </p>
         <h1 className="mt-2 text-3xl font-bold text-black">Billing</h1>
-        <p className="mt-2 text-zinc-600">
-          Billing status for your company requirements. Read-only.
-        </p>
+        <p className="mt-2 text-zinc-600">{BILLING_GENERATED_AFTER_HIRE}.</p>
       </div>
 
       <div className="mt-8">
@@ -23,7 +22,7 @@ export default async function ClientBillingPage() {
           mode="client"
           records={records}
           title="Your billing records"
-          description="Statuses shown here are internal HireIQ billing markers. Payment collection is not available in this portal."
+          description="Billing for hired candidates at your company. Statuses are internal HireIQ markers. Payment collection is not available."
         />
       </div>
     </div>

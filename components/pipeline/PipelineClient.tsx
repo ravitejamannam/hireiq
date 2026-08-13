@@ -7,6 +7,7 @@ import { ApplicationPipelineStatus } from "@prisma/client";
 import {
   transitionApplicationStatus,
 } from "@/app/actions/application-actions";
+import { getAdminHiringMonitorNote } from "@/components/applications/admin-hiring-notes";
 import {
   APPLICATION_PIPELINE_STATUS_OPTIONS,
   getApplicationPipelineStatusLabel,
@@ -73,19 +74,7 @@ function getErrorMessage(error: unknown) {
 }
 
 function getMonitorNote(status: ApplicationPipelineStatus) {
-  if (status === ApplicationPipelineStatus.SELECTED) {
-    return "Client decision: Selected. Hiring status: Awaiting confirmation.";
-  }
-
-  if (status === ApplicationPipelineStatus.HIRED) {
-    return "Hire confirmed by client. Billing generated.";
-  }
-
-  if (status === ApplicationPipelineStatus.SHORTLISTED) {
-    return "Interviewer recommendation. Client selects from the Client portal.";
-  }
-
-  return null;
+  return getAdminHiringMonitorNote(status);
 }
 
 function getMoveLabel(status: ApplicationPipelineStatus) {

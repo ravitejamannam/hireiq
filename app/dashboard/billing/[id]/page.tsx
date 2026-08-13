@@ -1,10 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
-import {
-  formatBillingDateTime,
-  getBillingStatusLabel,
-} from "@/components/billing/billing-labels";
+import BillingAdminStatusControls from "@/components/billing/BillingAdminStatusControls";
+import BillingRecordDetail from "@/components/billing/BillingRecordDetail";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { getBillingRecordById } from "@/lib/repositories/billing-repository";
@@ -59,41 +57,24 @@ export default async function AdminBillingDetailPage({
         <p className="mt-2 text-zinc-600">{record.company.name}</p>
       </div>
 
-      <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
-        <p className="text-xs text-zinc-500">
-          Internal billing foundation only. No payment amounts, taxes, or
-          gateway data are stored.
-        </p>
-        <dl className="mt-4 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2">
+      <BillingRecordDetail
+        record={record}
+        requirementHref={`/dashboard/requirements/${record.job.id}`}
+        manageSlot={
           <div>
-            <dt className="font-medium text-black">Status</dt>
-            <dd>{getBillingStatusLabel(record.status)}</dd>
+            <p className="text-sm font-medium text-black">Manage status</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Admin-only internal status markers. This does not collect payment.
+            </p>
+            <div className="mt-3">
+              <BillingAdminStatusControls
+                recordId={record.id}
+                status={record.status}
+              />
+            </div>
           </div>
-          <div>
-            <dt className="font-medium text-black">Company</dt>
-            <dd>{record.company.name}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Requirement</dt>
-            <dd>
-              <Link
-                href={`/dashboard/requirements/${record.job.id}`}
-                className="font-medium text-black underline underline-offset-2"
-              >
-                {record.job.title}
-              </Link>
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Created</dt>
-            <dd>{formatBillingDateTime(record.createdAt)}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Updated</dt>
-            <dd>{formatBillingDateTime(record.updatedAt)}</dd>
-          </div>
-        </dl>
-      </section>
+        }
+      />
     </DashboardLayout>
   );
 }

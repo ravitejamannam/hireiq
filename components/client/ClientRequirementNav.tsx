@@ -73,6 +73,7 @@ export default function ClientRequirementNav({
       </Link>
       <Link
         href={`${basePath}/billing`}
+        title="Generated after hire confirmation"
         className={navClassName(active === "billing")}
       >
         Billing

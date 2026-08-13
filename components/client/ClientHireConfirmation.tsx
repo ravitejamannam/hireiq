@@ -56,9 +56,8 @@ export default function ClientHireConfirmation({
         <p className="mt-2 text-lg font-bold text-black">
           {getClientPipelineStatusLabel(status)}
         </p>
-        <p className="mt-2 text-sm text-zinc-700">
-          Hire confirmed. Billing generated.
-        </p>
+        <p className="mt-2 text-sm font-medium text-black">Hire confirmed</p>
+        <p className="mt-1 text-sm text-zinc-700">Billing generated.</p>
       </section>
     );
   }
@@ -85,7 +84,8 @@ export default function ClientHireConfirmation({
         </div>
       </dl>
       <p className="mt-3 text-sm text-zinc-600">
-        Billing is generated only after you confirm this hire.
+        Confirm Hire to mark this candidate hired. Billing has not been
+        generated.
       </p>
 
       {actionError ? (

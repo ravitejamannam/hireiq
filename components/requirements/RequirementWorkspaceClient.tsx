@@ -14,6 +14,7 @@ import {
   transitionJobLifecycle,
 } from "@/app/actions/job-actions";
 import { transitionApplicationStatus } from "@/app/actions/application-actions";
+import { getAdminHiringMonitorNote } from "@/components/applications/admin-hiring-notes";
 import { getApplicationPipelineStatusLabel } from "@/components/applications/ApplicationForm";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import {
@@ -122,19 +123,7 @@ function getMoveLabel(status: ApplicationPipelineStatus) {
 }
 
 function getMonitorNote(status: ApplicationPipelineStatus) {
-  if (status === ApplicationPipelineStatus.SELECTED) {
-    return "Client decision: Selected. Hiring status: Awaiting confirmation.";
-  }
-
-  if (status === ApplicationPipelineStatus.HIRED) {
-    return "Hire confirmed by client. Billing generated.";
-  }
-
-  if (status === ApplicationPipelineStatus.SHORTLISTED) {
-    return "Interviewer recommendation. Client selects from the Client portal.";
-  }
-
-  return null;
+  return getAdminHiringMonitorNote(status);
 }
 
 function countByStatus(
@@ -757,16 +746,23 @@ export default function RequirementWorkspaceClient({
 
       {activeTab === "billing" && (
         <div className="mt-8">
+          {countByStatus(applications, ApplicationPipelineStatus.SELECTED) >
+            0 &&
+          countByStatus(applications, ApplicationPipelineStatus.HIRED) === 0 &&
+          billingRecords.length === 0 ? (
+            <div className="mb-6 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+              Awaiting client hire confirmation. Billing has not been generated.
+            </div>
+          ) : null}
           <BillingRecordsPanel
             mode="admin"
             records={billingRecords}
-            fixedJobId={requirement.id}
             showSearch={false}
             title="Requirement billing"
             description={
               billingRecords.length === 0
-                ? "Billing is not configured for this requirement yet."
-                : "Internal billing status for this requirement. Payment processing is not available."
+                ? "Billing is generated after hire confirmation. Selected candidates do not generate billing."
+                : "Internal billing generated after hire confirmation. Payment processing is not available."
             }
           />
         </div>

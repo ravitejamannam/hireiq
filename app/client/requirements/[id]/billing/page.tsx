@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import BillingRecordsPanel from "@/components/billing/BillingRecordsPanel";
+import { BILLING_GENERATED_AFTER_HIRE } from "@/components/billing/billing-labels";
 import ClientRequirementNav from "@/components/client/ClientRequirementNav";
 import { requireClientPortal } from "@/lib/auth/authorization";
 import { getClientApplicationsForRequirement } from "@/lib/repositories/application-repository";
@@ -45,6 +46,15 @@ export default async function ClientRequirementBillingPage({
   const shortlistedCount = applications.filter(
     (application) => application.status === "SHORTLISTED",
   ).length;
+  const selectedCount = applications.filter(
+    (application) => application.status === "SELECTED",
+  ).length;
+  const hiredCount = applications.filter(
+    (application) => application.status === "HIRED",
+  ).length;
+
+  const awaitingHireConfirmation =
+    records.length === 0 && selectedCount > 0 && hiredCount === 0;
 
   return (
     <div>
@@ -59,12 +69,15 @@ export default async function ClientRequirementBillingPage({
 
       <div>
         <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-          Requirement billing
+          Billing
         </p>
         <h1 className="mt-2 text-3xl font-bold text-black">
           {requirement.title}
         </h1>
         <p className="mt-2 text-zinc-600">{requirement.company.name}</p>
+        <p className="mt-2 text-sm text-zinc-600">
+          {BILLING_GENERATED_AFTER_HIRE}.
+        </p>
       </div>
 
       <ClientRequirementNav
@@ -74,17 +87,23 @@ export default async function ClientRequirementBillingPage({
         active="billing"
       />
 
+      {awaitingHireConfirmation ? (
+        <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+          Selected candidates are awaiting hire confirmation. Billing has not
+          been generated.
+        </div>
+      ) : null}
+
       <div className="mt-8">
         <BillingRecordsPanel
           mode="client"
           records={records}
-          fixedJobId={requirementId}
           showSearch={false}
           title="Billing status"
           description={
             records.length === 0
-              ? "Billing is not configured for this requirement yet."
-              : "Read-only billing status for this requirement."
+              ? "Billing is generated after hire confirmation. Selected candidates do not generate billing."
+              : "Read-only billing generated after hire confirmation for this requirement."
           }
         />
       </div>
