@@ -144,48 +144,6 @@ export default async function DashboardPage() {
           </div>
         )}
       </section>
-
-      <section className="mt-12">
-        <h2 className="text-2xl font-bold text-black">Quick Links</h2>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link
-            href="/dashboard/sourcing"
-            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
-          >
-            Sourcing
-          </Link>
-          <Link
-            href="/dashboard/expert-review"
-            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
-          >
-            Expert Review
-          </Link>
-          <Link
-            href="/dashboard/technical-evaluations"
-            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
-          >
-            Technical Evaluations
-          </Link>
-          <Link
-            href="/dashboard/shortlist"
-            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
-          >
-            Shortlist
-          </Link>
-          <Link
-            href="/dashboard/pipeline"
-            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
-          >
-            Pipeline
-          </Link>
-          <Link
-            href="/dashboard/notifications"
-            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
-          >
-            Notifications
-          </Link>
-        </div>
-      </section>
     </DashboardLayout>
   );
 }
