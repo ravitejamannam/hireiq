@@ -5,6 +5,7 @@ import {
   requireAdmin,
   requireClientPortal,
 } from "@/lib/auth/authorization";
+import { generateBillingForHiredApplication } from "@/lib/billing/generate-hire-billing";
 import { prisma } from "@/lib/prisma";
 import {
   assertApplicationIsInExpertReview,
@@ -21,6 +22,7 @@ import {
   ApplicationTenantIntegrityError,
   type SourcedCandidateInput,
 } from "@/lib/validation/application-validation";
+import { BillingValidationError } from "@/lib/validation/billing-validation";
 import { revalidatePath } from "next/cache";
 import {
   ApplicationPipelineStatus,
@@ -405,6 +407,7 @@ export async function transitionApplicationStatus(
     select: {
       id: true,
       status: true,
+      jobId: true,
     },
   });
 
@@ -420,24 +423,94 @@ export async function transitionApplicationStatus(
     throw new Error("Invalid application status transition.");
   }
 
+  const isSelectionTransition =
+    application.status === ApplicationPipelineStatus.SHORTLISTED &&
+    nextStatus === ApplicationPipelineStatus.SELECTED;
+  const isHireTransition =
+    application.status === ApplicationPipelineStatus.SELECTED &&
+    nextStatus === ApplicationPipelineStatus.HIRED;
+
   let updatedApplication;
 
   try {
-    updatedApplication = await prisma.application.update({
-      where: {
-        id: applicationId,
-      },
-      data: {
-        status: nextStatus,
-      },
-    });
+    if (isHireTransition) {
+      // SELECTED → HIRED + billing + BILLING_GENERATED must commit atomically.
+      updatedApplication = await prisma.$transaction(async (tx) => {
+        const updateResult = await tx.application.updateMany({
+          where: {
+            id: application.id,
+            status: ApplicationPipelineStatus.SELECTED,
+          },
+          data: {
+            status: ApplicationPipelineStatus.HIRED,
+          },
+        });
+
+        if (updateResult.count !== 1) {
+          throw new ApplicationValidationError(
+            "Candidate is no longer selected.",
+          );
+        }
+
+        await generateBillingForHiredApplication(tx, application.id);
+
+        return tx.application.findUniqueOrThrow({
+          where: { id: application.id },
+        });
+      });
+    } else if (isSelectionTransition) {
+      // SHORTLISTED → SELECTED is a decision only — no billing.
+      updatedApplication = await prisma.$transaction(async (tx) => {
+        const updateResult = await tx.application.updateMany({
+          where: {
+            id: application.id,
+            status: ApplicationPipelineStatus.SHORTLISTED,
+          },
+          data: {
+            status: ApplicationPipelineStatus.SELECTED,
+          },
+        });
+
+        if (updateResult.count !== 1) {
+          throw new ApplicationValidationError(
+            "Candidate is no longer shortlisted.",
+          );
+        }
+
+        return tx.application.findUniqueOrThrow({
+          where: { id: application.id },
+        });
+      });
+    } else {
+      updatedApplication = await prisma.application.update({
+        where: {
+          id: applicationId,
+        },
+        data: {
+          status: nextStatus,
+        },
+      });
+    }
   } catch (error) {
+    if (error instanceof ApplicationValidationError) {
+      throw error;
+    }
+    if (error instanceof BillingValidationError) {
+      throw error;
+    }
     throw translateApplicationSaveError(error);
   }
 
   try {
     revalidatePath("/dashboard/pipeline");
     revalidatePath("/dashboard/applications");
+    revalidatePath("/dashboard/shortlist");
+    revalidatePath("/dashboard/billing");
+    if (application.jobId) {
+      revalidatePath(`/dashboard/requirements/${application.jobId}`);
+      revalidatePath("/client/billing");
+      revalidatePath(`/client/requirements/${application.jobId}/billing`);
+    }
   } catch {
     // revalidatePath requires a Next.js request context
   }
@@ -448,6 +521,7 @@ export async function transitionApplicationStatus(
 /**
  * Client-only selection: SHORTLISTED → SELECTED for an Application
  * owned by the Client's company. Does not accept nextStatus from the browser.
+ * Selection is a decision only — billing is generated on SELECTED → HIRED.
  */
 export async function selectClientCandidate(applicationId: number) {
   const client = await requireClientPortal();
@@ -464,6 +538,7 @@ export async function selectClientCandidate(applicationId: number) {
       id: true,
       status: true,
       jobId: true,
+      companyId: true,
     },
   });
 
@@ -477,32 +552,43 @@ export async function selectClientCandidate(applicationId: number) {
     );
   }
 
-  // Conditional update prevents double-submit races from selecting twice.
-  const updateResult = await prisma.application.updateMany({
-    where: {
-      id: application.id,
-      status: ApplicationPipelineStatus.SHORTLISTED,
-      job: {
-        companyId: client.companyId,
-      },
-    },
-    data: {
-      status: ApplicationPipelineStatus.SELECTED,
-    },
-  });
+  let updatedApplication;
 
-  if (updateResult.count !== 1) {
-    throw new ApplicationValidationError(
-      "Candidate is no longer shortlisted.",
-    );
-  }
+  try {
+    updatedApplication = await prisma.$transaction(async (tx) => {
+      // Conditional update prevents double-submit races from selecting twice.
+      const updateResult = await tx.application.updateMany({
+        where: {
+          id: application.id,
+          status: ApplicationPipelineStatus.SHORTLISTED,
+          companyId: client.companyId,
+          job: {
+            companyId: client.companyId,
+          },
+        },
+        data: {
+          status: ApplicationPipelineStatus.SELECTED,
+        },
+      });
 
-  const updatedApplication = await prisma.application.findUnique({
-    where: { id: application.id },
-  });
+      if (updateResult.count !== 1) {
+        throw new ApplicationValidationError(
+          "Candidate is no longer shortlisted.",
+        );
+      }
 
-  if (!updatedApplication) {
-    throw new AuthorizationError("Resource not found.");
+      return tx.application.findUniqueOrThrow({
+        where: { id: application.id },
+      });
+    });
+  } catch (error) {
+    if (error instanceof ApplicationValidationError) {
+      throw error;
+    }
+    if (error instanceof AuthorizationError) {
+      throw error;
+    }
+    throw translateApplicationSaveError(error);
   }
 
   try {
@@ -516,6 +602,7 @@ export async function selectClientCandidate(applicationId: number) {
     revalidatePath("/dashboard/pipeline");
     revalidatePath("/dashboard/shortlist");
     revalidatePath("/dashboard/applications");
+    revalidatePath(`/dashboard/requirements/${application.jobId}`);
   } catch {
     // revalidatePath requires a Next.js request context
   }

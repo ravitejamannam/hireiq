@@ -44,6 +44,10 @@ function translateBillingSaveError(error: unknown) {
       return new Error("Billing record could not be created.");
     }
 
+    if (error.code === "P2002") {
+      return new Error("Billing record already exists.");
+    }
+
     if (error.code === "P2025") {
       return new Error("Resource not found.");
     }

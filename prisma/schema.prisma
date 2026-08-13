@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
 }
 
 datasource db {
@@ -188,12 +189,31 @@ model BillingRecord {
   companyId Int
   jobId     Int
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  job     Job     @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job       Job               @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  lineItems BillingLineItem[]
 
   @@index([companyId])
   @@index([jobId])
   @@index([status])
+}
+
+/// One billing line item per HIRED Application.
+/// No fee/amount fields — pricing is not defined by product source.
+model BillingLineItem {
+  id Int @id @default(autoincrement())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  billingRecordId Int
+  applicationId   Int
+
+  billingRecord BillingRecord @relation(fields: [billingRecordId], references: [id], onDelete: Restrict)
+  application   Application   @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  @@unique([applicationId])
+  @@index([billingRecordId])
 }
 
 model Interviewer {
@@ -257,6 +277,7 @@ model Application {
   codingTests CodingTest[]
   reports     Report[]
   evaluations Evaluation[]
+  billingLineItem BillingLineItem?
 
   @@unique([candidateId, jobId])
   @@index([candidateId])

@@ -30,6 +30,30 @@ const billingRecordSelect = {
       requirementLifecycle: true,
     },
   },
+  lineItems: {
+    select: {
+      id: true,
+      applicationId: true,
+      createdAt: true,
+      updatedAt: true,
+      application: {
+        select: {
+          id: true,
+          status: true,
+          candidateId: true,
+          candidate: {
+            select: {
+              name: true,
+              role: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "asc" as const,
+    },
+  },
 } satisfies Prisma.BillingRecordSelect;
 
 async function requireBillingActor() {
