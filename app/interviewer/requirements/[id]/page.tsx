@@ -53,6 +53,8 @@ export default async function InterviewerRequirementDetailPage({
         evaluationCriteria: requirement.evaluationCriteria,
         primarySkills: requirement.primarySkills,
         requirementLifecycle: requirement.requirementLifecycle,
+        sourcingAccessReceivedAt: requirement.sourcingAccessReceivedAt,
+        shortlistingCompletedAt: requirement.shortlistingCompletedAt,
         company: requirement.company,
       }}
       candidates={candidates.map((application) => ({

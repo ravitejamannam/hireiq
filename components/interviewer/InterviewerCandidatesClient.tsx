@@ -10,6 +10,7 @@ import {
   getClientPipelineStatusLabel,
   getClientSourceLabel,
 } from "@/components/client/client-labels";
+import InterviewerShortlistActions from "@/components/interviewer/InterviewerShortlistActions";
 
 type InterviewerCandidateRow = {
   id: number;
@@ -230,6 +231,10 @@ export default function InterviewerCandidatesClient({
                 >
                   Open Candidate
                 </Link>
+                <InterviewerShortlistActions
+                  applicationId={row.id}
+                  status={row.status}
+                />
               </div>
             </article>
           ))}

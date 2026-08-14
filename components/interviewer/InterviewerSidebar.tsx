@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
+  Bell,
   Briefcase,
   ClipboardList,
   LayoutDashboard,
@@ -35,6 +36,11 @@ const links = [
     icon: ClipboardList,
     label: "Evaluations",
     href: "/interviewer/evaluations",
+  },
+  {
+    icon: Bell,
+    label: "Notifications",
+    href: "/interviewer/notifications",
   },
 ];
 

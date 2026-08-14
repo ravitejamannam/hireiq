@@ -2,6 +2,7 @@
 
 import {
   AuthorizationError,
+  assertInterviewerJobAccess,
   requireAdmin,
   requireClientPortal,
   requireJobAccess,
@@ -26,8 +27,12 @@ import {
 } from "@/lib/validation/job-validation";
 import {
   dispatchInAppNotification,
+  finalizeDatabaseReadyCommunication,
   finalizeRequirementReadyCommunication,
+  finalizeShortlistReadyCommunication,
 } from "@/lib/communication/notification-service";
+import { recordSourcingAccessHandoff } from "@/lib/jobs/sourcing-access-handoff";
+import { recordShortlistCompletionHandoff } from "@/lib/jobs/shortlist-completion-handoff";
 import { NotificationValidationError } from "@/lib/validation/notification-validation";
 import {
   ensureInterviewerExists,
@@ -62,7 +67,6 @@ function revalidateClientRequirementPaths(jobId: number) {
   }
 }
 
-const SHORTLISTING_SLA_HOURS = 24;
 export async function createJob(
   title: string,
   status: JobStatus,
@@ -582,63 +586,80 @@ export async function markJobSourcingAccessReceived(jobId: number) {
     });
   }
 
-  const sourcingAccessReceivedAt = new Date();
-  const shortlistingDueAt = new Date(
-    sourcingAccessReceivedAt.getTime() + SHORTLISTING_SLA_HOURS * 60 * 60 * 1000,
-  );
+  let committed;
 
-  const transition = await prisma.job.updateMany({
-    where: {
-      id: validatedJobId,
-      requirementLifecycle: "INTERVIEWER_NOTIFIED",
-      sourcingAccessReceivedAt: null,
-    },
-    data: {
-      sourcingAccessReceivedAt,
-      shortlistingDueAt,
-      requirementLifecycle: "SOURCING_SHORTLISTING",
-    },
-  });
-
-  if (transition.count !== 1) {
-    const currentJob = await prisma.job.findUniqueOrThrow({
-      where: {
-        id: validatedJobId,
-      },
-    });
-
-    // Preserve existing already-recorded behavior if a concurrent request won.
-    if (currentJob.sourcingAccessReceivedAt) {
-      return currentJob;
+  try {
+    committed = await recordSourcingAccessHandoff(validatedJobId);
+  } catch (error) {
+    if (error instanceof JobValidationError) {
+      throw error;
     }
 
-    throw new JobValidationError("Invalid sourcing workflow state.");
-  }
+    if (error instanceof NotificationValidationError) {
+      throw new JobValidationError(error.message);
+    }
 
-  const job = await prisma.job.findUniqueOrThrow({
-    where: {
-      id: validatedJobId,
-    },
-  });
+    throw error;
+  }
 
   try {
     revalidatePath("/dashboard/jobs");
+    revalidatePath("/dashboard/notifications");
+    revalidatePath(`/dashboard/requirements/${existingJob.id}`);
   } catch {
     // revalidatePath requires a Next.js request context
   }
 
-  return job;
+  if (committed.established) {
+    const email = await finalizeDatabaseReadyCommunication(committed.inApp);
+
+    if (email.attempted && !email.sent) {
+      if (email.reason === "missing-recipient-email") {
+        throw new JobValidationError(
+          "Database access was recorded, but no interviewer login email is configured.",
+        );
+      }
+
+      if (email.reason === "provider-error") {
+        throw new JobValidationError(
+          "Database access was recorded, but the database-ready email could not be sent.",
+        );
+      }
+    }
+  }
+
+  return prisma.job.findUniqueOrThrow({
+    where: {
+      id: validatedJobId,
+    },
+  });
 }
 
 export async function completeJobShortlisting(jobId: number) {
-  await requireAdmin();
+  const user = await requireUser();
   const validatedJobId = validateJobId(jobId);
   const existingJob = await ensureJobExists(validatedJobId);
+
+  if (user.role === PortalRole.ADMIN) {
+    // Admin retains operational oversight of shortlist completion.
+  } else if (user.role === PortalRole.INTERVIEWER) {
+    assertInterviewerJobAccess(user, existingJob);
+  } else {
+    throw new AuthorizationError("Unauthorized.");
+  }
+
+  const shortlistedCount = await prisma.application.count({
+    where: {
+      jobId: validatedJobId,
+      status: "SHORTLISTED",
+    },
+  });
 
   const completionState = assertShortlistingCanBeCompleted(
     existingJob.requirementLifecycle,
     existingJob.sourcingAccessReceivedAt,
     existingJob.shortlistingCompletedAt,
+    shortlistedCount,
   );
 
   if (completionState === "ALREADY_COMPLETED") {
@@ -649,46 +670,55 @@ export async function completeJobShortlisting(jobId: number) {
     });
   }
 
-  const transition = await prisma.job.updateMany({
-    where: {
-      id: validatedJobId,
-      requirementLifecycle: "SOURCING_SHORTLISTING",
-      sourcingAccessReceivedAt: {
-        not: null,
-      },
-      shortlistingCompletedAt: null,
-    },
-    data: {
-      shortlistingCompletedAt: new Date(),
-    },
-  });
+  let committed;
 
-  if (transition.count !== 1) {
-    const currentJob = await prisma.job.findUniqueOrThrow({
-      where: {
-        id: validatedJobId,
-      },
-    });
-
-    // Preserve existing already-completed behavior if a concurrent request won.
-    if (currentJob.shortlistingCompletedAt) {
-      return currentJob;
+  try {
+    committed = await recordShortlistCompletionHandoff(validatedJobId);
+  } catch (error) {
+    if (error instanceof JobValidationError) {
+      throw error;
     }
 
-    throw new JobValidationError("Invalid sourcing workflow state.");
-  }
+    if (error instanceof NotificationValidationError) {
+      throw new JobValidationError(error.message);
+    }
 
-  const job = await prisma.job.findUniqueOrThrow({
-    where: {
-      id: validatedJobId,
-    },
-  });
+    throw error;
+  }
 
   try {
     revalidatePath("/dashboard/jobs");
+    revalidatePath("/dashboard/notifications");
+    revalidatePath("/dashboard/shortlist");
+    revalidatePath(`/dashboard/requirements/${existingJob.id}`);
+    revalidatePath(`/client/requirements/${existingJob.id}`);
+    revalidatePath(`/client/requirements/${existingJob.id}/shortlist`);
+    revalidatePath(`/interviewer/requirements/${existingJob.id}`);
   } catch {
     // revalidatePath requires a Next.js request context
   }
 
-  return job;
+  if (committed.established) {
+    const email = await finalizeShortlistReadyCommunication(committed.inApp);
+
+    if (email.attempted && !email.sent) {
+      if (email.reason === "missing-recipient-email") {
+        throw new JobValidationError(
+          "Shortlisting was completed, but no client login email is configured.",
+        );
+      }
+
+      if (email.reason === "provider-error") {
+        throw new JobValidationError(
+          "Shortlisting was completed, but the shortlist-ready email could not be sent.",
+        );
+      }
+    }
+  }
+
+  return prisma.job.findUniqueOrThrow({
+    where: {
+      id: validatedJobId,
+    },
+  });
 }

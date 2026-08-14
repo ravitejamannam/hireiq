@@ -371,6 +371,8 @@ export function notificationScopeWhere(
 
   if (user.role === PortalRole.CLIENT) {
     return {
+      type: "CLIENT_SHORTLIST_READY",
+      companyId: requireClientCompanyId(user),
       job: {
         companyId: requireClientCompanyId(user),
       },
@@ -380,6 +382,9 @@ export function notificationScopeWhere(
   if (user.role === PortalRole.INTERVIEWER) {
     return {
       interviewerId: requireInterviewerProfileId(user),
+      type: {
+        in: ["INTERVIEWER_REQUIREMENT_READY", "INTERVIEWER_DATABASE_READY"],
+      },
     };
   }
 

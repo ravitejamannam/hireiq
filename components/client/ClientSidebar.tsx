@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Briefcase, CreditCard, LayoutDashboard } from "lucide-react";
+import { Bell, Briefcase, CreditCard, LayoutDashboard } from "lucide-react";
 
 type ClientSidebarProps = {
   companyName: string;
@@ -133,16 +133,24 @@ export default function ClientSidebar({
               </Link>
             </li>
             <li>
-              <button
-                type="button"
-                disabled
-                aria-disabled="true"
-                title="Notifications will be available in a later release"
-                className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-4 py-3 text-left font-medium text-zinc-400"
+              <Link
+                href="/client/notifications"
+                className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 font-medium transition-colors ${
+                  isActivePath(pathname, "/client/notifications")
+                    ? "bg-black text-white"
+                    : "text-zinc-700 hover:bg-zinc-100 hover:text-black"
+                }`}
               >
+                <Bell
+                  size={18}
+                  className={
+                    isActivePath(pathname, "/client/notifications")
+                      ? "text-white"
+                      : "text-zinc-600"
+                  }
+                />
                 <span>Notifications</span>
-                <span className="ml-auto text-xs font-normal">Soon</span>
-              </button>
+              </Link>
             </li>
           </ul>
         </div>

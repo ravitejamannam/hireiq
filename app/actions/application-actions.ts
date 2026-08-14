@@ -4,11 +4,13 @@ import {
   AuthorizationError,
   requireAdmin,
   requireClientPortal,
+  requireInterviewerPortal,
 } from "@/lib/auth/authorization";
 import { generateBillingForHiredApplication } from "@/lib/billing/generate-hire-billing";
 import { prisma } from "@/lib/prisma";
 import {
   assertApplicationIsInExpertReview,
+  assertAdminCannotTakeClientHiringDecision,
   assertJobAllowsSourcingIntake,
   ensureApplicationExists,
   validateApplicationId,
@@ -22,6 +24,10 @@ import {
   ApplicationTenantIntegrityError,
   type SourcedCandidateInput,
 } from "@/lib/validation/application-validation";
+import {
+  getValidAdminPipelineTransitions,
+  getValidInterviewerPipelineTransitions,
+} from "@/lib/validation/application-pipeline";
 import { BillingValidationError } from "@/lib/validation/billing-validation";
 import { revalidatePath } from "next/cache";
 import {
@@ -49,10 +55,11 @@ export async function createApplication(
     rejectionReason,
   );
 
-  if (applicationInput.status === ApplicationPipelineStatus.HIRED) {
-    throw new ApplicationValidationError(
-      "Hiring must be confirmed by the client who owns this requirement.",
-    );
+  if (
+    applicationInput.status === ApplicationPipelineStatus.HIRED ||
+    applicationInput.status === ApplicationPipelineStatus.SELECTED
+  ) {
+    assertAdminCannotTakeClientHiringDecision(applicationInput.status);
   }
 
   try {
@@ -99,14 +106,10 @@ export async function updateApplication(
     rejectionReason,
   );
 
-  if (
-    applicationInput.status === ApplicationPipelineStatus.HIRED &&
-    existingApplication.status !== ApplicationPipelineStatus.HIRED
-  ) {
-    throw new ApplicationValidationError(
-      "Hiring must be confirmed by the client who owns this requirement.",
-    );
-  }
+  assertAdminCannotTakeClientHiringDecision(
+    applicationInput.status,
+    existingApplication.status,
+  );
 
   try {
     const application = await prisma.application.update({
@@ -142,37 +145,13 @@ export async function deleteApplication(id: number) {
   }
 }
 
-const APPLICATION_STATUS_TRANSITIONS: Record<
-  ApplicationPipelineStatus,
-  ApplicationPipelineStatus[]
-> = {
-  [ApplicationPipelineStatus.CV_POOL]: [
-    ApplicationPipelineStatus.EXPERT_REVIEW,
-    ApplicationPipelineStatus.REJECTED,
-  ],
-  [ApplicationPipelineStatus.EXPERT_REVIEW]: [
-    ApplicationPipelineStatus.TECH_EVALUATION,
-    ApplicationPipelineStatus.REJECTED,
-  ],
-  [ApplicationPipelineStatus.TECH_EVALUATION]: [
-    ApplicationPipelineStatus.SHORTLISTED,
-    ApplicationPipelineStatus.REJECTED,
-  ],
-  [ApplicationPipelineStatus.SHORTLISTED]: [
-    ApplicationPipelineStatus.SELECTED,
-    ApplicationPipelineStatus.REJECTED,
-  ],
-  // SELECTED → HIRED is Client-owned (confirmClientCandidateHire), not Admin.
-  [ApplicationPipelineStatus.SELECTED]: [],
-  [ApplicationPipelineStatus.REJECTED]: [],
-  [ApplicationPipelineStatus.HIRED]: [],
-};
-
 function getValidApplicationStatusTransitions(
   currentStatus: ApplicationPipelineStatus,
 ) {
-  return APPLICATION_STATUS_TRANSITIONS[currentStatus] ?? [];
+  return getValidAdminPipelineTransitions(currentStatus);
 }
+
+// T67–T71 hiring ownership: [ApplicationPipelineStatus.SELECTED]: [],
 
 function isApplicationPipelineStatus(
   status: unknown,
@@ -449,6 +428,12 @@ export async function transitionApplicationStatus(
     );
   }
 
+  if (nextStatus === ApplicationPipelineStatus.SELECTED) {
+    throw new ApplicationValidationError(
+      "Selection must be confirmed by the client who owns this requirement.",
+    );
+  }
+
   const allowedTransitions = getValidApplicationStatusTransitions(
     application.status,
   );
@@ -457,46 +442,17 @@ export async function transitionApplicationStatus(
     throw new Error("Invalid application status transition.");
   }
 
-  const isSelectionTransition =
-    application.status === ApplicationPipelineStatus.SHORTLISTED &&
-    nextStatus === ApplicationPipelineStatus.SELECTED;
-
   let updatedApplication;
 
   try {
-    if (isSelectionTransition) {
-      // SHORTLISTED → SELECTED is a decision only — no billing.
-      updatedApplication = await prisma.$transaction(async (tx) => {
-        const updateResult = await tx.application.updateMany({
-          where: {
-            id: application.id,
-            status: ApplicationPipelineStatus.SHORTLISTED,
-          },
-          data: {
-            status: ApplicationPipelineStatus.SELECTED,
-          },
-        });
-
-        if (updateResult.count !== 1) {
-          throw new ApplicationValidationError(
-            "Candidate is no longer shortlisted.",
-          );
-        }
-
-        return tx.application.findUniqueOrThrow({
-          where: { id: application.id },
-        });
-      });
-    } else {
-      updatedApplication = await prisma.application.update({
-        where: {
-          id: applicationId,
-        },
-        data: {
-          status: nextStatus,
-        },
-      });
-    }
+    updatedApplication = await prisma.application.update({
+      where: {
+        id: applicationId,
+      },
+      data: {
+        status: nextStatus,
+      },
+    });
   } catch (error) {
     if (error instanceof ApplicationValidationError) {
       throw error;
@@ -517,6 +473,122 @@ export async function transitionApplicationStatus(
       revalidatePath("/client/billing");
       revalidatePath(`/client/requirements/${application.jobId}/billing`);
     }
+  } catch {
+    // revalidatePath requires a Next.js request context
+  }
+
+  return updatedApplication;
+}
+
+/**
+ * Interviewer pipeline for assigned requirements.
+ * TECH_EVALUATION → SHORTLISTED | REJECTED only.
+ * Does not accept SELECTED or HIRED.
+ */
+export async function transitionInterviewerApplicationStatus(
+  id: number,
+  nextStatus: ApplicationPipelineStatus,
+) {
+  const interviewer = await requireInterviewerPortal();
+  const applicationId = validateApplicationId(id);
+
+  if (!isApplicationPipelineStatus(nextStatus)) {
+    throw new Error("Application status is invalid.");
+  }
+
+  if (
+    nextStatus === ApplicationPipelineStatus.SELECTED ||
+    nextStatus === ApplicationPipelineStatus.HIRED
+  ) {
+    throw new ApplicationValidationError(
+      nextStatus === ApplicationPipelineStatus.HIRED
+        ? "Hiring must be confirmed by the client who owns this requirement."
+        : "Selection must be confirmed by the client who owns this requirement.",
+    );
+  }
+
+  const application = await prisma.application.findFirst({
+    where: {
+      id: applicationId,
+      job: {
+        assignedInterviewerId: interviewer.interviewerId,
+      },
+    },
+    select: {
+      id: true,
+      status: true,
+      jobId: true,
+      job: {
+        select: {
+          assignedInterviewerId: true,
+        },
+      },
+    },
+  });
+
+  if (!application) {
+    throw new AuthorizationError("Resource not found.");
+  }
+
+  const allowedTransitions = getValidInterviewerPipelineTransitions(
+    application.status,
+  );
+
+  if (!allowedTransitions.includes(nextStatus)) {
+    throw new ApplicationValidationError(
+      "Invalid application status transition.",
+    );
+  }
+
+  let updatedApplication;
+
+  try {
+    const updateResult = await prisma.application.updateMany({
+      where: {
+        id: application.id,
+        status: application.status,
+        job: {
+          assignedInterviewerId: interviewer.interviewerId,
+        },
+      },
+      data: {
+        status: nextStatus,
+      },
+    });
+
+    if (updateResult.count !== 1) {
+      throw new ApplicationValidationError(
+        "Candidate is no longer in the expected pipeline state.",
+      );
+    }
+
+    updatedApplication = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+  } catch (error) {
+    if (error instanceof ApplicationValidationError) {
+      throw error;
+    }
+    if (error instanceof AuthorizationError) {
+      throw error;
+    }
+    throw translateApplicationSaveError(error);
+  }
+
+  try {
+    revalidatePath("/interviewer");
+    revalidatePath("/interviewer/requirements");
+    revalidatePath(`/interviewer/requirements/${application.jobId}`);
+    revalidatePath(
+      `/interviewer/requirements/${application.jobId}/candidates/${application.id}`,
+    );
+    revalidatePath("/interviewer/candidates");
+    revalidatePath("/interviewer/evaluations");
+    revalidatePath("/dashboard/pipeline");
+    revalidatePath("/dashboard/shortlist");
+    revalidatePath("/dashboard/technical-evaluations");
+    revalidatePath("/dashboard/applications");
+    revalidatePath(`/dashboard/requirements/${application.jobId}`);
   } catch {
     // revalidatePath requires a Next.js request context
   }

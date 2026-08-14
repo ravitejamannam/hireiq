@@ -8,6 +8,8 @@ import type {
   InAppNotificationRecord,
 } from "@/lib/communication/communication-types";
 import { deliverRequirementReadyEmail } from "@/lib/communication/requirement-ready-email";
+import { deliverDatabaseReadyEmail } from "@/lib/communication/database-ready-email";
+import { deliverShortlistReadyEmail } from "@/lib/communication/shortlist-ready-email";
 import {
   NotificationValidationError,
   validateNotificationJobId,
@@ -42,7 +44,8 @@ function toNotificationRecord(row: {
   type: DispatchInAppNotificationInput["type"];
   message: string;
   jobId: number;
-  interviewerId: number;
+  interviewerId: number | null;
+  companyId: number;
   createdAt: Date;
 }): InAppNotificationRecord {
   return {
@@ -51,6 +54,7 @@ function toNotificationRecord(row: {
     message: row.message,
     jobId: row.jobId,
     interviewerId: row.interviewerId,
+    companyId: row.companyId,
     createdAt: row.createdAt,
   };
 }
@@ -145,6 +149,7 @@ export async function dispatchInAppNotification(
       message: true,
       jobId: true,
       interviewerId: true,
+      companyId: true,
       createdAt: true,
     },
   });
@@ -165,6 +170,7 @@ export async function dispatchInAppNotification(
         message,
         jobId: recipient.jobId,
         interviewerId: recipient.interviewerId,
+        companyId: recipient.companyId,
       },
       select: {
         id: true,
@@ -172,6 +178,7 @@ export async function dispatchInAppNotification(
         message: true,
         jobId: true,
         interviewerId: true,
+        companyId: true,
         createdAt: true,
       },
     });
@@ -201,6 +208,7 @@ export async function dispatchInAppNotification(
         message: true,
         jobId: true,
         interviewerId: true,
+        companyId: true,
         createdAt: true,
       },
     });
@@ -233,5 +241,191 @@ export async function finalizeRequirementReadyCommunication(
     };
   }
 
+  if (inApp.notification.type !== "INTERVIEWER_REQUIREMENT_READY") {
+    return {
+      attempted: false,
+      reason: "no-requirement-ready-notification",
+    };
+  }
+
   return deliverRequirementReadyEmail(inApp.notification.jobId);
+}
+
+/**
+ * Send the T69 database-ready email only when a new in-app
+ * INTERVIEWER_DATABASE_READY notification was created.
+ */
+export async function finalizeDatabaseReadyCommunication(
+  inApp: DispatchInAppNotificationResult,
+): Promise<EmailDeliveryResult> {
+  if (!inApp.created) {
+    return {
+      attempted: false,
+      reason: "already-notified",
+    };
+  }
+
+  if (inApp.notification.type !== "INTERVIEWER_DATABASE_READY") {
+    return {
+      attempted: false,
+      reason: "no-database-ready-notification",
+    };
+  }
+
+  return deliverDatabaseReadyEmail(inApp.notification.jobId);
+}
+
+const notificationRecordSelect = {
+  id: true,
+  type: true,
+  message: true,
+  jobId: true,
+  interviewerId: true,
+  companyId: true,
+  createdAt: true,
+} as const;
+
+/**
+ * Resolve the Client email from the Job's owning company.
+ * Never accepts companyId, userId, or recipient email from the caller.
+ */
+export async function resolveOwningClientRecipient(
+  jobId: number,
+  db: NotificationDb = prisma,
+) {
+  const job = await db.job.findUnique({
+    where: { id: jobId },
+    select: {
+      id: true,
+      companyId: true,
+    },
+  });
+
+  if (!job) {
+    throw new NotificationValidationError("Resource not found.");
+  }
+
+  const user = await db.user.findFirst({
+    where: {
+      companyId: job.companyId,
+      role: "CLIENT",
+    },
+    orderBy: {
+      id: "asc",
+    },
+    select: {
+      email: true,
+    },
+  });
+
+  return {
+    jobId: job.id,
+    companyId: job.companyId,
+    interviewerId: null,
+    email: user?.email ?? null,
+  };
+}
+
+/**
+ * Create a company-scoped in-app Notification for the Job's Client.
+ * Idempotent on @@unique([jobId, companyId, type]).
+ */
+export async function dispatchClientInAppNotification(
+  input: DispatchInAppNotificationInput,
+  db: NotificationDb = prisma,
+): Promise<DispatchInAppNotificationResult> {
+  const jobId = validateNotificationJobId(input.jobId);
+  const type = validateNotificationType(input.type);
+  const message = validateNotificationMessage(input.message);
+  const recipient = await resolveOwningClientRecipient(jobId, db);
+
+  const existing = await db.notification.findUnique({
+    where: {
+      jobId_companyId_type: {
+        jobId: recipient.jobId,
+        companyId: recipient.companyId,
+        type,
+      },
+    },
+    select: notificationRecordSelect,
+  });
+
+  if (existing) {
+    return {
+      created: false,
+      notification: toNotificationRecord(existing),
+      recipient,
+      email: DEFERRED_EMAIL,
+    };
+  }
+
+  try {
+    const created = await db.notification.create({
+      data: {
+        type,
+        message,
+        jobId: recipient.jobId,
+        companyId: recipient.companyId,
+        interviewerId: null,
+      },
+      select: notificationRecordSelect,
+    });
+
+    return {
+      created: true,
+      notification: toNotificationRecord(created),
+      recipient,
+      email: DEFERRED_EMAIL,
+    };
+  } catch (error) {
+    if (!isNotificationUniquenessConflict(error)) {
+      throw error;
+    }
+
+    const raced = await db.notification.findUnique({
+      where: {
+        jobId_companyId_type: {
+          jobId: recipient.jobId,
+          companyId: recipient.companyId,
+          type,
+        },
+      },
+      select: notificationRecordSelect,
+    });
+
+    if (!raced) {
+      throw error;
+    }
+
+    return {
+      created: false,
+      notification: toNotificationRecord(raced),
+      recipient,
+      email: DEFERRED_EMAIL,
+    };
+  }
+}
+
+/**
+ * Send the T70 shortlist-ready email only when a new in-app
+ * CLIENT_SHORTLIST_READY notification was created.
+ */
+export async function finalizeShortlistReadyCommunication(
+  inApp: DispatchInAppNotificationResult,
+): Promise<EmailDeliveryResult> {
+  if (!inApp.created) {
+    return {
+      attempted: false,
+      reason: "already-notified",
+    };
+  }
+
+  if (inApp.notification.type !== "CLIENT_SHORTLIST_READY") {
+    return {
+      attempted: false,
+      reason: "no-shortlist-ready-notification",
+    };
+  }
+
+  return deliverShortlistReadyEmail(inApp.notification.jobId);
 }

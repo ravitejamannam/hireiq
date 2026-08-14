@@ -18,6 +18,7 @@ import {
   getClientSourceLabel,
 } from "@/components/client/client-labels";
 import InterviewerEvaluationWorkspace from "@/components/interviewer/InterviewerEvaluationWorkspace";
+import InterviewerShortlistActions from "@/components/interviewer/InterviewerShortlistActions";
 
 type Question = {
   id: number;
@@ -150,6 +151,10 @@ export default function InterviewerCandidateDetail({
             <dd>{formatClientOptional(candidate.skills)}</dd>
           </div>
         </dl>
+        <InterviewerShortlistActions
+          applicationId={applicationId}
+          status={application.status}
+        />
       </section>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-6">

@@ -193,6 +193,15 @@ export function validateJobLifecycleTransition(
   }
 
   if (
+    currentLifecycle === "INTERVIEWER_NOTIFIED" &&
+    validatedNextLifecycle === "SOURCING_SHORTLISTING"
+  ) {
+    throw new JobValidationError(
+      "Sourcing access must be recorded through the database-access workflow.",
+    );
+  }
+
+  if (
     currentLifecycle === "SOURCING_SHORTLISTING" &&
     validatedNextLifecycle === "BILLING_GENERATED"
   ) {
@@ -238,6 +247,7 @@ export async function ensureJobExists(id: number) {
       sourcingAccessReceivedAt: true,
       shortlistingDueAt: true,
       shortlistingCompletedAt: true,
+      assignedInterviewerId: true,
     },
   });
 
@@ -277,6 +287,7 @@ export function assertShortlistingCanBeCompleted(
   requirementLifecycle: RequirementLifecycle,
   sourcingAccessReceivedAt: Date | null,
   shortlistingCompletedAt: Date | null,
+  shortlistedCount: number,
 ) {
   if (shortlistingCompletedAt) {
     return "ALREADY_COMPLETED" as const;
@@ -288,6 +299,12 @@ export function assertShortlistingCanBeCompleted(
 
   if (requirementLifecycle !== "SOURCING_SHORTLISTING") {
     throw new JobValidationError("Invalid sourcing workflow state.");
+  }
+
+  if (shortlistedCount < 1) {
+    throw new JobValidationError(
+      "Cannot complete shortlisting until at least one candidate has been shortlisted.",
+    );
   }
 
   return "READY" as const;

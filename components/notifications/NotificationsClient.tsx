@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import NotificationCard from "@/components/notifications/NotificationCard";
+import CommunicationHistoryList from "@/components/notifications/CommunicationHistoryList";
 import type { getNotifications } from "@/lib/repositories/notification-repository";
 
 type Notification = Awaited<ReturnType<typeof getNotifications>>[number];
@@ -26,9 +26,10 @@ export default function NotificationsClient({
       notification.message,
       notification.type,
       notification.job.title,
-      notification.interviewer.name,
+      notification.interviewer?.name,
+      notification.company?.name,
       notification.job.requirementLifecycle,
-    ];
+    ].filter((value): value is string => Boolean(value));
 
     return searchableValues.some((value) =>
       value.toLowerCase().includes(query),
@@ -38,20 +39,21 @@ export default function NotificationsClient({
   return (
     <DashboardLayout>
       <div>
-        <h1 className="text-3xl font-bold text-black">Notifications</h1>
+        <h1 className="text-3xl font-bold text-black">Communication history</h1>
         <p className="mt-2 text-zinc-600">
-          Internal requirement handoff notifications for assigned interviewers.
+          Recorded requirement-ready, database-ready, and shortlist-ready
+          communications. Email delivery status is not stored.
         </p>
       </div>
 
       <div className="mt-8">
         <label htmlFor="notifications-search" className="sr-only">
-          Search notifications
+          Search communication history
         </label>
         <input
           id="notifications-search"
           type="text"
-          placeholder="Search by message, requirement, interviewer, or type..."
+          placeholder="Search by message, requirement, interviewer, company, or type..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           className="
@@ -71,37 +73,23 @@ export default function NotificationsClient({
         />
       </div>
 
-      {filteredNotifications.length === 0 ? (
-        <div className="mt-10 rounded-2xl border border-dashed border-zinc-300 bg-white py-20 text-center">
-          <p className="text-lg font-medium text-black">
-            {initialNotifications.length === 0
-              ? "No notifications yet"
-              : "No matching notifications"}
-          </p>
-          <p className="mt-2 text-sm text-zinc-500">
-            {initialNotifications.length === 0
-              ? "Notify an assigned interviewer from a posted requirement to create a handoff record."
-              : "Try a different search term."}
-          </p>
-        </div>
-      ) : (
-        <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {filteredNotifications.map((notification) => (
-            <NotificationCard
-              key={notification.id}
-              type={notification.type}
-              message={notification.message}
-              createdAt={notification.createdAt}
-              jobTitle={notification.job.title}
-              jobStatus={notification.job.status}
-              requirementLifecycle={notification.job.requirementLifecycle}
-              interviewerName={notification.interviewer.name}
-              interviewerCategory={notification.interviewer.category}
-              interviewerAvailability={notification.interviewer.availability}
-            />
-          ))}
-        </div>
-      )}
+      <CommunicationHistoryList
+        notifications={filteredNotifications}
+        emptyTitle={
+          initialNotifications.length === 0
+            ? "No communication history yet"
+            : "No matching communications"
+        }
+        emptyDescription={
+          initialNotifications.length === 0
+            ? "Requirement-ready, database-ready, and shortlist-ready events appear here after they are recorded."
+            : "Try a different search term."
+        }
+        workspaceHrefFor={(notification) =>
+          `/dashboard/requirements/${notification.jobId}`
+        }
+        workspaceLabel="Open requirement"
+      />
     </DashboardLayout>
   );
 }

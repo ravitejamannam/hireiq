@@ -19,6 +19,7 @@ import WorkflowRequirementNav, {
 } from "@/components/dashboard/WorkflowRequirementNav";
 import PipelineCard from "@/components/pipeline/PipelineCard";
 import type { getApplications } from "@/lib/repositories/application-repository";
+import { ADMIN_PIPELINE_TRANSITIONS } from "@/lib/validation/application-pipeline";
 
 type Application = Awaited<ReturnType<typeof getApplications>>[number];
 type StatusFilter = "ALL" | ApplicationPipelineStatus;
@@ -37,29 +38,7 @@ const PIPELINE_COLUMNS: ApplicationPipelineStatus[] = [
   ApplicationPipelineStatus.REJECTED,
 ];
 
-const APPLICATION_STATUS_TRANSITIONS: Record<
-  ApplicationPipelineStatus,
-  ApplicationPipelineStatus[]
-> = {
-  [ApplicationPipelineStatus.CV_POOL]: [
-    ApplicationPipelineStatus.EXPERT_REVIEW,
-    ApplicationPipelineStatus.REJECTED,
-  ],
-  [ApplicationPipelineStatus.EXPERT_REVIEW]: [
-    ApplicationPipelineStatus.TECH_EVALUATION,
-    ApplicationPipelineStatus.REJECTED,
-  ],
-  [ApplicationPipelineStatus.TECH_EVALUATION]: [
-    ApplicationPipelineStatus.SHORTLISTED,
-    ApplicationPipelineStatus.REJECTED,
-  ],
-  [ApplicationPipelineStatus.SHORTLISTED]: [
-    ApplicationPipelineStatus.REJECTED,
-  ],
-  [ApplicationPipelineStatus.SELECTED]: [],
-  [ApplicationPipelineStatus.REJECTED]: [],
-  [ApplicationPipelineStatus.HIRED]: [],
-};
+const APPLICATION_STATUS_TRANSITIONS = ADMIN_PIPELINE_TRANSITIONS;
 
 function getValidApplicationStatusTransitions(
   currentStatus: ApplicationPipelineStatus,

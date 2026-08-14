@@ -19,6 +19,29 @@ export class ApplicationTenantIntegrityError extends ApplicationValidationError 
   }
 }
 
+export function assertAdminCannotTakeClientHiringDecision(
+  nextStatus: ApplicationPipelineStatus,
+  currentStatus?: ApplicationPipelineStatus,
+) {
+  if (
+    nextStatus === ApplicationPipelineStatus.HIRED &&
+    currentStatus !== ApplicationPipelineStatus.HIRED
+  ) {
+    throw new ApplicationValidationError(
+      "Hiring must be confirmed by the client who owns this requirement.",
+    );
+  }
+
+  if (
+    nextStatus === ApplicationPipelineStatus.SELECTED &&
+    currentStatus !== ApplicationPipelineStatus.SELECTED
+  ) {
+    throw new ApplicationValidationError(
+      "Selection must be confirmed by the client who owns this requirement.",
+    );
+  }
+}
+
 export type ValidatedApplicationInput = {
   candidateId: number;
   jobId: number;

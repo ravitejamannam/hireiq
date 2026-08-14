@@ -20,6 +20,8 @@ function interviewerJobSelect(interviewerId: number) {
     evaluationCriteria: true,
     primarySkills: true,
     requirementLifecycle: true,
+    sourcingAccessReceivedAt: true,
+    shortlistingCompletedAt: true,
     company: {
       select: {
         name: true,

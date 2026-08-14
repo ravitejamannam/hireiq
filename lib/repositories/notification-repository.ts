@@ -13,6 +13,7 @@ const notificationSelect = {
   createdAt: true,
   jobId: true,
   interviewerId: true,
+  companyId: true,
   job: {
     select: {
       id: true,
@@ -27,6 +28,12 @@ const notificationSelect = {
       name: true,
       category: true,
       availability: true,
+    },
+  },
+  company: {
+    select: {
+      id: true,
+      name: true,
     },
   },
 } satisfies Prisma.NotificationSelect;

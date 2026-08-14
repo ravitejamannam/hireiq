@@ -3,11 +3,14 @@ import type { NotificationType } from "@prisma/client";
 /**
  * T67 communication foundation types.
  * T68 adds requirement-ready email delivery results.
- * Read/unread and history remain deferred to T71.
+ * T69 adds database-ready email delivery results.
+ * T70 adds client shortlist-ready email delivery results.
+ * T71 reads existing Notification rows as communication history.
+ * Read/unread and email-delivery persistence are not implemented.
  */
 
 export type CommunicationRecipient = {
-  interviewerId: number;
+  interviewerId: number | null;
   companyId: number;
   jobId: number;
   email: string | null;
@@ -18,7 +21,8 @@ export type InAppNotificationRecord = {
   type: NotificationType;
   message: string;
   jobId: number;
-  interviewerId: number;
+  interviewerId: number | null;
+  companyId: number;
   createdAt: Date;
 };
 
@@ -37,7 +41,11 @@ export type RequirementReadyEmailPreview = {
 export type EmailDeliveryResult =
   | {
       attempted: false;
-      reason: "already-notified" | "no-requirement-ready-notification";
+      reason:
+        | "already-notified"
+        | "no-requirement-ready-notification"
+        | "no-database-ready-notification"
+        | "no-shortlist-ready-notification";
     }
   | {
       attempted: true;

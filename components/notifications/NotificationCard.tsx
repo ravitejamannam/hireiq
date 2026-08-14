@@ -5,6 +5,7 @@ import type {
   NotificationType,
   RequirementLifecycle,
 } from "@prisma/client";
+import Link from "next/link";
 
 type NotificationCardProps = {
   type: NotificationType;
@@ -13,13 +14,18 @@ type NotificationCardProps = {
   jobTitle: string;
   jobStatus: JobStatus;
   requirementLifecycle: RequirementLifecycle;
-  interviewerName: string;
-  interviewerCategory: InterviewerCategory;
-  interviewerAvailability: InterviewerAvailability;
+  interviewerName: string | null;
+  interviewerCategory: InterviewerCategory | null;
+  interviewerAvailability: InterviewerAvailability | null;
+  companyName?: string | null;
+  workspaceHref?: string | null;
+  workspaceLabel?: string | null;
 };
 
 const notificationTypeLabels: Record<NotificationType, string> = {
   INTERVIEWER_REQUIREMENT_READY: "Interviewer Requirement Ready",
+  INTERVIEWER_DATABASE_READY: "Database Ready",
+  CLIENT_SHORTLIST_READY: "Shortlist Ready",
 };
 
 const requirementLifecycleLabels: Record<RequirementLifecycle, string> = {
@@ -62,7 +68,15 @@ export default function NotificationCard({
   interviewerName,
   interviewerCategory,
   interviewerAvailability,
+  companyName,
+  workspaceHref,
+  workspaceLabel,
 }: NotificationCardProps) {
+  const interviewerLabel =
+    interviewerName && interviewerCategory && interviewerAvailability
+      ? `${interviewerName} — ${interviewerCategoryLabels[interviewerCategory]} — ${availabilityLabels[interviewerAvailability]}`
+      : "Client company";
+
   return (
     <article className="rounded-xl border border-zinc-200 bg-white p-6 transition hover:border-black">
       <div className="flex items-start justify-between gap-4">
@@ -87,10 +101,13 @@ export default function NotificationCard({
           <dd>{requirementLifecycleLabels[requirementLifecycle]}</dd>
         </div>
         <div>
-          <dt className="font-medium text-black">Interviewer</dt>
+          <dt className="font-medium text-black">
+            {type === "CLIENT_SHORTLIST_READY" ? "Client" : "Interviewer"}
+          </dt>
           <dd>
-            {interviewerName} — {interviewerCategoryLabels[interviewerCategory]}{" "}
-            — {availabilityLabels[interviewerAvailability]}
+            {type === "CLIENT_SHORTLIST_READY"
+              ? companyName || "Client company"
+              : interviewerLabel}
           </dd>
         </div>
         <div>
@@ -98,6 +115,16 @@ export default function NotificationCard({
           <dd>{formatNotificationDateTime(createdAt)}</dd>
         </div>
       </dl>
+      {workspaceHref ? (
+        <div className="mt-6">
+          <Link
+            href={workspaceHref}
+            className="inline-flex rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+          >
+            {workspaceLabel ?? "Open requirement"}
+          </Link>
+        </div>
+      ) : null}
     </article>
   );
 }

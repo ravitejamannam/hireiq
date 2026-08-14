@@ -295,10 +295,13 @@ export default function ApplicationForm({
         >
           <option value="">Select pipeline status</option>
           {APPLICATION_PIPELINE_STATUS_OPTIONS.filter((option) => {
-            if (option.value !== ApplicationPipelineStatus.HIRED) {
-              return true;
+            if (
+              option.value === ApplicationPipelineStatus.HIRED ||
+              option.value === ApplicationPipelineStatus.SELECTED
+            ) {
+              return initialValues?.status === option.value;
             }
-            return initialValues?.status === ApplicationPipelineStatus.HIRED;
+            return true;
           }).map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}

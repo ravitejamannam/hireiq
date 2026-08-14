@@ -1263,6 +1263,7 @@ async function seedV1Qa() {
       message: `${NS}: Requirement "${jobA.title}" is ready for interviewer review.`,
       jobId: jobA.id,
       interviewerId: interviewerAlpha.id,
+      companyId: companyAlpha.id,
     },
   });
   await prisma.notification.create({
@@ -1271,6 +1272,7 @@ async function seedV1Qa() {
       message: `${NS}: Requirement "${jobF.title}" is ready for interviewer review.`,
       jobId: jobF.id,
       interviewerId: interviewerBeta.id,
+      companyId: companyBeta.id,
     },
   });
 

@@ -18,6 +18,8 @@ import {
   getClientPipelineStatusLabel,
   getClientSourceLabel,
 } from "@/components/client/client-labels";
+import { completeJobShortlisting } from "@/app/actions/job-actions";
+import InterviewerShortlistActions from "@/components/interviewer/InterviewerShortlistActions";
 
 type InterviewerCandidate = {
   id: number;
@@ -56,6 +58,8 @@ type InterviewerRequirementDetailClientProps = {
     evaluationCriteria: string | null;
     primarySkills: string | null;
     requirementLifecycle: RequirementLifecycle;
+    sourcingAccessReceivedAt: Date | null;
+    shortlistingCompletedAt: Date | null;
     company: { name: string };
   };
   candidates: InterviewerCandidate[];
@@ -87,6 +91,11 @@ export default function InterviewerRequirementDetailClient({
   const [statusFilter, setStatusFilter] = useState<
     ApplicationPipelineStatus | "ALL"
   >("ALL");
+  const [isCompletingShortlist, setIsCompletingShortlist] = useState(false);
+  const [shortlistingCompletedAt, setShortlistingCompletedAt] = useState(
+    requirement.shortlistingCompletedAt,
+  );
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const availableStatuses = useMemo(() => {
     const present = new Set(candidates.map((candidate) => candidate.status));
@@ -123,6 +132,33 @@ export default function InterviewerRequirementDetailClient({
     });
   }, [candidates, search, statusFilter]);
 
+  const shortlistedCount = candidates.filter(
+    (candidate) => candidate.status === "SHORTLISTED",
+  ).length;
+
+  const canCompleteShortlisting =
+    requirement.requirementLifecycle === "SOURCING_SHORTLISTING" &&
+    Boolean(requirement.sourcingAccessReceivedAt) &&
+    !shortlistingCompletedAt;
+
+  async function handleCompleteShortlisting() {
+    setActionError(null);
+    setIsCompletingShortlist(true);
+
+    try {
+      const updated = await completeJobShortlisting(requirement.id);
+      setShortlistingCompletedAt(updated.shortlistingCompletedAt);
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Shortlisting could not be completed.",
+      );
+    } finally {
+      setIsCompletingShortlist(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-6">
@@ -154,6 +190,34 @@ export default function InterviewerRequirementDetailClient({
             }
           </span>
         </div>
+        {canCompleteShortlisting ? (
+          <div className="mt-4">
+            <p className="mb-2 text-sm text-zinc-600">
+              Shortlisted: {shortlistedCount}
+            </p>
+            <button
+              type="button"
+              disabled={isCompletingShortlist || shortlistedCount < 1}
+              onClick={() => void handleCompleteShortlisting()}
+              className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
+            >
+              {isCompletingShortlist ? "Completing..." : "Complete Shortlisting"}
+            </button>
+            {shortlistedCount < 1 ? (
+              <p className="mt-2 text-sm text-zinc-600">
+                Shortlist at least one candidate before completing.
+              </p>
+            ) : null}
+            {actionError ? (
+              <p className="mt-2 text-sm text-red-700">{actionError}</p>
+            ) : null}
+          </div>
+        ) : null}
+        {shortlistingCompletedAt ? (
+          <p className="mt-3 text-sm text-zinc-600">
+            Shortlist completed. The client can now review recommended candidates.
+          </p>
+        ) : null}
       </div>
 
       <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
@@ -221,7 +285,8 @@ export default function InterviewerRequirementDetailClient({
           <div>
             <h2 className="text-2xl font-bold text-black">Candidates</h2>
             <p className="mt-2 text-sm text-zinc-600">
-              Applications for this assigned requirement.
+              Applications for this assigned requirement. Shortlisted:{" "}
+              {shortlistedCount}
             </p>
           </div>
           <p className="text-sm text-zinc-600">
@@ -352,6 +417,10 @@ export default function InterviewerRequirementDetailClient({
                   >
                     Open Candidate
                   </Link>
+                  <InterviewerShortlistActions
+                    applicationId={application.id}
+                    status={application.status}
+                  />
                 </div>
               </article>
             ))}

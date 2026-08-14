@@ -100,6 +100,8 @@ enum EvaluationFitDecision {
 
 enum NotificationType {
   INTERVIEWER_REQUIREMENT_READY
+  INTERVIEWER_DATABASE_READY
+  CLIENT_SHORTLIST_READY
 }
 
 enum PortalRole {
@@ -131,6 +133,7 @@ model Company {
   jobs           Job[]
   users          User[]
   billingRecords BillingRecord[]
+  notifications  Notification[]
 }
 
 model Job {
@@ -397,14 +400,18 @@ model Notification {
   createdAt DateTime @default(now())
 
   jobId Int
-  interviewerId Int
+  interviewerId Int?
+  companyId Int
 
   job Job @relation(fields: [jobId], references: [id], onDelete: Restrict)
-  interviewer Interviewer @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
+  interviewer Interviewer? @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
   @@unique([jobId, interviewerId, type])
+  @@unique([jobId, companyId, type])
   @@index([jobId])
   @@index([interviewerId])
+  @@index([companyId])
   @@index([type])
 }
 
