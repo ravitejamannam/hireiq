@@ -24,6 +24,8 @@ import {
   type JobRequirementInput,
   JobValidationError,
 } from "@/lib/validation/job-validation";
+import { dispatchInAppNotification } from "@/lib/communication/notification-service";
+import { NotificationValidationError } from "@/lib/validation/notification-validation";
 import {
   ensureInterviewerExists,
   validateNullableInterviewerId,
@@ -483,14 +485,14 @@ export async function notifyAssignedInterviewer(jobId: number) {
         );
       }
 
-      await tx.notification.create({
-        data: {
+      await dispatchInAppNotification(
+        {
           type: "INTERVIEWER_REQUIREMENT_READY",
           message,
           jobId: existingJob.id,
-          interviewerId: assignedInterviewerId,
         },
-      });
+        tx,
+      );
 
       return tx.job.findUniqueOrThrow({
         where: {
@@ -501,6 +503,10 @@ export async function notifyAssignedInterviewer(jobId: number) {
   } catch (error) {
     if (error instanceof JobValidationError) {
       throw error;
+    }
+
+    if (error instanceof NotificationValidationError) {
+      throw new JobValidationError(error.message);
     }
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
