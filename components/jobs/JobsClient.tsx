@@ -19,6 +19,7 @@ import {
   transitionJobLifecycle,
   updateJob,
 } from "@/app/actions/job-actions";
+import { describeUnsentCommunicationEmail } from "@/lib/communication/email-follow-up";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import JobCard from "@/components/jobs/JobCard";
@@ -64,6 +65,7 @@ export default function JobsClient({
   const [search, setSearch] = useState("");
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [actionError, setActionError] = useState("");
+  const [actionNotice, setActionNotice] = useState("");
 
   async function handleSaveJob(job: JobFormData) {
     setIsSaving(true);
@@ -133,10 +135,13 @@ export default function JobsClient({
 
   async function handleMarkAccessReceived(jobId: number) {
     setActionError("");
+    setActionNotice("");
     setRecordingAccessJobId(jobId);
 
     try {
-      await markJobSourcingAccessReceived(jobId);
+      const result = await markJobSourcingAccessReceived(jobId);
+      const notice = describeUnsentCommunicationEmail(result.email, "T69");
+      if (notice) setActionNotice(notice);
       router.refresh();
     } catch (error) {
       setActionError(getErrorMessage(error));
@@ -161,10 +166,13 @@ export default function JobsClient({
 
   async function handleNotifyInterviewer(jobId: number) {
     setActionError("");
+    setActionNotice("");
     setNotifyingInterviewerJobId(jobId);
 
     try {
-      await notifyAssignedInterviewer(jobId);
+      const result = await notifyAssignedInterviewer(jobId);
+      const notice = describeUnsentCommunicationEmail(result.email, "T68");
+      if (notice) setActionNotice(notice);
       router.refresh();
     } catch (error) {
       setActionError(getErrorMessage(error));
@@ -175,10 +183,13 @@ export default function JobsClient({
 
   async function handleCompleteShortlisting(jobId: number) {
     setActionError("");
+    setActionNotice("");
     setCompletingShortlistingJobId(jobId);
 
     try {
-      await completeJobShortlisting(jobId);
+      const result = await completeJobShortlisting(jobId);
+      const notice = describeUnsentCommunicationEmail(result.email, "T70");
+      if (notice) setActionNotice(notice);
       router.refresh();
     } catch (error) {
       setActionError(getErrorMessage(error));
@@ -273,6 +284,11 @@ export default function JobsClient({
       {actionError && !isModalOpen && (
         <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {actionError}
+        </div>
+      )}
+      {actionNotice && !isModalOpen && (
+        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {actionNotice}
         </div>
       )}
 

@@ -10,6 +10,8 @@ import {
 import { prisma } from "@/lib/prisma";
 import {
   BillingValidationError,
+  assertJobHasHiredApplicationForBilling,
+  assertJobHasNoActiveBillingRecord,
   ensureJobExistsForBilling,
   validateBillingJobId,
   validateBillingRecordId,
@@ -64,6 +66,8 @@ export async function createBillingRecord(jobId: unknown) {
 
   const validatedJobId = validateBillingJobId(jobId);
   const job = await ensureJobExistsForBilling(validatedJobId);
+  await assertJobHasHiredApplicationForBilling(job.id);
+  await assertJobHasNoActiveBillingRecord(job.id);
 
   try {
     const record = await prisma.billingRecord.create({

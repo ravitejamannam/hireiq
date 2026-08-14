@@ -398,6 +398,8 @@ model Notification {
   message String
 
   createdAt DateTime @default(now())
+  /// Set only after a successful outbound email. Null means not delivered.
+  emailDeliveredAt DateTime?
 
   jobId Int
   interviewerId Int?

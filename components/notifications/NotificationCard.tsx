@@ -11,6 +11,7 @@ type NotificationCardProps = {
   type: NotificationType;
   message: string;
   createdAt: Date;
+  emailDeliveredAt?: Date | null;
   jobTitle: string;
   jobStatus: JobStatus;
   requirementLifecycle: RequirementLifecycle;
@@ -20,6 +21,10 @@ type NotificationCardProps = {
   companyName?: string | null;
   workspaceHref?: string | null;
   workspaceLabel?: string | null;
+  canRetry?: boolean;
+  isRetrying?: boolean;
+  onRetry?: (notificationId: number) => void;
+  notificationId?: number;
 };
 
 const notificationTypeLabels: Record<NotificationType, string> = {
@@ -71,6 +76,11 @@ export default function NotificationCard({
   companyName,
   workspaceHref,
   workspaceLabel,
+  emailDeliveredAt,
+  canRetry = false,
+  isRetrying = false,
+  onRetry,
+  notificationId,
 }: NotificationCardProps) {
   const interviewerLabel =
     interviewerName && interviewerCategory && interviewerAvailability
@@ -114,17 +124,35 @@ export default function NotificationCard({
           <dt className="font-medium text-black">Created</dt>
           <dd>{formatNotificationDateTime(createdAt)}</dd>
         </div>
+        <div>
+          <dt className="font-medium text-black">Email</dt>
+          <dd>
+            {emailDeliveredAt
+              ? `Delivered ${formatNotificationDateTime(emailDeliveredAt)}`
+              : "Not delivered"}
+          </dd>
+        </div>
       </dl>
-      {workspaceHref ? (
-        <div className="mt-6">
+      <div className="mt-6 flex flex-wrap gap-3">
+        {workspaceHref ? (
           <Link
             href={workspaceHref}
             className="inline-flex rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
           >
             {workspaceLabel ?? "Open requirement"}
           </Link>
-        </div>
-      ) : null}
+        ) : null}
+        {canRetry && !emailDeliveredAt && notificationId && onRetry ? (
+          <button
+            type="button"
+            disabled={isRetrying}
+            onClick={() => onRetry(notificationId)}
+            className="inline-flex rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100 disabled:opacity-60"
+          >
+            {isRetrying ? "Retrying..." : "Retry email"}
+          </button>
+        ) : null}
+      </div>
     </article>
   );
 }

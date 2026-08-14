@@ -6,6 +6,10 @@ import {
   SourcingDatabaseSource,
 } from "@prisma/client";
 import type { getJobs } from "@/lib/repositories/job-repository";
+import {
+  getAdminApplicationFormStatuses,
+  getValidAdminPipelineTransitions,
+} from "@/lib/validation/application-pipeline";
 
 export type ApplicationCandidateOption = {
   id: number;
@@ -117,6 +121,14 @@ export default function ApplicationForm({
   const [sourceError, setSourceError] = useState("");
   const [expertScoreError, setExpertScoreError] = useState("");
 
+  const isCreate = !initialValues;
+  const allowedStatuses = getAdminApplicationFormStatuses(
+    initialValues?.status ?? null,
+  );
+  const isStatusLocked = initialValues
+    ? getValidAdminPipelineTransitions(initialValues.status).length === 0
+    : false;
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -140,8 +152,13 @@ export default function ApplicationForm({
 
     let validatedStatus: ApplicationPipelineStatus | null = null;
 
-    if (!status || !isApplicationPipelineStatus(status)) {
+    if (isCreate) {
+      validatedStatus = ApplicationPipelineStatus.CV_POOL;
+    } else if (!status || !isApplicationPipelineStatus(status)) {
       setStatusError("Pipeline status is required.");
+      valid = false;
+    } else if (!allowedStatuses.includes(status)) {
+      setStatusError("Invalid application status transition.");
       valid = false;
     } else {
       validatedStatus = status;
@@ -269,46 +286,74 @@ export default function ApplicationForm({
           Status
         </label>
 
-        <select
-          id="application-status"
-          value={status}
-          onChange={(event) => {
-            const nextStatus = event.target.value;
-            setStatus(
-              isApplicationPipelineStatus(nextStatus) ? nextStatus : "",
-            );
-          }}
-          className="
-            mt-2
-            w-full
-            rounded-lg
-            border
-            border-zinc-300
-            bg-white
-            px-4
-            py-3
-            text-black
-            outline-none
-            transition
-            focus:border-black
-          "
-        >
-          <option value="">Select pipeline status</option>
-          {APPLICATION_PIPELINE_STATUS_OPTIONS.filter((option) => {
-            if (
-              option.value === ApplicationPipelineStatus.HIRED ||
-              option.value === ApplicationPipelineStatus.SELECTED
-            ) {
-              return initialValues?.status === option.value;
-            }
-            return true;
-          }).map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        {isCreate || isStatusLocked ? (
+          <input
+            id="application-status"
+            value={getApplicationPipelineStatusLabel(
+              isCreate
+                ? ApplicationPipelineStatus.CV_POOL
+                : (initialValues?.status ?? ApplicationPipelineStatus.CV_POOL),
+            )}
+            readOnly
+            disabled
+            className="
+              mt-2
+              w-full
+              rounded-lg
+              border
+              border-zinc-300
+              bg-zinc-100
+              px-4
+              py-3
+              text-black
+              outline-none
+            "
+          />
+        ) : (
+          <select
+            id="application-status"
+            value={status}
+            onChange={(event) => {
+              const nextStatus = event.target.value;
+              setStatus(
+                isApplicationPipelineStatus(nextStatus) ? nextStatus : "",
+              );
+            }}
+            className="
+              mt-2
+              w-full
+              rounded-lg
+              border
+              border-zinc-300
+              bg-white
+              px-4
+              py-3
+              text-black
+              outline-none
+              transition
+              focus:border-black
+            "
+          >
+            {APPLICATION_PIPELINE_STATUS_OPTIONS.filter((option) =>
+              allowedStatuses.includes(option.value),
+            ).map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        )}
 
+        {isCreate ? (
+          <p className="mt-2 text-sm text-zinc-600">
+            New applications start in CV Pool.
+          </p>
+        ) : null}
+        {isStatusLocked ? (
+          <p className="mt-2 text-sm text-zinc-600">
+            This pipeline status cannot be changed from Admin application CRUD.
+          </p>
+        ) : null}
         {statusError && (
           <p className="mt-2 text-sm text-red-600">{statusError}</p>
         )}
@@ -449,6 +494,7 @@ export default function ApplicationForm({
 
         <button
           type="submit"
+          disabled={isStatusLocked}
           className="
             rounded-lg
             bg-black
@@ -458,6 +504,8 @@ export default function ApplicationForm({
             text-white
             transition
             hover:bg-zinc-800
+            disabled:cursor-not-allowed
+            disabled:bg-zinc-400
           "
         >
           {initialValues ? "Save Changes" : "Create Application"}

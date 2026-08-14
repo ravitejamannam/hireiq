@@ -6,7 +6,7 @@ import type { NotificationType } from "@prisma/client";
  * T69 adds database-ready email delivery results.
  * T70 adds client shortlist-ready email delivery results.
  * T71 reads existing Notification rows as communication history.
- * Read/unread and email-delivery persistence are not implemented.
+ * T76 persists successful email delivery on Notification.emailDeliveredAt.
  */
 
 export type CommunicationRecipient = {
@@ -43,6 +43,7 @@ export type EmailDeliveryResult =
       attempted: false;
       reason:
         | "already-notified"
+        | "already-delivered"
         | "no-requirement-ready-notification"
         | "no-database-ready-notification"
         | "no-shortlist-ready-notification";

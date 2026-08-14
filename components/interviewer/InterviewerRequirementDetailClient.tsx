@@ -19,6 +19,7 @@ import {
   getClientSourceLabel,
 } from "@/components/client/client-labels";
 import { completeJobShortlisting } from "@/app/actions/job-actions";
+import { describeUnsentCommunicationEmail } from "@/lib/communication/email-follow-up";
 import InterviewerShortlistActions from "@/components/interviewer/InterviewerShortlistActions";
 
 type InterviewerCandidate = {
@@ -96,6 +97,7 @@ export default function InterviewerRequirementDetailClient({
     requirement.shortlistingCompletedAt,
   );
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const availableStatuses = useMemo(() => {
     const present = new Set(candidates.map((candidate) => candidate.status));
@@ -143,11 +145,14 @@ export default function InterviewerRequirementDetailClient({
 
   async function handleCompleteShortlisting() {
     setActionError(null);
+    setActionNotice(null);
     setIsCompletingShortlist(true);
 
     try {
-      const updated = await completeJobShortlisting(requirement.id);
-      setShortlistingCompletedAt(updated.shortlistingCompletedAt);
+      const result = await completeJobShortlisting(requirement.id);
+      setShortlistingCompletedAt(result.job.shortlistingCompletedAt);
+      const notice = describeUnsentCommunicationEmail(result.email, "T70");
+      if (notice) setActionNotice(notice);
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -210,6 +215,9 @@ export default function InterviewerRequirementDetailClient({
             ) : null}
             {actionError ? (
               <p className="mt-2 text-sm text-red-700">{actionError}</p>
+            ) : null}
+            {actionNotice ? (
+              <p className="mt-2 text-sm text-amber-800">{actionNotice}</p>
             ) : null}
           </div>
         ) : null}

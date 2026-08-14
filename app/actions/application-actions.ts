@@ -9,8 +9,15 @@ import {
 import { generateBillingForHiredApplication } from "@/lib/billing/generate-hire-billing";
 import { prisma } from "@/lib/prisma";
 import {
+  CLIENT_HIRING_REQUIREMENT_LIFECYCLES,
+  getValidInterviewerPipelineTransitions,
+} from "@/lib/validation/application-pipeline";
+import {
   assertApplicationIsInExpertReview,
-  assertAdminCannotTakeClientHiringDecision,
+  assertAdminPipelineTransition,
+  assertApplicationCreatedAtCvPool,
+  assertJobAllowsClientHire,
+  assertJobAllowsClientSelection,
   assertJobAllowsSourcingIntake,
   ensureApplicationExists,
   validateApplicationId,
@@ -24,10 +31,6 @@ import {
   ApplicationTenantIntegrityError,
   type SourcedCandidateInput,
 } from "@/lib/validation/application-validation";
-import {
-  getValidAdminPipelineTransitions,
-  getValidInterviewerPipelineTransitions,
-} from "@/lib/validation/application-pipeline";
 import { BillingValidationError } from "@/lib/validation/billing-validation";
 import { revalidatePath } from "next/cache";
 import {
@@ -46,21 +49,15 @@ export async function createApplication(
   rejectionReason: string | null = null,
 ) {
   await requireAdmin();
+  const createStatus = assertApplicationCreatedAtCvPool(status);
   const applicationInput = await validateApplicationInput(
     candidateId,
     jobId,
-    status,
+    createStatus,
     source,
     expertScore,
     rejectionReason,
   );
-
-  if (
-    applicationInput.status === ApplicationPipelineStatus.HIRED ||
-    applicationInput.status === ApplicationPipelineStatus.SELECTED
-  ) {
-    assertAdminCannotTakeClientHiringDecision(applicationInput.status);
-  }
 
   try {
     const application = await prisma.application.create({
@@ -106,9 +103,9 @@ export async function updateApplication(
     rejectionReason,
   );
 
-  assertAdminCannotTakeClientHiringDecision(
-    applicationInput.status,
+  assertAdminPipelineTransition(
     existingApplication.status,
+    applicationInput.status,
   );
 
   try {
@@ -144,14 +141,6 @@ export async function deleteApplication(id: number) {
     throw translateApplicationDeleteError(error);
   }
 }
-
-function getValidApplicationStatusTransitions(
-  currentStatus: ApplicationPipelineStatus,
-) {
-  return getValidAdminPipelineTransitions(currentStatus);
-}
-
-// T67–T71 hiring ownership: [ApplicationPipelineStatus.SELECTED]: [],
 
 function isApplicationPipelineStatus(
   status: unknown,
@@ -419,28 +408,8 @@ export async function transitionApplicationStatus(
     throw new Error("Application not found.");
   }
 
-  if (
-    application.status === ApplicationPipelineStatus.SELECTED &&
-    nextStatus === ApplicationPipelineStatus.HIRED
-  ) {
-    throw new ApplicationValidationError(
-      "Hiring must be confirmed by the client who owns this requirement.",
-    );
-  }
-
-  if (nextStatus === ApplicationPipelineStatus.SELECTED) {
-    throw new ApplicationValidationError(
-      "Selection must be confirmed by the client who owns this requirement.",
-    );
-  }
-
-  const allowedTransitions = getValidApplicationStatusTransitions(
-    application.status,
-  );
-
-  if (!allowedTransitions.includes(nextStatus)) {
-    throw new Error("Invalid application status transition.");
-  }
+  assertAdminPipelineTransition(application.status, nextStatus);
+  // Admin pipeline ownership: [ApplicationPipelineStatus.SELECTED]: [],
 
   let updatedApplication;
 
@@ -617,6 +586,11 @@ export async function selectClientCandidate(applicationId: number) {
       status: true,
       jobId: true,
       companyId: true,
+      job: {
+        select: {
+          requirementLifecycle: true,
+        },
+      },
     },
   });
 
@@ -630,6 +604,8 @@ export async function selectClientCandidate(applicationId: number) {
     );
   }
 
+  assertJobAllowsClientSelection(application.job.requirementLifecycle);
+
   let updatedApplication;
 
   try {
@@ -642,6 +618,9 @@ export async function selectClientCandidate(applicationId: number) {
           companyId: client.companyId,
           job: {
             companyId: client.companyId,
+            requirementLifecycle: {
+              in: CLIENT_HIRING_REQUIREMENT_LIFECYCLES,
+            },
           },
         },
         data: {
@@ -710,6 +689,11 @@ export async function confirmClientCandidateHire(applicationId: number) {
       status: true,
       jobId: true,
       companyId: true,
+      job: {
+        select: {
+          requirementLifecycle: true,
+        },
+      },
     },
   });
 
@@ -723,6 +707,8 @@ export async function confirmClientCandidateHire(applicationId: number) {
     );
   }
 
+  assertJobAllowsClientHire(application.job.requirementLifecycle);
+
   let updatedApplication;
 
   try {
@@ -734,6 +720,9 @@ export async function confirmClientCandidateHire(applicationId: number) {
           companyId: client.companyId,
           job: {
             companyId: client.companyId,
+            requirementLifecycle: {
+              in: CLIENT_HIRING_REQUIREMENT_LIFECYCLES,
+            },
           },
         },
         data: {

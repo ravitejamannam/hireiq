@@ -10,6 +10,7 @@ import type {
   SourcingDatabaseSource,
 } from "@prisma/client";
 import type { Company } from "@/types/company";
+import { formatJobDateTime } from "@/components/jobs/JobCard";
 
 type AssignedInterviewerSummary = {
   id: number;
@@ -76,18 +77,18 @@ export type JobFormData = {
     jobDescription: string | null;
     evaluationCriteria: string | null;
     primarySkills: string | null;
-    clientCompletedAt: Date | null;
     sourcingDatabaseSource: SourcingDatabaseSource | null;
     sourcingAccessDetails: string | null;
-    sourcingAccessReceivedAt: Date | null;
-    shortlistingDueAt: Date | null;
-    shortlistingCompletedAt: Date | null;
   };
 };
 
 type JobFormInitialValues = Omit<JobFormData, "requirementFields"> &
   JobFormData["requirementFields"] & {
     requirementLifecycle: RequirementLifecycle;
+    clientCompletedAt: Date | null;
+    sourcingAccessReceivedAt: Date | null;
+    shortlistingDueAt: Date | null;
+    shortlistingCompletedAt: Date | null;
   };
 
 type JobFormProps = {
@@ -121,21 +122,6 @@ function formatDateInputValue(value: Date | string | null | undefined) {
   return `${year}-${month}-${day}`;
 }
 
-function formatDateTimeLocalValue(value: Date | string | null | undefined) {
-  if (!value) return "";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
 function normalizeOptionalString(value: string) {
   return value.trim() || null;
 }
@@ -144,8 +130,24 @@ function parseOptionalDate(value: string) {
   return value ? new Date(`${value}T00:00`) : null;
 }
 
-function parseOptionalDateTime(value: string) {
-  return value ? new Date(value) : null;
+function WorkflowTimestampDisplay({
+  label,
+  value,
+}: {
+  label: string;
+  value: Date | string | null | undefined;
+}) {
+  return (
+    <div>
+      <span className="block text-sm font-medium text-black">{label}</span>
+      <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium text-zinc-700">
+        {value ? formatJobDateTime(new Date(value)) : "Not recorded"}
+      </div>
+      <p className="mt-2 text-xs text-zinc-500">
+        Set only by the dedicated workflow action.
+      </p>
+    </div>
+  );
 }
 
 function FieldError({ message }: { message: string }) {
@@ -211,23 +213,11 @@ export default function JobForm({
   );
   const currentRequirementLifecycle =
     initialValues?.requirementLifecycle ?? "REQUIREMENT_DRAFTED";
-  const [clientCompletedAt, setClientCompletedAt] = useState(
-    formatDateTimeLocalValue(initialValues?.clientCompletedAt),
-  );
   const [sourcingDatabaseSource, setSourcingDatabaseSource] = useState<
     SourcingDatabaseSource | ""
   >(initialValues?.sourcingDatabaseSource ?? "");
   const [sourcingAccessDetails, setSourcingAccessDetails] = useState(
     initialValues?.sourcingAccessDetails ?? "",
-  );
-  const [sourcingAccessReceivedAt, setSourcingAccessReceivedAt] = useState(
-    formatDateTimeLocalValue(initialValues?.sourcingAccessReceivedAt),
-  );
-  const [shortlistingDueAt, setShortlistingDueAt] = useState(
-    formatDateTimeLocalValue(initialValues?.shortlistingDueAt),
-  );
-  const [shortlistingCompletedAt, setShortlistingCompletedAt] = useState(
-    formatDateTimeLocalValue(initialValues?.shortlistingCompletedAt),
   );
 
   const [titleError, setTitleError] = useState("");
@@ -291,16 +281,8 @@ export default function JobForm({
         jobDescription: normalizeOptionalString(jobDescription),
         evaluationCriteria: normalizeOptionalString(evaluationCriteria),
         primarySkills: normalizeOptionalString(primarySkills),
-        clientCompletedAt: parseOptionalDateTime(clientCompletedAt),
         sourcingDatabaseSource: sourcingDatabaseSource || null,
         sourcingAccessDetails: normalizeOptionalString(sourcingAccessDetails),
-        sourcingAccessReceivedAt: parseOptionalDateTime(
-          sourcingAccessReceivedAt,
-        ),
-        shortlistingDueAt: parseOptionalDateTime(shortlistingDueAt),
-        shortlistingCompletedAt: parseOptionalDateTime(
-          shortlistingCompletedAt,
-        ),
       },
     });
   }
@@ -616,21 +598,17 @@ export default function JobForm({
           </div>
 
           <div>
-            <label
-              htmlFor="job-sourcing-access-received-at"
-              className="block text-sm font-medium text-black"
-            >
-              Access Received Date & Time
-            </label>
-            <input
-              id="job-sourcing-access-received-at"
-              type="datetime-local"
-              value={sourcingAccessReceivedAt}
-              onChange={(event) =>
-                setSourcingAccessReceivedAt(event.target.value)
-              }
-              className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-black outline-none transition focus:border-black"
-            />
+            <span className="block text-sm font-medium text-black">
+              Access Received
+            </span>
+            <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium text-zinc-700">
+              {initialValues?.sourcingAccessReceivedAt
+                ? formatJobDateTime(new Date(initialValues.sourcingAccessReceivedAt))
+                : "Not recorded"}
+            </div>
+            <p className="mt-2 text-xs text-zinc-500">
+              Recorded by Mark Database Access Received.
+            </p>
           </div>
 
           <div className="md:col-span-2">
@@ -798,55 +776,20 @@ export default function JobForm({
             )}
           </div>
 
-          <div>
-            <label
-              htmlFor="job-client-completed-at"
-              className="block text-sm font-medium text-black"
-            >
-              Client Completed Date & Time
-            </label>
-            <input
-              id="job-client-completed-at"
-              type="datetime-local"
-              value={clientCompletedAt}
-              onChange={(event) => setClientCompletedAt(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-black outline-none transition focus:border-black"
-            />
-          </div>
+          <WorkflowTimestampDisplay
+            label="Client Completed Date & Time"
+            value={initialValues?.clientCompletedAt}
+          />
 
-          <div>
-            <label
-              htmlFor="job-shortlisting-due-at"
-              className="block text-sm font-medium text-black"
-            >
-              Shortlisting Due Date & Time
-            </label>
-            <input
-              id="job-shortlisting-due-at"
-              type="datetime-local"
-              value={shortlistingDueAt}
-              onChange={(event) => setShortlistingDueAt(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-black outline-none transition focus:border-black"
-            />
-          </div>
+          <WorkflowTimestampDisplay
+            label="Shortlisting Due Date & Time"
+            value={initialValues?.shortlistingDueAt}
+          />
 
-          <div>
-            <label
-              htmlFor="job-shortlisting-completed-at"
-              className="block text-sm font-medium text-black"
-            >
-              Shortlisting Completed Date & Time
-            </label>
-            <input
-              id="job-shortlisting-completed-at"
-              type="datetime-local"
-              value={shortlistingCompletedAt}
-              onChange={(event) =>
-                setShortlistingCompletedAt(event.target.value)
-              }
-              className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-black outline-none transition focus:border-black"
-            />
-          </div>
+          <WorkflowTimestampDisplay
+            label="Shortlisting Completed Date & Time"
+            value={initialValues?.shortlistingCompletedAt}
+          />
         </div>
       </section>
 

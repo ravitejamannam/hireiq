@@ -391,6 +391,12 @@ export function notificationScopeWhere(
   throw new AuthorizationError();
 }
 
+export function assertCanRetryNotificationEmail(user: AuthUser) {
+  if (user.role !== PortalRole.ADMIN) {
+    throw new AuthorizationError("Resource not found.");
+  }
+}
+
 export function interviewerScopeWhere(
   user: AuthUser,
 ): Prisma.InterviewerWhereInput | null {

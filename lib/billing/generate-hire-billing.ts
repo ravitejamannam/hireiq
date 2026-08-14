@@ -2,8 +2,13 @@ import type { Prisma } from "@prisma/client";
 import {
   ApplicationPipelineStatus,
   Prisma as PrismaNamespace,
+  RequirementLifecycle,
 } from "@prisma/client";
 
+import {
+  CLIENT_HIRING_REQUIREMENT_LIFECYCLES,
+  jobAllowsClientHiringAction,
+} from "@/lib/validation/application-pipeline";
 import { BillingValidationError } from "@/lib/validation/billing-validation";
 
 type Tx = Prisma.TransactionClient;
@@ -54,6 +59,12 @@ export async function generateBillingForHiredApplication(
   if (application.companyId !== application.job.companyId) {
     throw new BillingValidationError(
       "Billing company does not match the requirement company.",
+    );
+  }
+
+  if (!jobAllowsClientHiringAction(application.job.requirementLifecycle)) {
+    throw new BillingValidationError(
+      "Billing can only be generated after sourcing and shortlisting.",
     );
   }
 
@@ -155,15 +166,25 @@ export async function generateBillingForHiredApplication(
   });
 
   // Lifecycle advances only after billing succeeds (same transaction).
-  await tx.job.updateMany({
+  // Cannot plant BILLING_GENERATED from a pre-sourcing requirement state.
+  const lifecycleUpdate = await tx.job.updateMany({
     where: {
       id: application.jobId,
       companyId: application.companyId,
+      requirementLifecycle: {
+        in: CLIENT_HIRING_REQUIREMENT_LIFECYCLES,
+      },
     },
     data: {
-      requirementLifecycle: "BILLING_GENERATED",
+      requirementLifecycle: RequirementLifecycle.BILLING_GENERATED,
     },
   });
+
+  if (lifecycleUpdate.count !== 1) {
+    throw new BillingValidationError(
+      "Billing can only be generated after sourcing and shortlisting.",
+    );
+  }
 
   return {
     billingRecord,

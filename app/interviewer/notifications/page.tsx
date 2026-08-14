@@ -17,7 +17,7 @@ export default async function InterviewerNotificationsPage() {
         </h1>
         <p className="mt-2 text-zinc-600">
           Requirement-ready and database-ready communications assigned to you.
-          Email delivery status is not stored.
+          Email delivery is recorded when the message is sent.
         </p>
       </div>
 

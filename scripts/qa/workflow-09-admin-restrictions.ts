@@ -83,8 +83,23 @@ export async function runWorkflow09() {
     "Admin UI copy does not offer Select",
   );
   assertIncludes(
+    applicationActions,
+    "assertApplicationCreatedAtCvPool",
+    "generic createApplication is gated by CV_POOL create rule",
+  );
+  assertIncludes(
+    applicationActions,
+    "assertAdminPipelineTransition",
+    "generic updateApplication uses the same Admin pipeline as transitionApplicationStatus",
+  );
+  assertIncludes(
     applicationForm,
-    "option.value === ApplicationPipelineStatus.SELECTED",
-    "Admin application form hides SELECTED unless already SELECTED",
+    "getAdminApplicationFormStatuses",
+    "Admin application form derives statuses from Admin pipeline map",
+  );
+  assertIncludes(
+    applicationForm,
+    "getValidAdminPipelineTransitions",
+    "Admin application form locks terminal and Client-owned statuses",
   );
 }

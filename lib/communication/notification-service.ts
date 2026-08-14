@@ -21,7 +21,7 @@ type NotificationDb = {
   interviewer: Pick<typeof prisma.interviewer, "findUnique">;
   notification: Pick<
     typeof prisma.notification,
-    "findUnique" | "create"
+    "findUnique" | "findFirst" | "create" | "update"
   >;
   user: Pick<typeof prisma.user, "findFirst">;
 };
@@ -226,10 +226,33 @@ export async function dispatchInAppNotification(
   }
 }
 
+const RETRYABLE_NOTIFICATION_TYPES = [
+  "INTERVIEWER_REQUIREMENT_READY",
+  "INTERVIEWER_DATABASE_READY",
+  "CLIENT_SHORTLIST_READY",
+] as const;
+
+async function persistSuccessfulEmailDelivery(
+  notificationId: number,
+  email: EmailDeliveryResult,
+) {
+  if (!email.attempted || !email.sent) {
+    return email;
+  }
+
+  await prisma.notification.update({
+    where: { id: notificationId },
+    data: { emailDeliveredAt: new Date() },
+  });
+
+  return email;
+}
+
 /**
  * Send the T68 requirement-ready email only when a new in-app
- * notification was created. Duplicate in-app rows skip email.
+ * notification was created. Duplicate in-app rows skip this first-path send.
  * Delivery happens after the DB transaction commits.
+ * Unsent first-path email is retried via retryNotificationEmail().
  */
 export async function finalizeRequirementReadyCommunication(
   inApp: DispatchInAppNotificationResult,
@@ -248,7 +271,10 @@ export async function finalizeRequirementReadyCommunication(
     };
   }
 
-  return deliverRequirementReadyEmail(inApp.notification.jobId);
+  return persistSuccessfulEmailDelivery(
+    inApp.notification.id,
+    await deliverRequirementReadyEmail(inApp.notification.jobId),
+  );
 }
 
 /**
@@ -272,7 +298,10 @@ export async function finalizeDatabaseReadyCommunication(
     };
   }
 
-  return deliverDatabaseReadyEmail(inApp.notification.jobId);
+  return persistSuccessfulEmailDelivery(
+    inApp.notification.id,
+    await deliverDatabaseReadyEmail(inApp.notification.jobId),
+  );
 }
 
 const notificationRecordSelect = {
@@ -427,5 +456,60 @@ export async function finalizeShortlistReadyCommunication(
     };
   }
 
-  return deliverShortlistReadyEmail(inApp.notification.jobId);
+  return persistSuccessfulEmailDelivery(
+    inApp.notification.id,
+    await deliverShortlistReadyEmail(inApp.notification.jobId),
+  );
+}
+
+function isRetryableNotificationType(
+  type: string,
+): type is (typeof RETRYABLE_NOTIFICATION_TYPES)[number] {
+  return RETRYABLE_NOTIFICATION_TYPES.some((retryable) => retryable === type);
+}
+
+/**
+ * Retry outbound email for an existing T68/T69/T70 Notification.
+ * Does not create another Notification or change workflow state.
+ * Recipient is resolved from the Job, never from caller input.
+ */
+export async function retryNotificationEmail(
+  notificationId: number,
+): Promise<EmailDeliveryResult> {
+  const notification = await prisma.notification.findUnique({
+    where: { id: notificationId },
+    select: {
+      id: true,
+      type: true,
+      jobId: true,
+      emailDeliveredAt: true,
+    },
+  });
+
+  if (!notification) {
+    throw new NotificationValidationError("Notification not found.");
+  }
+
+  if (!isRetryableNotificationType(notification.type)) {
+    throw new NotificationValidationError("Notification type is invalid.");
+  }
+
+  if (notification.emailDeliveredAt) {
+    return {
+      attempted: false,
+      reason: "already-delivered",
+    };
+  }
+
+  let email: EmailDeliveryResult;
+
+  if (notification.type === "INTERVIEWER_REQUIREMENT_READY") {
+    email = await deliverRequirementReadyEmail(notification.jobId);
+  } else if (notification.type === "INTERVIEWER_DATABASE_READY") {
+    email = await deliverDatabaseReadyEmail(notification.jobId);
+  } else {
+    email = await deliverShortlistReadyEmail(notification.jobId);
+  }
+
+  return persistSuccessfulEmailDelivery(notification.id, email);
 }

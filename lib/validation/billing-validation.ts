@@ -1,4 +1,4 @@
-import { BillingStatus } from "@prisma/client";
+import { ApplicationPipelineStatus, BillingStatus } from "@prisma/client";
 
 import { ALLOWED_BILLING_STATUS_TRANSITIONS } from "@/lib/billing/constants";
 import { prisma } from "@/lib/prisma";
@@ -69,4 +69,45 @@ export async function ensureJobExistsForBilling(jobId: number) {
   }
 
   return job;
+}
+
+/**
+ * Manual Admin billing create is not a hire workflow.
+ * It must not plant a BillingRecord unless the Job already has a HIRED application.
+ */
+export async function assertJobHasHiredApplicationForBilling(jobId: number) {
+  const hiredCount = await prisma.application.count({
+    where: {
+      jobId,
+      status: ApplicationPipelineStatus.HIRED,
+    },
+  });
+
+  if (hiredCount < 1) {
+    throw new BillingValidationError(
+      "Billing can only be created for requirements with a hired candidate.",
+    );
+  }
+}
+
+/**
+ * Manual Admin billing create must not add a second active record
+ * after the hire path already created one.
+ */
+export async function assertJobHasNoActiveBillingRecord(jobId: number) {
+  const existing = await prisma.billingRecord.findFirst({
+    where: {
+      jobId,
+      status: {
+        not: "CANCELLED",
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (existing) {
+    throw new BillingValidationError("Billing record already exists.");
+  }
 }

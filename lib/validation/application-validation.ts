@@ -1,9 +1,14 @@
 import {
   ApplicationPipelineStatus,
+  RequirementLifecycle,
   SourcingDatabaseSource,
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import {
+  getValidAdminPipelineTransitions,
+  jobAllowsClientHiringAction,
+} from "@/lib/validation/application-pipeline";
 
 export class ApplicationValidationError extends Error {
   constructor(message: string) {
@@ -38,6 +43,74 @@ export function assertAdminCannotTakeClientHiringDecision(
   ) {
     throw new ApplicationValidationError(
       "Selection must be confirmed by the client who owns this requirement.",
+    );
+  }
+}
+
+/**
+ * Generic Admin createApplication may only start in CV_POOL.
+ */
+export function assertApplicationCreatedAtCvPool(status: unknown) {
+  if (status === undefined || status === null) {
+    return ApplicationPipelineStatus.CV_POOL;
+  }
+
+  const validatedStatus = validateApplicationPipelineStatus(status);
+
+  if (validatedStatus !== ApplicationPipelineStatus.CV_POOL) {
+    throw new ApplicationValidationError(
+      "Applications can only be created in CV Pool.",
+    );
+  }
+
+  return ApplicationPipelineStatus.CV_POOL;
+}
+
+/**
+ * Authoritative Admin pipeline for both transitionApplicationStatus
+ * and generic updateApplication. Same-status is not a transition.
+ */
+export function assertAdminPipelineTransition(
+  currentStatus: ApplicationPipelineStatus,
+  nextStatus: ApplicationPipelineStatus,
+) {
+  if (currentStatus === nextStatus) {
+    return nextStatus;
+  }
+
+  assertAdminCannotTakeClientHiringDecision(nextStatus, currentStatus);
+
+  const allowed = getValidAdminPipelineTransitions(currentStatus);
+
+  if (!allowed.includes(nextStatus)) {
+    throw new ApplicationValidationError(
+      "Invalid application status transition.",
+    );
+  }
+
+  return nextStatus;
+}
+
+/**
+ * Client SELECT / CONFIRM HIRE cannot skip the requirement lifecycle
+ * into BILLING_GENERATED from a pre-sourcing state.
+ */
+export function assertJobAllowsClientSelection(
+  requirementLifecycle: RequirementLifecycle,
+) {
+  if (!jobAllowsClientHiringAction(requirementLifecycle)) {
+    throw new ApplicationValidationError(
+      "Candidate can only be selected after sourcing and shortlisting has started.",
+    );
+  }
+}
+
+export function assertJobAllowsClientHire(
+  requirementLifecycle: RequirementLifecycle,
+) {
+  if (!jobAllowsClientHiringAction(requirementLifecycle)) {
+    throw new ApplicationValidationError(
+      "Hire can only be confirmed after sourcing and shortlisting has started.",
     );
   }
 }

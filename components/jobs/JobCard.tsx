@@ -7,6 +7,7 @@ import type {
   RoleCategory,
   SourcingDatabaseSource,
 } from "@prisma/client";
+import { isInterviewerAssignmentLocked } from "@/lib/jobs/interviewer-assignment-lock";
 
 type InterviewerOption = {
   id: number;
@@ -210,6 +211,7 @@ export default function JobCard({
     requirementLifecycle === "SOURCING_SHORTLISTING" &&
     Boolean(sourcingAccessReceivedAt) &&
     !shortlistingCompletedAt;
+  const assignmentLocked = isInterviewerAssignmentLocked(requirementLifecycle);
 
   return (
     <article className="rounded-xl border border-zinc-200 bg-white p-6 transition hover:border-black">
@@ -330,6 +332,11 @@ export default function JobCard({
         <p className="mt-1 text-sm text-zinc-600">
           {assignedInterviewer ? assignedInterviewer.name : "Not assigned"}
         </p>
+        {assignmentLocked ? (
+          <p className="mt-2 text-sm text-zinc-600">
+            Interviewer assignment is locked after interviewer notification.
+          </p>
+        ) : null}
         <select
           id={`job-${id}-interviewer`}
           value={assignedInterviewerId?.toString() ?? ""}
@@ -339,7 +346,7 @@ export default function JobCard({
               event.target.value ? Number(event.target.value) : null,
             )
           }
-          disabled={isAssigning}
+          disabled={isAssigning || assignmentLocked}
           className="mt-3 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-black disabled:cursor-not-allowed disabled:bg-zinc-100"
         >
           <option value="">Not assigned</option>

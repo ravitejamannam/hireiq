@@ -1,4 +1,7 @@
-import { ApplicationPipelineStatus } from "@prisma/client";
+import {
+  ApplicationPipelineStatus,
+  RequirementLifecycle,
+} from "@prisma/client";
 
 /**
  * Admin operational pipeline. SELECTED and HIRED are Client-owned.
@@ -57,4 +60,31 @@ export function getValidInterviewerPipelineTransitions(
   currentStatus: ApplicationPipelineStatus,
 ) {
   return INTERVIEWER_PIPELINE_TRANSITIONS[currentStatus] ?? [];
+}
+
+export function getAdminApplicationFormStatuses(
+  currentStatus: ApplicationPipelineStatus | null,
+) {
+  if (currentStatus === null) {
+    return [ApplicationPipelineStatus.CV_POOL];
+  }
+
+  const allowedNext = getValidAdminPipelineTransitions(currentStatus);
+  return [currentStatus, ...allowedNext];
+}
+
+/**
+ * Client SELECT / HIRE (and hire billing) may run during sourcing
+ * or after the first hire has already marked BILLING_GENERATED.
+ * T70 shortlistingCompletedAt is a communication handoff, not a hiring gate.
+ */
+export const CLIENT_HIRING_REQUIREMENT_LIFECYCLES: RequirementLifecycle[] = [
+  RequirementLifecycle.SOURCING_SHORTLISTING,
+  RequirementLifecycle.BILLING_GENERATED,
+];
+
+export function jobAllowsClientHiringAction(
+  requirementLifecycle: RequirementLifecycle,
+) {
+  return CLIENT_HIRING_REQUIREMENT_LIFECYCLES.includes(requirementLifecycle);
 }

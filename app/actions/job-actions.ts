@@ -22,8 +22,9 @@ import {
   assertSourcingAccessCanBeRecorded,
   assertShortlistingCanBeCompleted,
   validateJobRequirementCompletion,
-  type JobRequirementInput,
+  type GenericJobRequirementInput,
   JobValidationError,
+  assertInterviewerAssignmentNotLocked,
 } from "@/lib/validation/job-validation";
 import {
   dispatchInAppNotification,
@@ -71,7 +72,7 @@ export async function createJob(
   title: string,
   status: JobStatus,
   companyId: number,
-  requirementFields: JobRequirementInput = {},
+  requirementFields: GenericJobRequirementInput = {},
 ) {
   await requireAdmin();
   const validatedJob = await validateJobInput(
@@ -99,7 +100,7 @@ export async function updateJob(
   title: string,
   status: JobStatus,
   companyId: number,
-  requirementFields: JobRequirementInput = {},
+  requirementFields: GenericJobRequirementInput = {},
 ) {
   await requireAdmin();
   const jobId = validateJobId(id);
@@ -222,11 +223,27 @@ export async function assignInterviewerToJob(
     },
     select: {
       id: true,
+      requirementLifecycle: true,
+      assignedInterviewerId: true,
     },
   });
 
   if (!existingJob) {
     throw new JobValidationError("Job not found.");
+  }
+
+  assertInterviewerAssignmentNotLocked(
+    existingJob.requirementLifecycle,
+    existingJob.assignedInterviewerId,
+    validatedInterviewerId,
+  );
+
+  if (existingJob.assignedInterviewerId === validatedInterviewerId) {
+    return prisma.job.findUniqueOrThrow({
+      where: {
+        id: validatedJobId,
+      },
+    });
   }
 
   if (validatedInterviewerId !== null) {
@@ -378,8 +395,8 @@ export async function updateClientRequirement(
     throw new JobValidationError("Requirement is not editable.");
   }
 
-  // Explicit allow-list — never accept lifecycle, status, sourcing, or SLA fields.
-  const allowedFields: JobRequirementInput = {
+  // Explicit allow-list — never accept lifecycle, status, sourcing timestamps, or SLA.
+  const allowedFields: GenericJobRequirementInput = {
     roleCategory: fields.roleCategory,
     experienceRange: fields.experienceRange,
     location: fields.location,
@@ -549,21 +566,10 @@ export async function notifyAssignedInterviewer(jobId: number) {
 
   const email = await finalizeRequirementReadyCommunication(inAppResult);
 
-  if (email.attempted && !email.sent) {
-    if (email.reason === "missing-recipient-email") {
-      throw new JobValidationError(
-        "Interviewer was notified in-app, but no interviewer login email is configured.",
-      );
-    }
-
-    if (email.reason === "provider-error") {
-      throw new JobValidationError(
-        "Interviewer was notified in-app, but the requirement-ready email could not be sent.",
-      );
-    }
-  }
-
-  return updatedJob;
+  return {
+    job: updatedJob,
+    email,
+  };
 }
 
 export async function markJobSourcingAccessReceived(jobId: number) {
@@ -579,11 +585,14 @@ export async function markJobSourcingAccessReceived(jobId: number) {
   );
 
   if (accessState === "ALREADY_RECORDED") {
-    return prisma.job.findUniqueOrThrow({
-      where: {
-        id: validatedJobId,
-      },
-    });
+    return {
+      job: await prisma.job.findUniqueOrThrow({
+        where: {
+          id: validatedJobId,
+        },
+      }),
+      email: null,
+    };
   }
 
   let committed;
@@ -612,27 +621,24 @@ export async function markJobSourcingAccessReceived(jobId: number) {
 
   if (committed.established) {
     const email = await finalizeDatabaseReadyCommunication(committed.inApp);
-
-    if (email.attempted && !email.sent) {
-      if (email.reason === "missing-recipient-email") {
-        throw new JobValidationError(
-          "Database access was recorded, but no interviewer login email is configured.",
-        );
-      }
-
-      if (email.reason === "provider-error") {
-        throw new JobValidationError(
-          "Database access was recorded, but the database-ready email could not be sent.",
-        );
-      }
-    }
+    return {
+      job: await prisma.job.findUniqueOrThrow({
+        where: {
+          id: validatedJobId,
+        },
+      }),
+      email,
+    };
   }
 
-  return prisma.job.findUniqueOrThrow({
-    where: {
-      id: validatedJobId,
-    },
-  });
+  return {
+    job: await prisma.job.findUniqueOrThrow({
+      where: {
+        id: validatedJobId,
+      },
+    }),
+    email: null,
+  };
 }
 
 export async function completeJobShortlisting(jobId: number) {
@@ -663,11 +669,14 @@ export async function completeJobShortlisting(jobId: number) {
   );
 
   if (completionState === "ALREADY_COMPLETED") {
-    return prisma.job.findUniqueOrThrow({
-      where: {
-        id: validatedJobId,
-      },
-    });
+    return {
+      job: await prisma.job.findUniqueOrThrow({
+        where: {
+          id: validatedJobId,
+        },
+      }),
+      email: null,
+    };
   }
 
   let committed;
@@ -700,25 +709,22 @@ export async function completeJobShortlisting(jobId: number) {
 
   if (committed.established) {
     const email = await finalizeShortlistReadyCommunication(committed.inApp);
-
-    if (email.attempted && !email.sent) {
-      if (email.reason === "missing-recipient-email") {
-        throw new JobValidationError(
-          "Shortlisting was completed, but no client login email is configured.",
-        );
-      }
-
-      if (email.reason === "provider-error") {
-        throw new JobValidationError(
-          "Shortlisting was completed, but the shortlist-ready email could not be sent.",
-        );
-      }
-    }
+    return {
+      job: await prisma.job.findUniqueOrThrow({
+        where: {
+          id: validatedJobId,
+        },
+      }),
+      email,
+    };
   }
 
-  return prisma.job.findUniqueOrThrow({
-    where: {
-      id: validatedJobId,
-    },
-  });
+  return {
+    job: await prisma.job.findUniqueOrThrow({
+      where: {
+        id: validatedJobId,
+      },
+    }),
+    email: null,
+  };
 }

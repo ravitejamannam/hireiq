@@ -16,8 +16,8 @@ export default async function ClientNotificationsPage() {
           Communication history
         </h1>
         <p className="mt-2 text-zinc-600">
-          Shortlist-ready communications for your company. Email delivery status
-          is not stored.
+          Shortlist-ready communications for your company. Email delivery is
+          recorded when the message is sent.
         </p>
       </div>
 

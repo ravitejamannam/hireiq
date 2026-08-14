@@ -11,6 +11,7 @@ const notificationSelect = {
   type: true,
   message: true,
   createdAt: true,
+  emailDeliveredAt: true,
   jobId: true,
   interviewerId: true,
   companyId: true,

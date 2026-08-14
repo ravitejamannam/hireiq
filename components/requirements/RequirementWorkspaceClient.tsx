@@ -16,6 +16,7 @@ import {
 import { transitionApplicationStatus } from "@/app/actions/application-actions";
 import { getAdminHiringMonitorNote } from "@/components/applications/admin-hiring-notes";
 import { getApplicationPipelineStatusLabel } from "@/components/applications/ApplicationForm";
+import { describeUnsentCommunicationEmail } from "@/lib/communication/email-follow-up";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import {
   getFitDecisionLabel,
@@ -36,6 +37,7 @@ import type { getEvaluationsByJobId } from "@/lib/repositories/evaluation-reposi
 import type { getInterviewsByJobId } from "@/lib/repositories/interview-repository";
 import type { getInterviewers } from "@/lib/repositories/interviewer-repository";
 import type { getJobById } from "@/lib/repositories/job-repository";
+import { isInterviewerAssignmentLocked } from "@/lib/jobs/interviewer-assignment-lock";
 import type { RequirementLifecycle } from "@prisma/client";
 
 type Requirement = NonNullable<Awaited<ReturnType<typeof getJobById>>>;
@@ -146,6 +148,7 @@ export default function RequirementWorkspaceClient({
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("overview");
   const [pipelineFilter, setPipelineFilter] = useState<PipelineFilter>("ALL");
   const [actionError, setActionError] = useState("");
+  const [actionNotice, setActionNotice] = useState("");
   const [movingApplicationId, setMovingApplicationId] = useState<number | null>(
     null,
   );
@@ -156,6 +159,9 @@ export default function RequirementWorkspaceClient({
     shortlistingCompletedAt: requirement.shortlistingCompletedAt,
     shortlistingDueAt: requirement.shortlistingDueAt,
   });
+  const assignmentLocked = isInterviewerAssignmentLocked(
+    requirement.requirementLifecycle,
+  );
 
   const stageCounts = useMemo(() => {
     return Object.fromEntries(
@@ -202,12 +208,28 @@ export default function RequirementWorkspaceClient({
     }
   }
 
-  async function runLifecycleAction(action: () => Promise<unknown>) {
+  async function runLifecycleAction(
+    action: () => Promise<unknown>,
+    emailEvent?: "T68" | "T69" | "T70",
+  ) {
     setActionError("");
+    setActionNotice("");
     setIsLifecycleBusy(true);
 
     try {
-      await action();
+      const result = await action();
+      if (
+        emailEvent &&
+        result &&
+        typeof result === "object" &&
+        "email" in result
+      ) {
+        const notice = describeUnsentCommunicationEmail(
+          (result as { email: Parameters<typeof describeUnsentCommunicationEmail>[0] }).email,
+          emailEvent,
+        );
+        if (notice) setActionNotice(notice);
+      }
       router.refresh();
     } catch (error) {
       setActionError(getErrorMessage(error));
@@ -326,6 +348,11 @@ export default function RequirementWorkspaceClient({
           {actionError}
         </p>
       )}
+      {actionNotice && (
+        <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {actionNotice}
+        </p>
+      )}
 
       {activeTab === "overview" && (
         <div className="mt-8 space-y-8">
@@ -418,7 +445,7 @@ export default function RequirementWorkspaceClient({
                 <select
                   id="requirement-interviewer"
                   value={requirement.assignedInterviewerId?.toString() ?? ""}
-                  disabled={isAssigning}
+                  disabled={isAssigning || assignmentLocked}
                   onChange={(event) =>
                     void handleAssignInterviewer(
                       event.target.value ? Number(event.target.value) : null,
@@ -433,6 +460,12 @@ export default function RequirementWorkspaceClient({
                     </option>
                   ))}
                 </select>
+                {assignmentLocked ? (
+                  <p className="mt-2 text-sm text-zinc-600">
+                    Interviewer assignment is locked after interviewer
+                    notification.
+                  </p>
+                ) : null}
               </div>
 
               <div className="flex flex-wrap gap-3">
@@ -475,6 +508,7 @@ export default function RequirementWorkspaceClient({
                       onClick={() =>
                         void runLifecycleAction(() =>
                           notifyAssignedInterviewer(requirement.id),
+                        "T68",
                         )
                       }
                       className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
@@ -490,6 +524,7 @@ export default function RequirementWorkspaceClient({
                       onClick={() =>
                         void runLifecycleAction(() =>
                           markJobSourcingAccessReceived(requirement.id),
+                        "T69",
                         )
                       }
                       className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
@@ -506,6 +541,7 @@ export default function RequirementWorkspaceClient({
                       onClick={() =>
                         void runLifecycleAction(() =>
                           completeJobShortlisting(requirement.id),
+                        "T70",
                         )
                       }
                       className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"

@@ -59,6 +59,12 @@ Never deletes:
 | 10 | Interviewer hiring restriction | Maps + source + `billingScopeWhere` |
 | 11 | Tenant isolation | `jobScopeWhere` / `applicationScopeWhere` / IDOR findFirst both directions |
 | 12 | Notification isolation | `notificationScopeWhere` Admin/Client/Interviewer |
+| 13 | Generic job timestamp bypass | `validateJobInput` rejects SLA timestamps; T69/T70 handoffs still write them |
+| 14 | Generic application CRUD pipeline | `assertApplicationCreatedAtCvPool` + `assertAdminPipelineTransition`; Admin cannot plant/skip/un-hire; Client SELECT/HIRE paths remain |
+| 15 | Billing creation without HIRED | `assertJobHasHiredApplicationForBilling` rejects CV_POOL/SHORTLISTED/SELECTED; V1QA HIRED billing remains; generator idempotent; W08 re-run |
+| 16 | Interviewer reassignment freeze | Assignment locked after `INTERVIEWER_NOTIFIED`; T68/T69 stay on Alpha; pre-notify Alpha→Beta still allowed |
+| 17 | Email retry after commit | T68/T69/T70 remain committed on email failure; `retryNotificationEmail` resends without a second Notification |
+| 18 | Hiring / lifecycle / billing | Client SELECT/HIRE require `SOURCING_SHORTLISTING` or `BILLING_GENERATED`; HIRED/REJECTED terminal; one active BillingRecord; T70 is not a hire gate |
 
 ## Auth limitation
 

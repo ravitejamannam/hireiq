@@ -19,6 +19,7 @@ import {
   getClientRecommendationLabel,
   getClientSourceLabel,
 } from "@/components/client/client-labels";
+import { jobAllowsClientHiringAction } from "@/lib/validation/application-pipeline";
 import type { JobStatus, RequirementLifecycle } from "@prisma/client";
 
 type RecommendationFilter =
@@ -457,7 +458,12 @@ export default function ClientShortlistReview({
                       setConfirmingItem(item);
                     },
                     isSelecting: selectingId === item.applicationId,
-                    selectDisabled: isPending || item.status !== "SHORTLISTED",
+                    selectDisabled:
+                      isPending ||
+                      item.status !== "SHORTLISTED" ||
+                      !jobAllowsClientHiringAction(
+                        requirement.requirementLifecycle,
+                      ),
                   }}
                 />
               ))}

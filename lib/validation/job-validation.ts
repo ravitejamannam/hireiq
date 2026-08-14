@@ -6,6 +6,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { isInterviewerAssignmentLocked } from "@/lib/jobs/interviewer-assignment-lock";
 
 export class JobValidationError extends Error {
   constructor(message: string) {
@@ -14,7 +15,30 @@ export class JobValidationError extends Error {
   }
 }
 
-export type JobRequirementInput = {
+/**
+ * Reassignment is allowed until T68. Same-interviewer after lock is
+ * idempotent. A different interviewer (or unassign) is rejected.
+ */
+export function assertInterviewerAssignmentNotLocked(
+  lifecycle: RequirementLifecycle,
+  currentAssignedInterviewerId: number | null,
+  nextAssignedInterviewerId: number | null,
+) {
+  if (!isInterviewerAssignmentLocked(lifecycle)) {
+    return;
+  }
+
+  if (currentAssignedInterviewerId === nextAssignedInterviewerId) {
+    return;
+  }
+
+  throw new JobValidationError(
+    "Interviewer assignment is locked after interviewer notification.",
+  );
+}
+
+/** Ordinary job/requirement fields that generic createJob/updateJob may write. */
+export type GenericJobRequirementInput = {
   roleCategory?: unknown;
   experienceRange?: unknown;
   location?: unknown;
@@ -27,13 +51,28 @@ export type JobRequirementInput = {
   evaluationCriteria?: unknown;
   primarySkills?: unknown;
   requirementLifecycle?: unknown;
-  clientCompletedAt?: unknown;
   sourcingDatabaseSource?: unknown;
   sourcingAccessDetails?: unknown;
-  sourcingAccessReceivedAt?: unknown;
-  shortlistingDueAt?: unknown;
-  shortlistingCompletedAt?: unknown;
 };
+
+/**
+ * Timestamps owned by dedicated workflows. Generic Job CRUD must reject these.
+ * clientCompletedAt → completeJobRequirement
+ * sourcingAccessReceivedAt / shortlistingDueAt → recordSourcingAccessHandoff
+ * shortlistingCompletedAt → recordShortlistCompletionHandoff
+ */
+export const WORKFLOW_OWNED_TIMESTAMP_FIELDS = [
+  "clientCompletedAt",
+  "sourcingAccessReceivedAt",
+  "shortlistingDueAt",
+  "shortlistingCompletedAt",
+] as const;
+
+export type WorkflowOwnedTimestampField =
+  (typeof WORKFLOW_OWNED_TIMESTAMP_FIELDS)[number];
+
+export type JobRequirementInput = GenericJobRequirementInput &
+  Partial<Record<WorkflowOwnedTimestampField, unknown>>;
 
 type JobRequirementData = {
   roleCategory?: RoleCategory | null;
@@ -48,12 +87,8 @@ type JobRequirementData = {
   evaluationCriteria?: string | null;
   primarySkills?: string | null;
   requirementLifecycle?: RequirementLifecycle;
-  clientCompletedAt?: Date | null;
   sourcingDatabaseSource?: SourcingDatabaseSource | null;
   sourcingAccessDetails?: string | null;
-  sourcingAccessReceivedAt?: Date | null;
-  shortlistingDueAt?: Date | null;
-  shortlistingCompletedAt?: Date | null;
 };
 
 type ValidateRequirementFieldsOptions = {
@@ -272,6 +307,8 @@ export function assertSourcingAccessCanBeRecorded(
   requirementLifecycle: RequirementLifecycle,
   sourcingAccessReceivedAt: Date | null,
 ) {
+  // Idempotent for timestamps written by recordSourcingAccessHandoff.
+  // Generic Job CRUD can no longer plant this field (T72-P1-01).
   if (sourcingAccessReceivedAt) {
     return "ALREADY_RECORDED" as const;
   }
@@ -289,6 +326,8 @@ export function assertShortlistingCanBeCompleted(
   shortlistingCompletedAt: Date | null,
   shortlistedCount: number,
 ) {
+  // Idempotent for timestamps written by recordShortlistCompletionHandoff.
+  // Generic Job CRUD can no longer plant this field (T72-P1-01).
   if (shortlistingCompletedAt) {
     return "ALREADY_COMPLETED" as const;
   }
@@ -412,10 +451,24 @@ function hasField(
   return Object.prototype.hasOwnProperty.call(requirementFields, field);
 }
 
+export function assertGenericJobInputRejectsWorkflowTimestamps(
+  requirementFields: object,
+) {
+  for (const field of WORKFLOW_OWNED_TIMESTAMP_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(requirementFields, field)) {
+      throw new JobValidationError(
+        "Workflow timestamps must be recorded through the dedicated workflow.",
+      );
+    }
+  }
+}
+
 function validateRequirementFields(
   requirementFields: JobRequirementInput,
   options: ValidateRequirementFieldsOptions = {},
 ): JobRequirementData {
+  assertGenericJobInputRejectsWorkflowTimestamps(requirementFields);
+
   const requirementData: JobRequirementData = {};
 
   if (hasField(requirementFields, "roleCategory")) {
@@ -519,12 +572,6 @@ function validateRequirementFields(
     requirementData.requirementLifecycle = validatedRequirementLifecycle;
   }
 
-  if (hasField(requirementFields, "clientCompletedAt")) {
-    requirementData.clientCompletedAt = validateOptionalDate(
-      requirementFields.clientCompletedAt,
-    );
-  }
-
   if (hasField(requirementFields, "sourcingDatabaseSource")) {
     requirementData.sourcingDatabaseSource = validateSourcingDatabaseSource(
       requirementFields.sourcingDatabaseSource,
@@ -535,24 +582,6 @@ function validateRequirementFields(
     requirementData.sourcingAccessDetails = validateOptionalString(
       requirementFields.sourcingAccessDetails,
       "Sourcing access details must be a string or null.",
-    );
-  }
-
-  if (hasField(requirementFields, "sourcingAccessReceivedAt")) {
-    requirementData.sourcingAccessReceivedAt = validateOptionalDate(
-      requirementFields.sourcingAccessReceivedAt,
-    );
-  }
-
-  if (hasField(requirementFields, "shortlistingDueAt")) {
-    requirementData.shortlistingDueAt = validateOptionalDate(
-      requirementFields.shortlistingDueAt,
-    );
-  }
-
-  if (hasField(requirementFields, "shortlistingCompletedAt")) {
-    requirementData.shortlistingCompletedAt = validateOptionalDate(
-      requirementFields.shortlistingCompletedAt,
     );
   }
 

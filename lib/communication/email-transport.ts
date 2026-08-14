@@ -29,29 +29,39 @@ export async function sendOutboundEmail(
     return { sent: false, reason: "provider-not-configured" };
   }
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to: [email.to],
-      subject: email.subject,
-      text: email.text,
-      html: email.html,
-    }),
-  });
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [email.to],
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
 
-  if (!response.ok) {
-    const detail = await response.text();
+    if (!response.ok) {
+      const detail = await response.text();
+      return {
+        sent: false,
+        reason: "provider-error",
+        error: `Resend HTTP ${response.status}: ${detail.slice(0, 300)}`,
+      };
+    }
+
+    return { sent: true, provider: "resend" };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
     return {
       sent: false,
       reason: "provider-error",
-      error: `Resend HTTP ${response.status}: ${detail.slice(0, 300)}`,
+      error: detail.slice(0, 300),
     };
   }
-
-  return { sent: true, provider: "resend" };
 }

@@ -21,6 +21,12 @@ import { runWorkflow09 } from "./workflow-09-admin-restrictions";
 import { runWorkflow10 } from "./workflow-10-interviewer-restrictions";
 import { runWorkflow11 } from "./workflow-11-tenant-isolation";
 import { runWorkflow12 } from "./workflow-12-notification-isolation";
+import { runWorkflow13 } from "./workflow-13-job-timestamps";
+import { runWorkflow14 } from "./workflow-14-application-crud";
+import { runWorkflow15 } from "./workflow-15-billing-creation";
+import { runWorkflow16 } from "./workflow-16-interviewer-reassignment";
+import { runWorkflow17 } from "./workflow-17-email-retry";
+import { runWorkflow18 } from "./workflow-18-hiring-lifecycle";
 
 type Spec = {
   id: string;
@@ -114,6 +120,48 @@ const workflows: Spec[] = [
     testType: "notificationScopeWhere",
     notes: "Admin all; Client T70; Interviewer T68/T69",
     run: runWorkflow12,
+  },
+  {
+    id: "13",
+    name: "Generic job timestamp bypass",
+    testType: "validateJobInput + T69/T70 handoffs + source",
+    notes: "create/update Job cannot plant SLA timestamps; dedicated workflows still write them",
+    run: runWorkflow13,
+  },
+  {
+    id: "14",
+    name: "Generic application CRUD pipeline",
+    testType: "create/update validators + source + Client SELECT/HIRE paths",
+    notes: "Admin CRUD cannot plant or skip pipeline; SELECT/HIRE stay Client-owned",
+    run: runWorkflow14,
+  },
+  {
+    id: "15",
+    name: "Billing creation without HIRED",
+    testType: "assertJobHasHiredApplicationForBilling + hire generator + W08",
+    notes: "createBillingRecord cannot plant billing without HIRED; hire path remains idempotent",
+    run: runWorkflow15,
+  },
+  {
+    id: "16",
+    name: "Interviewer reassignment freeze",
+    testType: "assignment lock + T68/T69 recipients + interviewer scope",
+    notes: "Reassignment rejected after T68/T69; pre-notify reassignment still allowed",
+    run: runWorkflow16,
+  },
+  {
+    id: "17",
+    name: "Email retry after commit",
+    testType: "finalize + retryNotificationEmail + delivery persistence",
+    notes: "T68/T69/T70 stay committed on email failure; retry does not duplicate events",
+    run: runWorkflow17,
+  },
+  {
+    id: "18",
+    name: "Hiring / lifecycle / billing consistency",
+    testType: "SELECT/HIRE lifecycle gate + billing uniqueness + terminal states",
+    notes: "Client SELECT/HIRE cannot skip pre-sourcing lifecycle; BILLING_GENERATED only after HIRE; one active BillingRecord",
+    run: runWorkflow18,
   },
 ];
 
