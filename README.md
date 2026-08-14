@@ -20,6 +20,9 @@ Copy `.env.example` to `.env` and set:
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `AUTH_SECRET` | Required secret for signing session tokens (`openssl rand -base64 32`) |
+| `AUTH_URL` | Optional Auth.js public URL |
+| `APP_URL` | Public app URL used in interviewer email links (preferred over `AUTH_URL`) |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Optional Resend delivery for requirement-ready interviewer emails. Leave unset locally to skip real sends. |
 | `ADMIN_EMAIL` / `ADMIN_NAME` / `ADMIN_PASSWORD` | Used only by the admin bootstrap script |
 
 Bootstrap the first Admin user (idempotent; does not run on app startup):

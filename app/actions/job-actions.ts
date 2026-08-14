@@ -24,7 +24,10 @@ import {
   type JobRequirementInput,
   JobValidationError,
 } from "@/lib/validation/job-validation";
-import { dispatchInAppNotification } from "@/lib/communication/notification-service";
+import {
+  dispatchInAppNotification,
+  finalizeRequirementReadyCommunication,
+} from "@/lib/communication/notification-service";
 import { NotificationValidationError } from "@/lib/validation/notification-validation";
 import {
   ensureInterviewerExists,
@@ -464,9 +467,12 @@ export async function notifyAssignedInterviewer(jobId: number) {
   const assignedInterviewerId = existingJob.assignedInterviewerId;
 
   let updatedJob;
+  let inAppResult: Awaited<
+    ReturnType<typeof dispatchInAppNotification>
+  >;
 
   try {
-    updatedJob = await prisma.$transaction(async (tx) => {
+    const committed = await prisma.$transaction(async (tx) => {
       // Lifecycle transition is the concurrency gate.
       const transition = await tx.job.updateMany({
         where: {
@@ -485,7 +491,7 @@ export async function notifyAssignedInterviewer(jobId: number) {
         );
       }
 
-      await dispatchInAppNotification(
+      const notificationResult = await dispatchInAppNotification(
         {
           type: "INTERVIEWER_REQUIREMENT_READY",
           message,
@@ -494,12 +500,17 @@ export async function notifyAssignedInterviewer(jobId: number) {
         tx,
       );
 
-      return tx.job.findUniqueOrThrow({
+      const job = await tx.job.findUniqueOrThrow({
         where: {
           id: existingJob.id,
         },
       });
+
+      return { job, notificationResult };
     });
+
+    updatedJob = committed.job;
+    inAppResult = committed.notificationResult;
   } catch (error) {
     if (error instanceof JobValidationError) {
       throw error;
@@ -527,8 +538,25 @@ export async function notifyAssignedInterviewer(jobId: number) {
   try {
     revalidatePath("/dashboard/jobs");
     revalidatePath("/dashboard/notifications");
+    revalidatePath(`/dashboard/requirements/${existingJob.id}`);
   } catch {
     // revalidatePath requires a Next.js request context
+  }
+
+  const email = await finalizeRequirementReadyCommunication(inAppResult);
+
+  if (email.attempted && !email.sent) {
+    if (email.reason === "missing-recipient-email") {
+      throw new JobValidationError(
+        "Interviewer was notified in-app, but no interviewer login email is configured.",
+      );
+    }
+
+    if (email.reason === "provider-error") {
+      throw new JobValidationError(
+        "Interviewer was notified in-app, but the requirement-ready email could not be sent.",
+      );
+    }
   }
 
   return updatedJob;

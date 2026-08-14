@@ -4,8 +4,10 @@ import { prisma } from "@/lib/prisma";
 import type {
   DispatchInAppNotificationInput,
   DispatchInAppNotificationResult,
+  EmailDeliveryResult,
   InAppNotificationRecord,
 } from "@/lib/communication/communication-types";
+import { deliverRequirementReadyEmail } from "@/lib/communication/requirement-ready-email";
 import {
   NotificationValidationError,
   validateNotificationJobId,
@@ -214,4 +216,22 @@ export async function dispatchInAppNotification(
       email: DEFERRED_EMAIL,
     };
   }
+}
+
+/**
+ * Send the T68 requirement-ready email only when a new in-app
+ * notification was created. Duplicate in-app rows skip email.
+ * Delivery happens after the DB transaction commits.
+ */
+export async function finalizeRequirementReadyCommunication(
+  inApp: DispatchInAppNotificationResult,
+): Promise<EmailDeliveryResult> {
+  if (!inApp.created) {
+    return {
+      attempted: false,
+      reason: "already-notified",
+    };
+  }
+
+  return deliverRequirementReadyEmail(inApp.notification.jobId);
 }
