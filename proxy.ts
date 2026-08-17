@@ -9,5 +9,10 @@ export const config = {
     "/interviewer",
     "/interviewer/:path*",
     "/login",
+    "/signup",
+    "/onboarding",
+    "/onboarding/:path*",
+    "/post-auth",
+    "/verify-email",
   ],
 };

@@ -4,6 +4,12 @@ import type { PortalRole } from "@prisma/client";
 
 import { authConfig } from "@/auth.config";
 import { verifyPassword } from "@/lib/auth/password";
+import {
+  consumeAuthRateLimit,
+  RateLimitError,
+  rateLimitKeyForEmail,
+  rateLimitKeyForIp,
+} from "@/lib/auth/rate-limit";
 import { getUserCredentialsByEmail } from "@/lib/repositories/user-repository";
 import {
   UserValidationError,
@@ -23,11 +29,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         try {
           const { email, password } = validateLoginCredentials({
             email: credentials?.email,
             password: credentials?.password,
+          });
+
+          const ip =
+            request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+            request?.headers?.get("x-real-ip")?.trim() ||
+            "unknown";
+
+          await consumeAuthRateLimit({
+            name: "loginEmail",
+            key: rateLimitKeyForEmail(email),
+          });
+          await consumeAuthRateLimit({
+            name: "loginIp",
+            key: rateLimitKeyForIp(ip),
           });
 
           const user = await getUserCredentialsByEmail(email);
@@ -52,6 +72,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             role: user.role,
           };
         } catch (error) {
+          if (error instanceof RateLimitError) {
+            return null;
+          }
+
           if (error instanceof UserValidationError) {
             return null;
           }

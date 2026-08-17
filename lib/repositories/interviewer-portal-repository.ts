@@ -2,6 +2,10 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 
 import { requireInterviewerPortal } from "@/lib/auth/authorization";
+import {
+  JOB_SPECIFICATION_SCALAR_SELECT,
+  readJobSpecification,
+} from "@/lib/jobs/job-specification";
 
 function interviewerJobSelect(interviewerId: number) {
   return {
@@ -47,6 +51,9 @@ function interviewerJobSelect(interviewerId: number) {
           },
         },
       },
+    },
+    currentPublishedSpecificationVersion: {
+      select: JOB_SPECIFICATION_SCALAR_SELECT,
     },
   } satisfies Prisma.JobSelect;
 }
@@ -135,6 +142,15 @@ function interviewerApplicationSelect(interviewerId: number) {
   } satisfies Prisma.ApplicationSelect;
 }
 
+function overlayPublishedSpecification<
+  T extends Parameters<typeof readJobSpecification>[0],
+>(job: T) {
+  return {
+    ...job,
+    ...readJobSpecification(job),
+  };
+}
+
 export async function getInterviewerDashboardStats() {
   const interviewer = await requireInterviewerPortal();
 
@@ -194,7 +210,7 @@ export async function getInterviewerDashboardStats() {
 export async function getInterviewerAssignedJobs() {
   const interviewer = await requireInterviewerPortal();
 
-  return prisma.job.findMany({
+  const jobs = await prisma.job.findMany({
     where: {
       assignedInterviewerId: interviewer.interviewerId,
     },
@@ -203,18 +219,22 @@ export async function getInterviewerAssignedJobs() {
       createdAt: "desc",
     },
   });
+
+  return jobs.map(overlayPublishedSpecification);
 }
 
 export async function getInterviewerAssignedJobById(jobId: number) {
   const interviewer = await requireInterviewerPortal();
 
-  return prisma.job.findFirst({
+  const job = await prisma.job.findFirst({
     where: {
       id: jobId,
       assignedInterviewerId: interviewer.interviewerId,
     },
     select: interviewerJobSelect(interviewer.interviewerId),
   });
+
+  return job ? overlayPublishedSpecification(job) : null;
 }
 
 export async function getInterviewerApplicationsForJob(jobId: number) {

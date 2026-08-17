@@ -71,6 +71,77 @@ enum SourcingDatabaseSource {
   NAUKRI
 }
 
+enum JobSpecificationVersionStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum JobDescriptionAiGenerationStatus {
+  NONE
+  GENERATING
+  READY
+  FAILED
+}
+
+/// T83 job-board / channel identity. Separate from T69 SourcingDatabaseSource.
+enum DistributionProvider {
+  LINKEDIN
+  INDEED
+  NAUKRI
+  MANUAL
+}
+
+enum ProviderConnectionStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum JobDistributionStatus {
+  DISABLED
+  READY
+  PUBLISHING
+  PUBLISHED
+  PAUSED
+  CLOSING
+  CLOSED
+  FAILED
+}
+
+enum ProviderPostingStatus {
+  UNKNOWN
+  LIVE
+  PAUSED
+  CLOSED
+  REJECTED
+}
+
+enum DistributionAttemptStatus {
+  IN_FLIGHT
+  SUCCEEDED
+  FAILED_RETRYABLE
+  FAILED_PERMANENT
+}
+
+enum DistributionAttemptOperation {
+  CREATE
+  UPDATE
+  CLOSE
+  PAUSE
+  RESUME
+  FETCH
+}
+
+enum ApplyMode {
+  PROVIDER_NATIVE
+  EXTERNAL_URL
+  HIREIQ_HOSTED
+}
+
+/// T84 submission handoff only. Not an Application pipeline state.
+enum HostedApplySubmissionStatus {
+  RECEIVED
+}
+
 enum InterviewerAvailability {
   AVAILABLE
   NOT_AVAILABLE
@@ -110,6 +181,17 @@ enum PortalRole {
   INTERVIEWER
 }
 
+enum OrganizationMemberRole {
+  OWNER
+  MEMBER
+}
+
+enum OrganizationMemberStatus {
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
 /// Internal billing foundation states only.
 /// Payment processing is NOT implemented.
 enum BillingStatus {
@@ -129,11 +211,16 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  candidates     Candidate[]
-  jobs           Job[]
-  users          User[]
-  billingRecords BillingRecord[]
-  notifications  Notification[]
+  candidates            Candidate[]
+  jobs                  Job[]
+  users                 User[]
+  billingRecords        BillingRecord[]
+  notifications         Notification[]
+  organizationMembers   OrganizationMember[]
+  invitations           Invitation[]
+  providerConnections   ProviderConnection[]
+  jobDistributions      JobDistribution[]
+  hostedApplySubmissions HostedApplySubmission[]
 }
 
 model Job {
@@ -169,15 +256,64 @@ model Job {
   companyId Int
   assignedInterviewerId Int?
 
+  /// Compatibility projection of the published (or dual-written draft) spec.
+  /// Canonical specification lives on JobSpecificationVersion.
+  currentPublishedSpecificationVersionId Int? @unique
+
   company      Company        @relation(fields: [companyId], references: [id])
   assignedInterviewer Interviewer? @relation(fields: [assignedInterviewerId], references: [id], onDelete: Restrict)
   applications Application[]
   notifications Notification[]
   billingRecords BillingRecord[]
+  specificationVersions JobSpecificationVersion[] @relation("JobSpecVersions")
+  currentPublishedSpecificationVersion JobSpecificationVersion? @relation("JobPublishedSpec", fields: [currentPublishedSpecificationVersionId], references: [id], onDelete: SetNull)
+  distributions JobDistribution[]
+  hostedApplySubmissions HostedApplySubmission[]
 
   @@unique([id, companyId])
   @@index([companyId, status])
   @@index([assignedInterviewerId])
+}
+
+/// Versioned hiring specification. Job remains the operational root.
+/// PUBLISHED rows are immutable. At most one DRAFT per Job (SQL partial unique).
+model JobSpecificationVersion {
+  id            Int                            @id @default(autoincrement())
+  jobId         Int
+  versionNumber Int
+  status        JobSpecificationVersionStatus
+  publishedAt   DateTime?
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+  createdByUserId Int?
+
+  title                  String
+  roleCategory           RoleCategory?
+  experienceRange        String?
+  location               String?
+  compensationRange      String?
+  targetHireDate         DateTime?
+  numberOfPositions      Int?
+  mustHaveRequirements   String?
+  niceToHaveRequirements String?
+  jobDescription         String?
+  evaluationCriteria     String?
+  primarySkills          String?
+  structuredPayload      Json                    @default("{}")
+
+  /// AI JD proposal only. Canonical jobDescription is unchanged until human accept.
+  aiProposedJobDescription String?
+  aiGeneratedAt            DateTime?
+  aiGenerationStatus       JobDescriptionAiGenerationStatus @default(NONE)
+
+  job       Job   @relation("JobSpecVersions", fields: [jobId], references: [id], onDelete: Restrict)
+  createdBy User? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  publishedForJob Job? @relation("JobPublishedSpec")
+  distributions JobDistribution[]
+  hostedApplySubmissions HostedApplySubmission[]
+
+  @@unique([jobId, versionNumber])
+  @@index([jobId, status])
 }
 
 /// Requirement-scoped billing foundation record.
@@ -424,16 +560,252 @@ model User {
   role         PortalRole
   /// bcrypt hash — never expose to clients
   passwordHash String
+  /// Null until the mailbox is proven. Existing V1 users are backfilled.
+  emailVerifiedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// Compatibility projection of ACTIVE OrganizationMember.companyId.
+  /// Not the Client authorization authority.
   companyId     Int?
   interviewerId Int? @unique
 
   company     Company?     @relation(fields: [companyId], references: [id], onDelete: Restrict)
   interviewer Interviewer? @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
 
+  organizationMemberships OrganizationMember[]
+  sentInvitations         Invitation[]             @relation("InvitationInviter")
+  invitedMembers          OrganizationMember[]     @relation("MembershipInviter")
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  jobSpecificationVersions JobSpecificationVersion[]
+
   @@index([companyId])
   @@index([role])
+}
+
+model OrganizationMember {
+  id              Int                      @id @default(autoincrement())
+  companyId       Int
+  userId          Int
+  role            OrganizationMemberRole
+  status          OrganizationMemberStatus
+  invitedByUserId Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  invitedBy User?   @relation("MembershipInviter", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, userId])
+  @@index([userId, status])
+  @@index([companyId, status])
+  @@index([companyId, role, status])
+}
+
+model Invitation {
+  id              Int                    @id @default(autoincrement())
+  companyId       Int
+  email           String
+  role            OrganizationMemberRole
+  tokenHash       String                 @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  invitedByUserId Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  invitedBy User    @relation("InvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, email])
+  @@index([expiresAt])
+}
+
+model EmailVerificationToken {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  email      String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+}
+
+model AuthRateLimit {
+  id          Int      @id @default(autoincrement())
+  key         String
+  windowStart DateTime
+  count       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([key, windowStart])
+  @@index([key])
+}
+
+/// Company-owned provider credential. Secrets are AES-256-GCM ciphertext only.
+/// T69 sourcingDatabaseSource is unrelated and must not be stored here.
+model ProviderConnection {
+  id                 Int                      @id @default(autoincrement())
+  companyId          Int
+  provider           DistributionProvider
+  status             ProviderConnectionStatus @default(INACTIVE)
+  providerAccountId  String?
+  credentialCiphertext String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company       Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  distributions JobDistribution[]
+
+  @@unique([companyId, provider])
+  @@index([companyId, status])
+}
+
+/// Intent to distribute a Job to one provider against a pinned PUBLISHED spec.
+/// jobSpecificationVersionId is immutable after insert (application-enforced).
+model JobDistribution {
+  id                         Int                   @id @default(autoincrement())
+  companyId                  Int
+  jobId                      Int
+  jobSpecificationVersionId  Int
+  provider                   DistributionProvider
+  providerConnectionId       Int?
+  status                     JobDistributionStatus @default(READY)
+  applyMode                  ApplyMode
+  applyUrlSnapshot           String?
+  includeCompensation        Boolean               @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company                  Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job                      Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  pinnedSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  providerConnection       ProviderConnection?     @relation(fields: [providerConnectionId], references: [id], onDelete: SetNull)
+  posting                  ProviderPosting?
+  attempts                 DistributionAttempt[]
+  applyTokens              ApplyToken[]
+  hostedApplySubmissions   HostedApplySubmission[]
+
+  @@index([companyId])
+  @@index([jobId, provider])
+  @@index([jobSpecificationVersionId])
+  @@index([status])
+}
+
+/// External listing identity for one JobDistribution. No fabricated IDs.
+model ProviderPosting {
+  id                Int                   @id @default(autoincrement())
+  distributionId    Int                   @unique
+  provider          DistributionProvider
+  externalPostingId String?
+  externalUrl       String?
+  providerStatus    ProviderPostingStatus @default(UNKNOWN)
+  providerCreatedAt DateTime?
+  providerUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  distribution JobDistribution @relation(fields: [distributionId], references: [id], onDelete: Restrict)
+
+  @@index([provider, externalPostingId])
+}
+
+/// One persisted provider operation. History is never erased on retry.
+model DistributionAttempt {
+  id                 Int                           @id @default(autoincrement())
+  distributionId     Int
+  operation          DistributionAttemptOperation
+  idempotencyKey     String                        @unique
+  requestFingerprint String?
+  status             DistributionAttemptStatus
+  normalizedError    Json?
+  sanitizedResponse  Json?
+  startedAt          DateTime                      @default(now())
+  completedAt        DateTime?
+
+  createdAt DateTime @default(now())
+
+  distribution JobDistribution @relation(fields: [distributionId], references: [id], onDelete: Restrict)
+
+  @@index([distributionId, createdAt])
+  @@index([status])
+}
+
+/// T84 opaque public apply token. SHA-256 at rest. No plaintext token column.
+/// Resolves to one JobDistribution (and its pinned PUBLISHED specification).
+model ApplyToken {
+  id             Int       @id @default(autoincrement())
+  distributionId Int
+  tokenHash      String    @unique
+  createdAt      DateTime  @default(now())
+  revokedAt      DateTime?
+
+  distribution JobDistribution         @relation(fields: [distributionId], references: [id], onDelete: Restrict)
+  submissions  HostedApplySubmission[]
+
+  @@index([distributionId])
+}
+
+/// T84 public apply handoff for T85. Not an Application. Not a hiring pipeline.
+/// Unique (distributionId, emailNormalized) is T84 anti-duplicate only —
+/// not Candidate identity. T85/T91 own identity resolution.
+model HostedApplySubmission {
+  id                        Int                          @id @default(autoincrement())
+  applyTokenId              Int
+  distributionId            Int
+  companyId                 Int
+  jobId                     Int
+  jobSpecificationVersionId Int
+  idempotencyKey            String                       @unique
+  emailNormalized           String
+  name                      String
+  phone                     String?
+  location                  String?
+  experienceYears           Int?
+  linkedInUrl               String?
+  coverLetter               String?
+  consentAcceptedAt         DateTime
+  status                    HostedApplySubmissionStatus  @default(RECEIVED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applyToken               ApplyToken              @relation(fields: [applyTokenId], references: [id], onDelete: Restrict)
+  distribution             JobDistribution         @relation(fields: [distributionId], references: [id], onDelete: Restrict)
+  company                  Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job                      Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  pinnedSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([distributionId, emailNormalized])
+  @@index([applyTokenId])
+  @@index([distributionId])
+  @@index([jobId])
+  @@index([createdAt])
 }

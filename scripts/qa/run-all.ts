@@ -27,6 +27,13 @@ import { runWorkflow15 } from "./workflow-15-billing-creation";
 import { runWorkflow16 } from "./workflow-16-interviewer-reassignment";
 import { runWorkflow17 } from "./workflow-17-email-retry";
 import { runWorkflow18 } from "./workflow-18-hiring-lifecycle";
+import { runWorkflow19 } from "./workflow-19-organization-membership";
+import { runWorkflow20 } from "./workflow-20-self-serve-onboarding";
+import { runWorkflow21 } from "./workflow-21-job-specification";
+import { runWorkflow22 } from "./workflow-22-client-requirement-submission";
+import { runWorkflow23 } from "./workflow-23-ai-job-description";
+import { runWorkflow24 } from "./workflow-24-job-distribution";
+import { runWorkflow25 } from "./workflow-25-hosted-apply";
 
 type Spec = {
   id: string;
@@ -162,6 +169,55 @@ const workflows: Spec[] = [
     testType: "SELECT/HIRE lifecycle gate + billing uniqueness + terminal states",
     notes: "Client SELECT/HIRE cannot skip pre-sourcing lifecycle; BILLING_GENERATED only after HIRE; one active BillingRecord",
     run: runWorkflow18,
+  },
+  {
+    id: "19",
+    name: "Organization membership",
+    testType: "unit + database + source + integration",
+    notes: "ACTIVE membership is Client authority; hashed invitations; email verification; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED",
+    run: runWorkflow19,
+  },
+  {
+    id: "20",
+    name: "Self-serve onboarding",
+    testType: "unit + database + source + integration",
+    notes: "Signup/verify/company OWNER transaction/invitation-first/password reset/rate limits; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED",
+    run: runWorkflow20,
+  },
+  {
+    id: "21",
+    name: "Job specification versioning",
+    testType: "unit + database + source + integration",
+    notes: "JobSpecificationVersion DRAFT/PUBLISHED dual-read/write; T80 drafts editable; completion publishes immutably; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED",
+    run: runWorkflow21,
+  },
+  {
+    id: "22",
+    name: "Client requirement submission",
+    testType: "unit + database + source + integration",
+    notes: "Client REQUIREMENT_DRAFTED→CLIENT_NOTIFIED; completeness reused; no publish/complete; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED",
+    run: runWorkflow22,
+  },
+  {
+    id: "23",
+    name: "AI job description generation",
+    testType: "unit + database + source + integration",
+    notes: "AI JD proposal on DRAFT; human accept/discard; no publish/lifecycle; LIVE_AI_PROVIDER_NOT_TESTED; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED",
+    run: runWorkflow23,
+  },
+  {
+    id: "24",
+    name: "Job distribution",
+    testType: "unit + database + source + integration",
+    notes: "Provider-neutral JobDistribution pins PUBLISHED spec; Manual/Unavailable adapters; no live boards; T69 unchanged; LIVE_PROVIDER_NOT_TESTED; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED",
+    run: runWorkflow24,
+  },
+  {
+    id: "25",
+    name: "Hosted apply",
+    testType: "unit + database + source + integration",
+    notes: "Opaque ApplyToken; pinned PUBLISHED spec; HostedApplySubmission only; no Candidate/Application; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED",
+    run: runWorkflow25,
   },
 ];
 

@@ -3,13 +3,18 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type {
+  JobDescriptionAiGenerationStatus,
   JobStatus,
   RequirementLifecycle,
   RoleCategory,
 } from "@prisma/client";
 
 import {
+  acceptGeneratedJobDescription,
   completeJobRequirement,
+  discardGeneratedJobDescription,
+  generateJobDescription,
+  submitClientRequirement,
   updateClientRequirement,
 } from "@/app/actions/job-actions";
 import {
@@ -20,7 +25,10 @@ import {
 } from "@/components/client/client-labels";
 import ClientRequirementCandidates from "@/components/client/ClientRequirementCandidates";
 import ClientRequirementNav from "@/components/client/ClientRequirementNav";
+import JobDistributionPanel from "@/components/client/JobDistributionPanel";
 import type { ClientCandidateCardData } from "@/components/client/ClientCandidateCard";
+import type { SafeProviderConnection } from "@/lib/jobs/distribution/connection-service";
+import type { SafeJobDistribution } from "@/lib/jobs/distribution/distribution-service";
 
 const roleCategoryOptions = [
   { value: "ENGINEERING", label: "Engineering" },
@@ -53,6 +61,11 @@ export type ClientRequirementWorkspaceData = {
   jobDescription: string | null;
   evaluationCriteria: string | null;
   primarySkills: string | null;
+  specificationUpdatedAt: string | null;
+  hasDraftSpecification: boolean;
+  hasPublishedSpecification: boolean;
+  aiProposedJobDescription: string | null;
+  aiGenerationStatus: JobDescriptionAiGenerationStatus | null;
   clientCompletedAt: string | null;
   applicationCount: number;
   pipelineCounts: ClientPipelineCounts;
@@ -78,6 +91,9 @@ type ClientRequirementWorkspaceProps = {
   candidates: ClientCandidateCardData[];
   shortlistedCount: number;
   initialSection?: "overview" | "candidates";
+  isOwner: boolean;
+  connections: SafeProviderConnection[];
+  distributions: SafeJobDistribution[];
 };
 
 function getErrorMessage(error: unknown) {
@@ -143,7 +159,7 @@ function parseDraftFields(form: FormState) {
 function lifecycleGuidance(lifecycle: RequirementLifecycle) {
   switch (lifecycle) {
     case "REQUIREMENT_DRAFTED":
-      return "Requirement is still being prepared.";
+      return "You can edit this requirement. Submit it when all required fields are complete.";
     case "CLIENT_NOTIFIED":
       return "Review and complete this requirement.";
     case "REQUIREMENT_POSTED":
@@ -166,6 +182,9 @@ export default function ClientRequirementWorkspace({
   candidates,
   shortlistedCount,
   initialSection = "overview",
+  isOwner,
+  connections,
+  distributions,
 }: ClientRequirementWorkspaceProps) {
   const router = useRouter();
   const [section, setSection] = useState<"overview" | "candidates">(
@@ -175,11 +194,19 @@ export default function ClientRequirementWorkspace({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [busyAction, setBusyAction] = useState<"draft" | "complete" | null>(
-    null,
-  );
+  const [busyAction, setBusyAction] = useState<
+    "draft" | "submit" | "complete" | "generate" | "accept" | "discard" | null
+  >(null);
 
-  const isEditable = requirement.requirementLifecycle === "CLIENT_NOTIFIED";
+  const isEditable =
+    requirement.requirementLifecycle === "REQUIREMENT_DRAFTED" ||
+    requirement.requirementLifecycle === "CLIENT_NOTIFIED";
+  const canSubmit =
+    requirement.requirementLifecycle === "REQUIREMENT_DRAFTED";
+  const canUseAi =
+    isEditable && requirement.hasDraftSpecification;
+  const canComplete =
+    requirement.requirementLifecycle === "CLIENT_NOTIFIED";
   const isCompleted =
     requirement.requirementLifecycle === "REQUIREMENT_POSTED" ||
     requirement.requirementLifecycle === "INTERVIEWER_NOTIFIED" ||
@@ -203,8 +230,33 @@ export default function ClientRequirementWorkspace({
           requirement.id,
           form.title,
           parseDraftFields(form),
+          requirement.specificationUpdatedAt,
         );
         setSuccessMessage("Draft saved.");
+        router.refresh();
+      } catch (error) {
+        setErrorMessage(getErrorMessage(error));
+      } finally {
+        setBusyAction(null);
+      }
+    });
+  }
+
+  function handleSubmitRequirement() {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setBusyAction("submit");
+
+    startTransition(async () => {
+      try {
+        await updateClientRequirement(
+          requirement.id,
+          form.title,
+          parseDraftFields(form),
+          requirement.specificationUpdatedAt,
+        );
+        await submitClientRequirement(requirement.id);
+        setSuccessMessage("Requirement submitted.");
         router.refresh();
       } catch (error) {
         setErrorMessage(getErrorMessage(error));
@@ -225,6 +277,7 @@ export default function ClientRequirementWorkspace({
           requirement.id,
           form.title,
           parseDraftFields(form),
+          requirement.specificationUpdatedAt,
         );
         await completeJobRequirement(requirement.id);
         setSuccessMessage("Requirement completed.");
@@ -235,6 +288,57 @@ export default function ClientRequirementWorkspace({
         setBusyAction(null);
       }
     });
+  }
+
+  function runAiAction(
+    action: "generate" | "accept" | "discard",
+    run: () => Promise<unknown>,
+    successMessage: string,
+  ) {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setBusyAction(action);
+
+    startTransition(async () => {
+      try {
+        await run();
+        setSuccessMessage(successMessage);
+        router.refresh();
+      } catch (error) {
+        setErrorMessage(getErrorMessage(error));
+      } finally {
+        setBusyAction(null);
+      }
+    });
+  }
+
+  function handleGenerateJobDescription() {
+    runAiAction(
+      "generate",
+      () => generateJobDescription(requirement.id),
+      "Job description proposal generated.",
+    );
+  }
+
+  function handleAcceptGeneratedJobDescription() {
+    runAiAction(
+      "accept",
+      async () => {
+        await acceptGeneratedJobDescription(requirement.id);
+        if (requirement.aiProposedJobDescription) {
+          updateField("jobDescription", requirement.aiProposedJobDescription);
+        }
+      },
+      "Job description updated.",
+    );
+  }
+
+  function handleDiscardGeneratedJobDescription() {
+    runAiAction(
+      "discard",
+      () => discardGeneratedJobDescription(requirement.id),
+      "Generated job description discarded.",
+    );
   }
 
   const inputClassName =
@@ -526,6 +630,69 @@ export default function ClientRequirementWorkspace({
                   className={textareaClassName}
                 />
               </div>
+              {canUseAi ? (
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                  <h3 className="text-sm font-semibold text-black">
+                    AI Job Description
+                  </h3>
+                  <p className="mt-1 text-sm text-zinc-600">
+                    Generate a professional JD from your requirements. The
+                    current description is not changed until you use the
+                    proposal.
+                  </p>
+                  {requirement.aiProposedJobDescription ? (
+                    <div className="mt-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        AI Proposed Description
+                      </p>
+                      <pre className="mt-2 whitespace-pre-wrap rounded-lg border border-zinc-200 bg-white p-3 text-sm text-black">
+                        {requirement.aiProposedJobDescription}
+                      </pre>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={handleAcceptGeneratedJobDescription}
+                          className="rounded-lg bg-black px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
+                        >
+                          {busyAction === "accept"
+                            ? "Applying..."
+                            : "Use This Description"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={handleGenerateJobDescription}
+                          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:opacity-60"
+                        >
+                          {busyAction === "generate"
+                            ? "Generating..."
+                            : "Regenerate"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={handleDiscardGeneratedJobDescription}
+                          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:opacity-60"
+                        >
+                          {busyAction === "discard" ? "Discarding..." : "Discard"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={handleGenerateJobDescription}
+                      className="mt-3 rounded-lg bg-black px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
+                    >
+                      {busyAction === "generate"
+                        ? "Generating..."
+                        : "Generate Job Description"}
+                    </button>
+                  )}
+                </div>
+              ) : null}
               <div>
                 <label
                   htmlFor="requirement-evaluation-criteria"
@@ -549,8 +716,9 @@ export default function ClientRequirementWorkspace({
           <section className="rounded-xl border border-zinc-200 bg-white p-6">
             <h2 className="text-lg font-bold text-black">Client Action</h2>
             <p className="mt-2 text-sm text-zinc-600">
-              Review the requirement. Save a draft at any time, or complete it
-              when all details are confirmed.
+              {canComplete
+                ? "Review the requirement. Save a draft at any time, or complete it when all details are confirmed."
+                : "Save your draft at any time. Complete all required fields before submitting. Submission starts the hiring workflow."}
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button
@@ -560,6 +728,19 @@ export default function ClientRequirementWorkspace({
               >
                 {busyAction === "draft" ? "Saving..." : "Save Draft"}
               </button>
+              {canSubmit ? (
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={handleSubmitRequirement}
+                className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
+              >
+                {busyAction === "submit"
+                  ? "Submitting..."
+                  : "Submit Requirement"}
+              </button>
+              ) : null}
+              {canComplete ? (
               <button
                 type="button"
                 disabled={isPending}
@@ -570,6 +751,7 @@ export default function ClientRequirementWorkspace({
                   ? "Completing..."
                   : "Complete Requirement"}
               </button>
+              ) : null}
             </div>
           </section>
         </form>
@@ -661,6 +843,14 @@ export default function ClientRequirementWorkspace({
           ) : null}
         </>
       )}
+
+      <JobDistributionPanel
+        jobId={requirement.id}
+        hasPublishedSpecification={requirement.hasPublishedSpecification}
+        isOwner={isOwner}
+        connections={connections}
+        distributions={distributions}
+      />
 
       <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
         <h2 className="text-lg font-bold text-black">Pipeline summary</h2>

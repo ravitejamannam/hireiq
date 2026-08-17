@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import ClientRequirementCard from "@/components/client/ClientRequirementCard";
+import CreateFirstRoleForm from "@/components/client/CreateFirstRoleForm";
 import StatCard from "@/components/dashboard/StatCard";
 import { requireClientPortal } from "@/lib/auth/authorization";
 import { getClientDashboardStats } from "@/lib/repositories/dashboard-repository";
@@ -53,13 +54,16 @@ export default async function ClientDashboardPage() {
         </div>
 
         {stats.requirements.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-dashed border-zinc-300 bg-white py-16 text-center">
+          <div className="mt-6 rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center">
             <p className="text-lg font-medium text-black">
-              Your company does not have any requirements yet.
+              You haven&apos;t created a hiring requirement yet.
             </p>
             <p className="mt-2 text-sm text-zinc-500">
-              No candidates are currently in the recruitment pipeline.
+              Create a draft role to start the HireIQ hiring workflow.
             </p>
+            <div className="mx-auto mt-4 max-w-md text-left">
+              <CreateFirstRoleForm />
+            </div>
           </div>
         ) : (
           <div className="mt-6 grid gap-4">

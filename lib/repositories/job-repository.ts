@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
+import { JobSpecificationVersionStatus } from "@prisma/client";
 
 import { jobScopeWhere, requireUser } from "@/lib/auth/authorization";
+import {
+  JOB_SPECIFICATION_SCALAR_SELECT,
+  readEditableJobSpecification,
+} from "@/lib/jobs/job-specification";
 
 const jobSelect = {
   id: true,
@@ -55,6 +60,25 @@ const jobSelect = {
   },
 } satisfies Prisma.JobSelect;
 
+const jobSpecificationSelect = {
+  currentPublishedSpecificationVersion: {
+    select: JOB_SPECIFICATION_SCALAR_SELECT,
+  },
+  specificationVersions: {
+    where: {
+      status: JobSpecificationVersionStatus.DRAFT,
+    },
+    take: 1,
+    select: {
+      ...JOB_SPECIFICATION_SCALAR_SELECT,
+      updatedAt: true,
+      aiProposedJobDescription: true,
+      aiGenerationStatus: true,
+      aiGeneratedAt: true,
+    },
+  },
+} satisfies Prisma.JobSelect;
+
 export async function getJobs() {
   const user = await requireUser();
 
@@ -70,11 +94,39 @@ export async function getJobs() {
 export async function getJobById(id: number) {
   const user = await requireUser();
 
-  return prisma.job.findFirst({
+  const job = await prisma.job.findFirst({
     where: {
       id,
       ...jobScopeWhere(user),
     },
-    select: jobSelect,
+    select: {
+      ...jobSelect,
+      ...jobSpecificationSelect,
+    },
   });
+
+  if (!job) {
+    return null;
+  }
+
+  const spec = readEditableJobSpecification(job);
+  const draft = job.specificationVersions[0] ?? null;
+  const specificationUpdatedAt = draft?.updatedAt ?? null;
+  const {
+    currentPublishedSpecificationVersion,
+    specificationVersions,
+    ...rest
+  } = job;
+  void specificationVersions;
+
+  return {
+    ...rest,
+    ...spec,
+    specificationUpdatedAt,
+    hasDraftSpecification: draft !== null,
+    hasPublishedSpecification: currentPublishedSpecificationVersion != null,
+    aiProposedJobDescription: draft?.aiProposedJobDescription ?? null,
+    aiGenerationStatus: draft?.aiGenerationStatus ?? null,
+    aiGeneratedAt: draft?.aiGeneratedAt ?? null,
+  };
 }

@@ -3,6 +3,8 @@ import Link from "next/link";
 
 import type { ClientCandidateCardData } from "@/components/client/ClientCandidateCard";
 import ClientRequirementWorkspace from "@/components/client/ClientRequirementWorkspace";
+import { listProviderConnectionsForCompany } from "@/lib/jobs/distribution/connection-service";
+import { listJobDistributionsForJob } from "@/lib/jobs/distribution/distribution-service";
 import {
   countPipelineStatuses,
   getClientTechnicalEvaluationStatus,
@@ -23,7 +25,7 @@ export default async function ClientRequirementDetailPage({
   params,
   searchParams,
 }: ClientRequirementDetailPageProps) {
-  await requireClientPortal();
+  const client = await requireClientPortal();
 
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
@@ -44,7 +46,14 @@ export default async function ClientRequirementDetailPage({
     notFound();
   }
 
-  const applications = await getClientApplicationsForRequirement(requirementId);
+  const [applications, connections, distributions] = await Promise.all([
+    getClientApplicationsForRequirement(requirementId),
+    listProviderConnectionsForCompany(client.companyId),
+    listJobDistributionsForJob({
+      jobId: requirementId,
+      companyId: client.companyId,
+    }),
+  ]);
 
   const pipelineCounts = countPipelineStatuses(
     applications.map((application) => application.status),
@@ -96,7 +105,7 @@ export default async function ClientRequirementDetailPage({
       </div>
 
       <ClientRequirementWorkspace
-        key={`${requirement.id}-${requirement.requirementLifecycle}-${requirement.updatedAt.toISOString()}-${initialSection}`}
+        key={`${requirement.id}-${requirement.requirementLifecycle}-${requirement.updatedAt.toISOString()}-${requirement.specificationUpdatedAt?.toISOString() ?? "none"}-${initialSection}`}
         requirement={{
           id: requirement.id,
           title: requirement.title,
@@ -116,6 +125,13 @@ export default async function ClientRequirementDetailPage({
           jobDescription: requirement.jobDescription,
           evaluationCriteria: requirement.evaluationCriteria,
           primarySkills: requirement.primarySkills,
+          specificationUpdatedAt: requirement.specificationUpdatedAt
+            ? requirement.specificationUpdatedAt.toISOString()
+            : null,
+          hasDraftSpecification: requirement.hasDraftSpecification,
+          hasPublishedSpecification: requirement.hasPublishedSpecification,
+          aiProposedJobDescription: requirement.aiProposedJobDescription,
+          aiGenerationStatus: requirement.aiGenerationStatus,
           clientCompletedAt: requirement.clientCompletedAt
             ? requirement.clientCompletedAt.toISOString()
             : null,
@@ -125,6 +141,9 @@ export default async function ClientRequirementDetailPage({
         candidates={candidates}
         shortlistedCount={shortlistedCount}
         initialSection={initialSection}
+        isOwner={client.membershipRole === "OWNER"}
+        connections={connections}
+        distributions={distributions}
       />
     </div>
   );

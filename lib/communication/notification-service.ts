@@ -10,6 +10,7 @@ import type {
 import { deliverRequirementReadyEmail } from "@/lib/communication/requirement-ready-email";
 import { deliverDatabaseReadyEmail } from "@/lib/communication/database-ready-email";
 import { deliverShortlistReadyEmail } from "@/lib/communication/shortlist-ready-email";
+import { findActiveOwnerEmail } from "@/lib/organizations/active-owner";
 import {
   NotificationValidationError,
   validateNotificationJobId,
@@ -24,6 +25,7 @@ type NotificationDb = {
     "findUnique" | "findFirst" | "create" | "update"
   >;
   user: Pick<typeof prisma.user, "findFirst">;
+  organizationMember: Pick<typeof prisma.organizationMember, "findFirst">;
 };
 
 const DEFERRED_EMAIL = {
@@ -334,24 +336,13 @@ export async function resolveOwningClientRecipient(
     throw new NotificationValidationError("Resource not found.");
   }
 
-  const user = await db.user.findFirst({
-    where: {
-      companyId: job.companyId,
-      role: "CLIENT",
-    },
-    orderBy: {
-      id: "asc",
-    },
-    select: {
-      email: true,
-    },
-  });
+  const email = await findActiveOwnerEmail(job.companyId, db);
 
   return {
     jobId: job.id,
     companyId: job.companyId,
     interviewerId: null,
-    email: user?.email ?? null,
+    email,
   };
 }
 

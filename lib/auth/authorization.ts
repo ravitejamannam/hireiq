@@ -1,6 +1,7 @@
 import { PortalRole, type Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
+import { postAuthPathForActor } from "@/lib/auth/onboarding-state";
 import { prisma } from "@/lib/prisma";
 
 export class AuthenticationError extends Error {
@@ -33,10 +34,26 @@ const authUserSelect = {
   role: true,
   companyId: true,
   interviewerId: true,
+  emailVerifiedAt: true,
 } satisfies Prisma.UserSelect;
+
+type UserAuthorizationRow = AuthUser & {
+  emailVerifiedAt: Date | null;
+};
 
 function denyResource(): never {
   throw new AuthorizationError("Resource not found.");
+}
+
+function toAuthUser(user: UserAuthorizationRow): AuthUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    companyId: user.companyId,
+    interviewerId: user.interviewerId,
+  };
 }
 
 function requireClientCompanyId(user: AuthUser): number {
@@ -46,19 +63,57 @@ function requireClientCompanyId(user: AuthUser): number {
   return user.companyId;
 }
 
-function requireInterviewerProfileId(user: AuthUser): number {
-  if (user.interviewerId === null) {
+export function assertClientEmailVerified(emailVerifiedAt: Date | null) {
+  if (emailVerifiedAt === null) {
     throw new AuthorizationError("Unauthorized.");
   }
-  return user.interviewerId;
 }
 
 /**
- * Resolve the authenticated actor from the Auth.js session,
- * then reload the authoritative User row from the database.
- * Never trusts browser-supplied role/companyId/interviewerId.
+ * Client companyId comes from ACTIVE OrganizationMember.
+ * User.companyId is only a compatibility projection: mismatch fails closed.
  */
-export async function requireUser(): Promise<AuthUser> {
+export async function hydrateAuthUser(
+  user: UserAuthorizationRow,
+): Promise<UserAuthorizationRow> {
+  if (user.role !== PortalRole.CLIENT) {
+    return user;
+  }
+
+  const memberships = await prisma.organizationMember.findMany({
+    where: {
+      userId: user.id,
+      status: "ACTIVE",
+    },
+    select: {
+      companyId: true,
+    },
+  });
+
+  if (memberships.length > 1) {
+    throw new AuthorizationError("Unauthorized.");
+  }
+
+  const membership = memberships[0];
+
+  if (!membership) {
+    return {
+      ...user,
+      companyId: null,
+    };
+  }
+
+  if (user.companyId !== membership.companyId) {
+    throw new AuthorizationError("Unauthorized.");
+  }
+
+  return {
+    ...user,
+    companyId: membership.companyId,
+  };
+}
+
+async function loadSessionUser(): Promise<UserAuthorizationRow> {
   const session = await auth();
   const rawId = session?.user?.id;
 
@@ -80,7 +135,25 @@ export async function requireUser(): Promise<AuthUser> {
     throw new AuthenticationError();
   }
 
-  return user;
+  return hydrateAuthUser(user);
+}
+
+function requireInterviewerProfileId(user: AuthUser): number {
+  if (user.interviewerId === null) {
+    throw new AuthorizationError("Unauthorized.");
+  }
+  return user.interviewerId;
+}
+
+/**
+ * Resolve the authenticated actor from the Auth.js session,
+ * then reload the authoritative User row from the database.
+ * Never trusts browser-supplied role/companyId/interviewerId.
+ * Client companyId is hydrated from ACTIVE OrganizationMember.
+ */
+export async function requireUser(): Promise<AuthUser> {
+  const user = await loadSessionUser();
+  return toAuthUser(user);
 }
 
 export async function requireRole(
@@ -100,13 +173,20 @@ export async function requireAdmin(): Promise<AuthUser> {
 }
 
 export async function requireClient(): Promise<AuthUser> {
-  const user = await requireRole(PortalRole.CLIENT);
+  const user = await loadSessionUser();
+
+  if (user.role !== PortalRole.CLIENT) {
+    throw new AuthorizationError();
+  }
+
+  assertClientEmailVerified(user.emailVerifiedAt);
   requireClientCompanyId(user);
-  return user;
+  return toAuthUser(user);
 }
 
 export type ClientPortalContext = AuthUser & {
   companyId: number;
+  membershipRole: "OWNER" | "MEMBER";
   company: {
     id: number;
     name: string;
@@ -114,11 +194,18 @@ export type ClientPortalContext = AuthUser & {
 };
 
 /**
- * Client portal entry: authenticated CLIENT with company boundary loaded
- * from the database (never from URL/query input).
+ * Client portal authorization: PortalRole.CLIENT + emailVerifiedAt +
+ * ACTIVE OrganizationMember + Company exists.
+ * companyId is membership-derived, never from JWT or browser input.
  */
-export async function requireClientPortal(): Promise<ClientPortalContext> {
-  const user = await requireClient();
+export async function authorizeClientPortalAccess(
+  user: UserAuthorizationRow,
+): Promise<ClientPortalContext> {
+  if (user.role !== PortalRole.CLIENT) {
+    throw new AuthorizationError();
+  }
+
+  assertClientEmailVerified(user.emailVerifiedAt);
   const companyId = requireClientCompanyId(user);
 
   const company = await prisma.company.findUnique({
@@ -130,11 +217,64 @@ export async function requireClientPortal(): Promise<ClientPortalContext> {
     throw new AuthorizationError("Unauthorized.");
   }
 
+  const membership = await prisma.organizationMember.findFirst({
+    where: {
+      userId: user.id,
+      companyId,
+      status: "ACTIVE",
+    },
+    select: { role: true },
+  });
+
+  if (!membership) {
+    throw new AuthorizationError("Unauthorized.");
+  }
+
   return {
-    ...user,
+    ...toAuthUser(user),
     companyId,
+    membershipRole: membership.role,
     company,
   };
+}
+
+/**
+ * Client portal entry: authenticated CLIENT with company boundary loaded
+ * from ACTIVE membership (never from URL/query/JWT).
+ */
+export async function requireClientPortal(): Promise<ClientPortalContext> {
+  const user = await loadSessionUser();
+  return authorizeClientPortalAccess(user);
+}
+
+/**
+ * DB-derived post-login destination. JWT role is not the tenant authority.
+ */
+export async function requirePostAuthDestination(): Promise<string> {
+  const user = await loadSessionUser();
+  const membership =
+    user.role === PortalRole.CLIENT
+      ? await prisma.organizationMember.findFirst({
+          where: {
+            userId: user.id,
+            status: "ACTIVE",
+          },
+          select: { role: true },
+        })
+      : null;
+
+  const path = postAuthPathForActor({
+    role: user.role,
+    emailVerifiedAt: user.emailVerifiedAt,
+    companyId: user.companyId,
+    membershipRole: membership?.role ?? null,
+  });
+
+  if (path === "/client") {
+    console.info("[onboarding] onboarding_reached_client", { userId: user.id });
+  }
+
+  return path;
 }
 
 export async function requireInterviewer(): Promise<AuthUser> {

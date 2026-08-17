@@ -29,7 +29,18 @@ export const authConfig = {
       const isOnClient = pathname.startsWith("/client");
       const isOnInterviewer = pathname.startsWith("/interviewer");
 
-      if (isOnDashboard || isOnClient || isOnInterviewer) {
+      const isOnOnboarding = pathname.startsWith("/onboarding");
+      const isOnPostAuth = pathname === "/post-auth";
+      const isOnVerifyEmail = pathname === "/verify-email";
+
+      if (
+        isOnDashboard ||
+        isOnClient ||
+        isOnInterviewer ||
+        isOnOnboarding ||
+        isOnPostAuth ||
+        isOnVerifyEmail
+      ) {
         if (!isLoggedIn) {
           return false;
         }
@@ -41,9 +52,15 @@ export const authConfig = {
         );
       }
 
+      if (isLoggedIn && pathname === "/signup") {
+        return Response.redirect(
+          new URL(homePathFromSessionRole(role), nextUrl),
+        );
+      }
+
       if (isLoggedIn && isOnDashboard) {
         if (role === PortalRole.CLIENT) {
-          return Response.redirect(new URL("/client", nextUrl));
+          return Response.redirect(new URL("/post-auth", nextUrl));
         }
         if (role === PortalRole.INTERVIEWER) {
           return Response.redirect(new URL("/interviewer", nextUrl));

@@ -14,9 +14,11 @@
  */
 import {
   ApplicationPipelineStatus,
+  JobSpecificationVersionStatus,
   PrismaClient,
   type EvaluationFitDecision,
   type Recommendation,
+  type RoleCategory,
 } from "@prisma/client";
 
 import { hashPassword } from "../lib/auth/password";
@@ -124,6 +126,59 @@ const requirementBase = {
     "Coding quality, system design clarity, communication, and product sense.",
   primarySkills: "TypeScript, Node.js, PostgreSQL",
 };
+
+async function attachCanonicalSpecification(job: {
+  id: number;
+  title: string;
+  roleCategory: RoleCategory | null;
+  experienceRange: string | null;
+  location: string | null;
+  compensationRange: string | null;
+  targetHireDate: Date | null;
+  numberOfPositions: number | null;
+  mustHaveRequirements: string | null;
+  niceToHaveRequirements: string | null;
+  jobDescription: string | null;
+  evaluationCriteria: string | null;
+  primarySkills: string | null;
+  requirementLifecycle: string;
+  clientCompletedAt: Date | null;
+  createdAt: Date;
+}) {
+  const published =
+    job.requirementLifecycle !== "REQUIREMENT_DRAFTED" &&
+    job.requirementLifecycle !== "CLIENT_NOTIFIED";
+  const version = await prisma.jobSpecificationVersion.create({
+    data: {
+      jobId: job.id,
+      versionNumber: 1,
+      status: published
+        ? JobSpecificationVersionStatus.PUBLISHED
+        : JobSpecificationVersionStatus.DRAFT,
+      publishedAt: published ? (job.clientCompletedAt ?? job.createdAt) : null,
+      structuredPayload: { schemaVersion: 1, legacy: true },
+      title: job.title,
+      roleCategory: job.roleCategory,
+      experienceRange: job.experienceRange,
+      location: job.location,
+      compensationRange: job.compensationRange,
+      targetHireDate: job.targetHireDate,
+      numberOfPositions: job.numberOfPositions,
+      mustHaveRequirements: job.mustHaveRequirements,
+      niceToHaveRequirements: job.niceToHaveRequirements,
+      jobDescription: job.jobDescription,
+      evaluationCriteria: job.evaluationCriteria,
+      primarySkills: job.primarySkills,
+    },
+  });
+
+  if (published) {
+    await prisma.job.update({
+      where: { id: job.id },
+      data: { currentPublishedSpecificationVersionId: version.id },
+    });
+  }
+}
 
 function backendEval(
   score: number,
@@ -740,7 +795,47 @@ async function deleteFixtureSet(set: FixtureSet) {
   if (jobIds.length) jobOr.push({ id: { in: jobIds } });
   if (companyIds.length) jobOr.push({ companyId: { in: companyIds } });
   if (jobOr.length) {
-    await prisma.job.deleteMany({ where: { OR: jobOr } });
+    const jobsToDelete = await prisma.job.findMany({
+      where: { OR: jobOr },
+      select: { id: true },
+    });
+    const ids = jobsToDelete.map((job) => job.id);
+    if (ids.length) {
+      await prisma.job.updateMany({
+        where: { id: { in: ids } },
+        data: { currentPublishedSpecificationVersionId: null },
+      });
+      await prisma.jobSpecificationVersion.deleteMany({
+        where: { jobId: { in: ids } },
+      });
+      await prisma.job.deleteMany({ where: { id: { in: ids } } });
+    }
+  }
+
+  if (userIds.length) {
+    await prisma.emailVerificationToken.deleteMany({
+      where: { userId: { in: userIds } },
+    });
+    await prisma.invitation.deleteMany({
+      where: { invitedByUserId: { in: userIds } },
+    });
+    await prisma.organizationMember.deleteMany({
+      where: {
+        OR: [
+          { userId: { in: userIds } },
+          { invitedByUserId: { in: userIds } },
+        ],
+      },
+    });
+  }
+
+  if (companyIds.length) {
+    await prisma.invitation.deleteMany({
+      where: { companyId: { in: companyIds } },
+    });
+    await prisma.organizationMember.deleteMany({
+      where: { companyId: { in: companyIds } },
+    });
   }
 
   if (userIds.length) {
@@ -995,6 +1090,80 @@ async function assertV1QaIntegrity() {
   assert(billing[0]?.companyId === alpha.id, "billing belongs to Alpha");
   assert(billing[0]?.lineItems.length === 1, "billing has one hired line item");
 
+  const clientAlphaUser = await prisma.user.findUnique({
+    where: { email: EMAILS.clientAlpha },
+    select: { id: true, companyId: true, emailVerifiedAt: true, role: true },
+  });
+  const clientBetaUser = await prisma.user.findUnique({
+    where: { email: EMAILS.clientBeta },
+    select: { id: true, companyId: true, emailVerifiedAt: true, role: true },
+  });
+  const adminUser = await prisma.user.findUnique({
+    where: { email: EMAILS.admin },
+    select: { id: true, emailVerifiedAt: true },
+  });
+  const interviewerUsers = await prisma.user.findMany({
+    where: { email: { in: [EMAILS.interviewerAlpha, EMAILS.interviewerBeta] } },
+    select: { id: true },
+  });
+  assert(clientAlphaUser?.emailVerifiedAt, "Alpha CLIENT is email-verified");
+  assert(clientBetaUser?.emailVerifiedAt, "Beta CLIENT is email-verified");
+  assert(adminUser?.emailVerifiedAt, "ADMIN is email-verified");
+
+  const memberships = await prisma.organizationMember.findMany({
+    where: {
+      user: {
+        email: { startsWith: "v1qa." },
+      },
+    },
+    select: {
+      userId: true,
+      companyId: true,
+      role: true,
+      status: true,
+      user: { select: { role: true, companyId: true } },
+    },
+  });
+  assert(memberships.length === 2, `expected 2 V1QA memberships, got ${memberships.length}`);
+  const alphaMembership = memberships.find(
+    (membership) => membership.userId === clientAlphaUser?.id,
+  );
+  const betaMembership = memberships.find(
+    (membership) => membership.userId === clientBetaUser?.id,
+  );
+  assert(
+    alphaMembership?.role === "OWNER" &&
+      alphaMembership.status === "ACTIVE" &&
+      alphaMembership.companyId === alpha.id,
+    "Alpha CLIENT is ACTIVE OWNER",
+  );
+  assert(
+    betaMembership?.role === "OWNER" &&
+      betaMembership.status === "ACTIVE" &&
+      betaMembership.companyId === beta.id,
+    "Beta CLIENT is ACTIVE OWNER",
+  );
+  assert(
+    alphaMembership?.companyId === clientAlphaUser?.companyId,
+    "Alpha membership matches User.companyId projection",
+  );
+  assert(
+    betaMembership?.companyId === clientBetaUser?.companyId,
+    "Beta membership matches User.companyId projection",
+  );
+  for (const membership of memberships) {
+    assert(membership.user.role === "CLIENT", "membership user is CLIENT");
+  }
+
+  const adminMemberships = await prisma.organizationMember.count({
+    where: { userId: adminUser?.id ?? -1 },
+  });
+  assert(adminMemberships === 0, "ADMIN has zero memberships");
+  const interviewerMemberships = await prisma.organizationMember.count({
+    where: { userId: { in: interviewerUsers.map((user) => user.id) } },
+  });
+  assert(interviewerMemberships === 0, "INTERVIEWER users have zero memberships");
+
   const counts = applications.reduce<Record<string, number>>((acc, application) => {
     acc[application.status] = (acc[application.status] ?? 0) + 1;
     return acc;
@@ -1050,24 +1219,27 @@ async function seedV1Qa() {
       name: `${NS} Admin`,
       role: "ADMIN",
       passwordHash,
+      emailVerifiedAt: new Date(),
     },
   });
-  await prisma.user.create({
+  const clientAlpha = await prisma.user.create({
     data: {
       email: EMAILS.clientAlpha,
       name: `${NS} Client Alpha`,
       role: "CLIENT",
       passwordHash,
       companyId: companyAlpha.id,
+      emailVerifiedAt: new Date(),
     },
   });
-  await prisma.user.create({
+  const clientBeta = await prisma.user.create({
     data: {
       email: EMAILS.clientBeta,
       name: `${NS} Client Beta`,
       role: "CLIENT",
       passwordHash,
       companyId: companyBeta.id,
+      emailVerifiedAt: new Date(),
     },
   });
   await prisma.user.create({
@@ -1077,6 +1249,7 @@ async function seedV1Qa() {
       role: "INTERVIEWER",
       passwordHash,
       interviewerId: interviewerAlpha.id,
+      emailVerifiedAt: new Date(),
     },
   });
   await prisma.user.create({
@@ -1086,6 +1259,24 @@ async function seedV1Qa() {
       role: "INTERVIEWER",
       passwordHash,
       interviewerId: interviewerBeta.id,
+      emailVerifiedAt: new Date(),
+    },
+  });
+
+  await prisma.organizationMember.create({
+    data: {
+      companyId: companyAlpha.id,
+      userId: clientAlpha.id,
+      role: "OWNER",
+      status: "ACTIVE",
+    },
+  });
+  await prisma.organizationMember.create({
+    data: {
+      companyId: companyBeta.id,
+      userId: clientBeta.id,
+      role: "OWNER",
+      status: "ACTIVE",
     },
   });
 
@@ -1202,6 +1393,13 @@ async function seedV1Qa() {
       jobDescription: `${NS} Beta tenant-isolation backend requirement.`,
     },
   });
+
+  await attachCanonicalSpecification(jobA);
+  await attachCanonicalSpecification(jobB);
+  await attachCanonicalSpecification(jobC);
+  await attachCanonicalSpecification(jobD);
+  await attachCanonicalSpecification(jobE);
+  await attachCanonicalSpecification(jobF);
 
   const createdA = await seedApplications({
     apps: requirementAApps,

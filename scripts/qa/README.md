@@ -65,9 +65,16 @@ Never deletes:
 | 16 | Interviewer reassignment freeze | Assignment locked after `INTERVIEWER_NOTIFIED`; T68/T69 stay on Alpha; pre-notify Alpha→Beta still allowed |
 | 17 | Email retry after commit | T68/T69/T70 remain committed on email failure; `retryNotificationEmail` resends without a second Notification |
 | 18 | Hiring / lifecycle / billing | Client SELECT/HIRE require `SOURCING_SHORTLISTING` or `BILLING_GENERATED`; HIRED/REJECTED terminal; one active BillingRecord; T70 is not a hire gate |
+| 19 | Organization membership | ACTIVE `OrganizationMember` is Client authority; hashed/expiring/single-use invitations; email verification; V1QA OWNER backfill; no Playwright / Auth.js action invocation |
+| 20 | Self-serve onboarding | Signup always CLIENT; verification; company+OWNER transaction; invitation-first MEMBER; password reset; PostgreSQL rate limits; draft Job timestamps stay null; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED |
+| 21 | Job specification versioning | Additive JobSpecificationVersion; backfill; dual-read/write; Client DRAFTED+CLIENT_NOTIFIED editing; completion publishes immutable version; optimistic locking; one DRAFT; interviewer published read; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED |
+| 22 | Client requirement submission | Verified ACTIVE Client can submit complete DRAFTED → CLIENT_NOTIFIED; incomplete/wrong-lifecycle/cross-tenant rejected; concurrent submit is one-winner; no timestamps/spec mutation; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED |
+| 23 | AI job description generation | DRAFT-only AI JD proposal; human accept/discard; no lifecycle/publish; T80 rate limits; LIVE_AI_PROVIDER_NOT_TESTED; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED |
+| 24 | Job distribution | Published spec required; tenant/provider isolation; Manual vs Unavailable adapters; version pinning; T69/Application.source unchanged; no live boards; LIVE_PROVIDER_NOT_TESTED; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED |
+| 25 | Hosted apply | Opaque hashed ApplyToken; `/apply/[token]` public GET + POST; pinned PUBLISHED spec; HostedApplySubmission RECEIVED only; no Candidate/Application; no resume upload; AUTHENTICATED_SERVER_ACTIONS_NOT_INTEGRATION_TESTED |
 
 ## Auth limitation
 
-`completeJobShortlisting`, `selectClientCandidate`, `confirmClientCandidateHire`, `saveInterviewerEvaluation`, and other `"use server"` actions require Next.js/Auth.js request scope.
+`completeJobShortlisting`, `selectClientCandidate`, `confirmClientCandidateHire`, `saveInterviewerEvaluation`, `inviteOrganizationMember`, `acceptOrganizationInvitation`, and other `"use server"` actions require Next.js/Auth.js request scope.
 
 This suite tests the **same production functions those actions call**, plus authorization predicates, plus source scans that the actions remain role-gated.

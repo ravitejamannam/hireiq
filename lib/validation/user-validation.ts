@@ -1,5 +1,9 @@
 import { PortalRole } from "@prisma/client";
 
+import {
+  isPlausibleIdentityEmail,
+  normalizeIdentityEmail,
+} from "@/lib/auth/email-normalization";
 import { prisma } from "@/lib/prisma";
 
 export class UserValidationError extends Error {
@@ -51,9 +55,9 @@ function validateEmail(email: unknown) {
     throw new UserValidationError("Email is required.");
   }
 
-  const normalized = email.trim().toLowerCase();
+  const normalized = normalizeIdentityEmail(email);
 
-  if (!normalized.includes("@") || normalized.startsWith("@") || normalized.endsWith("@")) {
+  if (!isPlausibleIdentityEmail(normalized)) {
     throw new UserValidationError("Email is invalid.");
   }
 

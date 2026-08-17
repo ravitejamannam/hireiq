@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Bell, Briefcase, CreditCard, LayoutDashboard } from "lucide-react";
+import { Bell, Briefcase, CreditCard, LayoutDashboard, Users } from "lucide-react";
 
 type ClientSidebarProps = {
   companyName: string;
   userName: string;
+  isOwner?: boolean;
 };
 
 const primaryLinks = [
@@ -37,6 +38,7 @@ function isActivePath(pathname: string, href: string) {
 export default function ClientSidebar({
   companyName,
   userName,
+  isOwner = false,
 }: ClientSidebarProps) {
   const pathname = usePathname();
 
@@ -152,6 +154,28 @@ export default function ClientSidebar({
                 <span>Notifications</span>
               </Link>
             </li>
+            {isOwner ? (
+              <li>
+                <Link
+                  href="/client/team"
+                  className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 font-medium transition-colors ${
+                    isActivePath(pathname, "/client/team")
+                      ? "bg-black text-white"
+                      : "text-zinc-700 hover:bg-zinc-100 hover:text-black"
+                  }`}
+                >
+                  <Users
+                    size={18}
+                    className={
+                      isActivePath(pathname, "/client/team")
+                        ? "text-white"
+                        : "text-zinc-600"
+                    }
+                  />
+                  <span>Team</span>
+                </Link>
+              </li>
+            ) : null}
           </ul>
         </div>
       </nav>

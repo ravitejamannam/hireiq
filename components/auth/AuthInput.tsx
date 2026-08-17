@@ -10,6 +10,8 @@ type AuthInputProps = {
   onChange: (value: string) => void;
   error?: string;
   showToggle?: boolean;
+  disabled?: boolean;
+  readOnly?: boolean;
 };
 
 export default function AuthInput({
@@ -20,6 +22,8 @@ export default function AuthInput({
   onChange,
   error,
   showToggle,
+  disabled,
+  readOnly,
 }: AuthInputProps) {
   const [showPassword, setShowPassword] = useState(false);
   return (
@@ -34,6 +38,8 @@ export default function AuthInput({
         placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        readOnly={readOnly}
         className="
           w-full
           rounded-xl
@@ -48,6 +54,9 @@ export default function AuthInput({
           outline-none
           transition
           focus:border-black
+          disabled:cursor-not-allowed
+          disabled:bg-zinc-50
+          disabled:text-zinc-500
         "
       />
 

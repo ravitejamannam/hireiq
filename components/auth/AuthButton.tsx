@@ -4,6 +4,7 @@ type AuthButtonProps = {
   type?: "button" | "submit";
   isLoading?: boolean;
   disabled?: boolean;
+  loadingLabel?: string;
 };
 
 export default function AuthButton({
@@ -12,6 +13,7 @@ export default function AuthButton({
   type = "button",
   isLoading,
   disabled,
+  loadingLabel,
 }: AuthButtonProps) {
   return (
     <button
@@ -35,7 +37,7 @@ export default function AuthButton({
         disabled:opacity-60
       "
     >
-      {isLoading ? "Signing In..." : label}
+        {isLoading ? loadingLabel ?? "Signing In..." : label}
     </button>
   );
 }

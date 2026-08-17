@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { PortalRole } from "@prisma/client";
+import Link from "next/link";
 
 import { homePathForRole } from "@/lib/auth/routes";
 import AuthButton from "./AuthButton";
@@ -11,7 +12,11 @@ import AuthInput from "./AuthInput";
 
 const GENERIC_AUTH_ERROR = "Invalid email or password.";
 
-export default function LoginForm() {
+type LoginFormProps = {
+  callbackUrl?: string | null;
+};
+
+export default function LoginForm({ callbackUrl }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState("");
@@ -51,6 +56,12 @@ export default function LoginForm() {
 
       if (!result || result.error) {
         setFormError(GENERIC_AUTH_ERROR);
+        return;
+      }
+
+      if (callbackUrl) {
+        router.push(callbackUrl);
+        router.refresh();
         return;
       }
 
@@ -97,8 +108,20 @@ export default function LoginForm() {
 
       <AuthButton label="Sign In" type="submit" isLoading={isLoading} />
 
-      <div className="text-center text-sm text-zinc-600">
-        Accounts are provisioned by an administrator.
+      <div className="space-y-2 text-center text-sm text-zinc-600">
+        <p>
+          <Link href="/signup" className="font-medium text-black hover:underline">
+            Create an account
+          </Link>
+        </p>
+        <p>
+          <Link
+            href="/forgot-password"
+            className="font-medium text-black hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </p>
       </div>
     </form>
   );

@@ -3,11 +3,17 @@ import { resolve } from "node:path";
 
 import {
   ApplicationPipelineStatus,
+  JobSpecificationVersionStatus,
   PrismaClient,
   type RequirementLifecycle,
 } from "@prisma/client";
 
 import type { AuthUser } from "../../lib/auth/authorization";
+import {
+  isPostedOrLater,
+  LEGACY_STRUCTURED_PAYLOAD,
+  specFieldsFromRecord,
+} from "../../lib/jobs/job-specification";
 
 export const prisma = new PrismaClient();
 
@@ -150,6 +156,20 @@ export async function loadV1Qa(): Promise<V1QaContext> {
   };
 }
 
+export async function deleteJobSpecificationGraph(jobIds: number[]) {
+  if (!jobIds.length) {
+    return;
+  }
+
+  await prisma.job.updateMany({
+    where: { id: { in: jobIds } },
+    data: { currentPublishedSpecificationVersionId: null },
+  });
+  await prisma.jobSpecificationVersion.deleteMany({
+    where: { jobId: { in: jobIds } },
+  });
+}
+
 export async function createTmpJob(params: {
   prefix: string;
   title: string;
@@ -160,7 +180,7 @@ export async function createTmpJob(params: {
   shortlistingDueAt?: Date | null;
   shortlistingCompletedAt?: Date | null;
 }) {
-  return prisma.job.create({
+  const job = await prisma.job.create({
     data: {
       title: `${params.prefix} ${params.title}`,
       status: "OPEN",
@@ -183,6 +203,36 @@ export async function createTmpJob(params: {
       primarySkills: "TypeScript, PostgreSQL",
     },
   });
+
+  const fields = specFieldsFromRecord(job);
+  if (isPostedOrLater(job.requirementLifecycle)) {
+    const version = await prisma.jobSpecificationVersion.create({
+      data: {
+        jobId: job.id,
+        versionNumber: 1,
+        status: JobSpecificationVersionStatus.PUBLISHED,
+        publishedAt: job.clientCompletedAt ?? job.createdAt,
+        structuredPayload: LEGACY_STRUCTURED_PAYLOAD,
+        ...fields,
+      },
+    });
+    await prisma.job.update({
+      where: { id: job.id },
+      data: { currentPublishedSpecificationVersionId: version.id },
+    });
+  } else {
+    await prisma.jobSpecificationVersion.create({
+      data: {
+        jobId: job.id,
+        versionNumber: 1,
+        status: JobSpecificationVersionStatus.DRAFT,
+        structuredPayload: LEGACY_STRUCTURED_PAYLOAD,
+        ...fields,
+      },
+    });
+  }
+
+  return job;
 }
 
 export async function createTmpApplication(params: {
@@ -281,9 +331,32 @@ export async function cleanupPrefix(prefix: string) {
   }
 
   if (jobIds.length) {
+    const distributions = await prisma.jobDistribution.findMany({
+      where: { jobId: { in: jobIds } },
+      select: { id: true },
+    });
+    const distributionIds = distributions.map((row) => row.id);
+    if (distributionIds.length) {
+      await prisma.hostedApplySubmission.deleteMany({
+        where: { distributionId: { in: distributionIds } },
+      });
+      await prisma.applyToken.deleteMany({
+        where: { distributionId: { in: distributionIds } },
+      });
+      await prisma.distributionAttempt.deleteMany({
+        where: { distributionId: { in: distributionIds } },
+      });
+      await prisma.providerPosting.deleteMany({
+        where: { distributionId: { in: distributionIds } },
+      });
+      await prisma.jobDistribution.deleteMany({
+        where: { id: { in: distributionIds } },
+      });
+    }
     await prisma.billingRecord.deleteMany({ where: { jobId: { in: jobIds } } });
     await prisma.notification.deleteMany({ where: { jobId: { in: jobIds } } });
     await prisma.application.deleteMany({ where: { jobId: { in: jobIds } } });
+    await deleteJobSpecificationGraph(jobIds);
     await prisma.job.deleteMany({ where: { id: { in: jobIds } } });
   }
 

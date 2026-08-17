@@ -6,6 +6,7 @@ import type {
 import { getPublicAppUrl } from "@/lib/communication/email-config";
 import { sendOutboundEmail } from "@/lib/communication/email-transport";
 import { NotificationValidationError } from "@/lib/validation/notification-validation";
+import { findActiveOwnerEmail } from "@/lib/organizations/active-owner";
 
 const CLIENT_SHORTLIST_PATH_PREFIX = "/client/requirements";
 
@@ -131,14 +132,7 @@ async function loadShortlistReadyEmailContext(jobId: number) {
     );
   }
 
-  const clientUser = await prisma.user.findFirst({
-    where: {
-      companyId: job.companyId,
-      role: "CLIENT",
-    },
-    orderBy: { id: "asc" },
-    select: { email: true },
-  });
+  const ownerEmail = await findActiveOwnerEmail(job.companyId, prisma);
 
   const shortlistedCount = await prisma.application.count({
     where: {
@@ -152,7 +146,7 @@ async function loadShortlistReadyEmailContext(jobId: number) {
     jobId: job.id,
     jobTitle: job.title,
     companyName: job.company.name,
-    to: clientUser?.email ?? null,
+    to: ownerEmail,
     shortlistedCount,
   };
 }
