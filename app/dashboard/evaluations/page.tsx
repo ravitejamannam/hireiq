@@ -1,20 +1,5 @@
-import EvaluationsClient from "@/components/evaluations/EvaluationsClient";
-import { getApplications } from "@/lib/repositories/application-repository";
-import { getEvaluations } from "@/lib/repositories/evaluation-repository";
-import { getInterviewers } from "@/lib/repositories/interviewer-repository";
+import { redirect } from "next/navigation";
 
-export default async function EvaluationsPage() {
-  const [evaluations, applications, interviewers] = await Promise.all([
-    getEvaluations(),
-    getApplications(),
-    getInterviewers(),
-  ]);
-
-  return (
-    <EvaluationsClient
-      initialEvaluations={evaluations}
-      applications={applications}
-      interviewers={interviewers}
-    />
-  );
+export default function EvaluationsPage() {
+  redirect("/dashboard/technical-evaluations");
 }

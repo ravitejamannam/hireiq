@@ -5,7 +5,6 @@ import {
   assertInterviewerJobAccess,
   requireAdmin,
   requireClientPortal,
-  requireJobAccess,
   requireUser,
 } from "@/lib/auth/authorization";
 import { PortalRole, Prisma } from "@prisma/client";
@@ -25,18 +24,16 @@ import {
   JobValidationError,
   assertInterviewerAssignmentNotLocked,
 } from "@/lib/validation/job-validation";
-import { submitClientRequirementForCompany } from "@/lib/jobs/client-requirement-submission";
 import {
   acceptGeneratedJobDescriptionForActor,
   discardGeneratedJobDescriptionForActor,
   generateJobDescriptionForActor,
 } from "@/lib/jobs/job-description-ai";
+import { createPostedRequirementForCompany } from "@/lib/jobs/posted-requirement";
 import {
-  createDraftSpecificationForJob,
   isPostedOrLater,
   specFieldsFromRecord,
   upsertDraftSpecification,
-  publishDraftSpecification,
 } from "@/lib/jobs/job-specification";
 import {
   dispatchInAppNotification,
@@ -80,6 +77,27 @@ function revalidateClientRequirementPaths(jobId: number) {
   }
 }
 
+/**
+ * Client posts a role for their membership company.
+ * Company is never taken from the request. The role is created posted.
+ */
+export async function createClientRequirement(
+  title: string,
+  fields: ClientRequirementEditableInput = {},
+) {
+  const client = await requireClientPortal();
+  const job = await createPostedRequirementForCompany({
+    companyId: client.companyId,
+    createdByUserId: client.id,
+    title,
+    fields,
+  });
+
+  revalidateClientRequirementPaths(job.id);
+
+  return job;
+}
+
 async function requireJobDescriptionAiActor() {
   const user = await requireUser();
 
@@ -110,30 +128,13 @@ export async function createJob(
   requirementFields: GenericJobRequirementInput = {},
 ) {
   const admin = await requireAdmin();
-  const validatedJob = await validateJobInput(
+  const { requirementLifecycle: _ignored, ...postedFields } = requirementFields;
+  const job = await createPostedRequirementForCompany({
+    companyId,
+    createdByUserId: admin.id,
     title,
     status,
-    companyId,
-    requirementFields,
-    {
-      allowRequirementLifecycle: true,
-      requireDraftLifecycle: true,
-    },
-  );
-
-  const job = await prisma.$transaction(async (tx) => {
-    const created = await tx.job.create({
-      data: validatedJob,
-    });
-
-    await createDraftSpecificationForJob({
-      jobId: created.id,
-      fields: specFieldsFromRecord(created),
-      createdByUserId: admin.id,
-      db: tx,
-    });
-
-    return created;
+    fields: postedFields,
   });
 
   revalidatePath("/dashboard/jobs");
@@ -379,231 +380,6 @@ export async function assignInterviewerToJob(
 
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard/interviewers");
-
-  return job;
-}
-
-/**
- * Complete requirement: CLIENT_NOTIFIED → REQUIREMENT_POSTED.
- * Admin may complete any requirement; Client may complete only their own.
- * Lifecycle transition is conditional so concurrent requests cannot both win.
- */
-export async function completeJobRequirement(jobId: number) {
-  const user = await requireUser();
-  const validatedJobId = validateJobId(jobId);
-
-  let companyIdFilter: number | undefined;
-
-  if (user.role === PortalRole.ADMIN) {
-    // Admin may complete any requirement in the existing workflow.
-  } else if (user.role === PortalRole.CLIENT) {
-    const client = await requireClientPortal();
-    await requireJobAccess(validatedJobId);
-    companyIdFilter = client.companyId;
-  } else {
-    throw new AuthorizationError("Unauthorized.");
-  }
-
-  const existingJob = await prisma.job.findFirst({
-    where: {
-      id: validatedJobId,
-      ...(companyIdFilter !== undefined
-        ? { companyId: companyIdFilter }
-        : {}),
-    },
-    select: {
-      id: true,
-      title: true,
-      requirementLifecycle: true,
-      clientCompletedAt: true,
-      roleCategory: true,
-      experienceRange: true,
-      location: true,
-      compensationRange: true,
-      targetHireDate: true,
-      numberOfPositions: true,
-      mustHaveRequirements: true,
-      niceToHaveRequirements: true,
-      jobDescription: true,
-      evaluationCriteria: true,
-      primarySkills: true,
-    },
-  });
-
-  if (!existingJob) {
-    throw new JobValidationError("Requirement not found.");
-  }
-
-  if (existingJob.requirementLifecycle === "REQUIREMENT_POSTED") {
-    throw new JobValidationError("Requirement is already posted.");
-  }
-
-  if (existingJob.requirementLifecycle !== "CLIENT_NOTIFIED") {
-    throw new JobValidationError(
-      "Requirement must be in CLIENT_NOTIFIED state.",
-    );
-  }
-
-  const job = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`
-      SELECT "id" FROM "Job" WHERE "id" = ${validatedJobId} FOR UPDATE
-    `;
-
-    await publishDraftSpecification({
-      jobId: validatedJobId,
-      createdByUserId: user.id,
-      db: tx,
-    });
-
-    const transition = await tx.job.updateMany({
-      where: {
-        id: validatedJobId,
-        requirementLifecycle: "CLIENT_NOTIFIED",
-        ...(companyIdFilter !== undefined
-          ? { companyId: companyIdFilter }
-          : {}),
-      },
-      data: {
-        clientCompletedAt: new Date(),
-        requirementLifecycle: "REQUIREMENT_POSTED",
-      },
-    });
-
-    if (transition.count !== 1) {
-      throw new JobValidationError(
-        "Requirement is no longer available for completion.",
-      );
-    }
-
-    return tx.job.findUniqueOrThrow({
-      where: {
-        id: validatedJobId,
-      },
-    });
-  });
-
-  revalidateClientRequirementPaths(validatedJobId);
-
-  return job;
-}
-
-/**
- * Client draft save: updates editable requirement fields only.
- * Does not change lifecycle, status, clientCompletedAt, sourcing, or SLA.
- * Allowed while lifecycle is REQUIREMENT_DRAFTED or CLIENT_NOTIFIED.
- * Company comes from ACTIVE membership, never from the request.
- */
-export async function updateClientRequirement(
-  jobId: number,
-  title: string,
-  fields: ClientRequirementEditableInput,
-  expectedUpdatedAt?: Date | string | null,
-) {
-  const client = await requireClientPortal();
-  const validatedJobId = validateJobId(jobId);
-
-  const existingJob = await prisma.job.findFirst({
-    where: {
-      id: validatedJobId,
-      companyId: client.companyId,
-    },
-    select: {
-      id: true,
-      status: true,
-      companyId: true,
-      requirementLifecycle: true,
-    },
-  });
-
-  if (!existingJob) {
-    throw new JobValidationError("Requirement not found.");
-  }
-
-  if (
-    existingJob.requirementLifecycle !== "REQUIREMENT_DRAFTED" &&
-    existingJob.requirementLifecycle !== "CLIENT_NOTIFIED"
-  ) {
-    throw new JobValidationError("Requirement is not editable.");
-  }
-
-  // Explicit allow-list — never accept lifecycle, status, sourcing timestamps, or SLA.
-  const allowedFields: GenericJobRequirementInput = {
-    roleCategory: fields.roleCategory,
-    experienceRange: fields.experienceRange,
-    location: fields.location,
-    compensationRange: fields.compensationRange,
-    targetHireDate: fields.targetHireDate,
-    numberOfPositions: fields.numberOfPositions,
-    mustHaveRequirements: fields.mustHaveRequirements,
-    niceToHaveRequirements: fields.niceToHaveRequirements,
-    jobDescription: fields.jobDescription,
-    evaluationCriteria: fields.evaluationCriteria,
-    primarySkills: fields.primarySkills,
-  };
-
-  const validated = await validateJobInput(
-    title,
-    existingJob.status,
-    existingJob.companyId,
-    allowedFields,
-  );
-
-  const parsedExpectedUpdatedAt =
-    expectedUpdatedAt instanceof Date
-      ? expectedUpdatedAt
-      : typeof expectedUpdatedAt === "string" && expectedUpdatedAt
-        ? new Date(expectedUpdatedAt)
-        : null;
-
-  const job = await prisma.$transaction(async (tx) => {
-    await upsertDraftSpecification({
-      jobId: validatedJobId,
-      lifecycle: existingJob.requirementLifecycle,
-      fields: specFieldsFromRecord({
-        title: validated.title,
-        roleCategory: validated.roleCategory ?? null,
-        experienceRange: validated.experienceRange ?? null,
-        location: validated.location ?? null,
-        compensationRange: validated.compensationRange ?? null,
-        targetHireDate: validated.targetHireDate ?? null,
-        numberOfPositions: validated.numberOfPositions ?? null,
-        mustHaveRequirements: validated.mustHaveRequirements ?? null,
-        niceToHaveRequirements: validated.niceToHaveRequirements ?? null,
-        jobDescription: validated.jobDescription ?? null,
-        evaluationCriteria: validated.evaluationCriteria ?? null,
-        primarySkills: validated.primarySkills ?? null,
-      }),
-      expectedUpdatedAt: parsedExpectedUpdatedAt,
-      createdByUserId: client.id,
-      requireOptimisticLock: true,
-      db: tx,
-    });
-
-    return tx.job.findUniqueOrThrow({
-      where: { id: validatedJobId },
-    });
-  });
-
-  revalidateClientRequirementPaths(validatedJobId);
-
-  return job;
-}
-
-/**
- * Client submission: REQUIREMENT_DRAFTED → CLIENT_NOTIFIED.
- * Does not complete, publish, or plant workflow timestamps.
- * Company comes from ACTIVE membership, never from the request.
- */
-export async function submitClientRequirement(jobId: number) {
-  const client = await requireClientPortal();
-  const validatedJobId = validateJobId(jobId);
-
-  const job = await submitClientRequirementForCompany({
-    jobId: validatedJobId,
-    companyId: client.companyId,
-  });
-
-  revalidateClientRequirementPaths(validatedJobId);
 
   return job;
 }

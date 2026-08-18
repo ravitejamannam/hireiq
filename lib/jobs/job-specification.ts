@@ -1,7 +1,9 @@
 import {
   JobSpecificationVersionStatus,
   Prisma,
+  type JobStatus,
   type RoleCategory,
+  type SourcingDatabaseSource,
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
@@ -127,6 +129,54 @@ export function readEditableJobSpecification(job: {
   }
 
   return readJobSpecification(job);
+}
+
+export async function createPostedJobWithPublishedSpecification(input: {
+  title: string;
+  status: JobStatus;
+  companyId: number;
+  fields: JobSpecificationScalarFields;
+  createdByUserId?: number | null;
+  sourcingDatabaseSource?: SourcingDatabaseSource | null;
+  sourcingAccessDetails?: string | null;
+}) {
+  const completed = validateJobRequirementCompletion({
+    ...input.fields,
+    title: input.title,
+  });
+
+  return prisma.$transaction(async (tx) => {
+    const created = await tx.job.create({
+      data: {
+        status: input.status,
+        companyId: input.companyId,
+        requirementLifecycle: "REQUIREMENT_POSTED",
+        clientCompletedAt: new Date(),
+        sourcingDatabaseSource: input.sourcingDatabaseSource ?? null,
+        sourcingAccessDetails: input.sourcingAccessDetails ?? null,
+        ...jobProjectionFromSpec(completed),
+      },
+    });
+
+    const published = await tx.jobSpecificationVersion.create({
+      data: {
+        jobId: created.id,
+        versionNumber: 1,
+        status: JobSpecificationVersionStatus.PUBLISHED,
+        publishedAt: new Date(),
+        createdByUserId: input.createdByUserId ?? null,
+        structuredPayload: LEGACY_STRUCTURED_PAYLOAD,
+        ...completed,
+      },
+    });
+
+    return tx.job.update({
+      where: { id: created.id },
+      data: {
+        currentPublishedSpecificationVersionId: published.id,
+      },
+    });
+  });
 }
 
 export async function createDraftSpecificationForJob(input: {

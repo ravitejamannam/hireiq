@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { RequirementLifecycle } from "@prisma/client";
 
 import type { getInterviewers } from "@/lib/repositories/interviewer-repository";
 import type { getJobs } from "@/lib/repositories/job-repository";
@@ -10,13 +9,11 @@ import type { Company } from "@/types/company";
 import type { JobFormData } from "@/components/jobs/JobForm";
 import {
   assignInterviewerToJob,
-  completeJobRequirement,
   completeJobShortlisting,
   createJob,
   deleteJob,
   markJobSourcingAccessReceived,
   notifyAssignedInterviewer,
-  transitionJobLifecycle,
   updateJob,
 } from "@/app/actions/job-actions";
 import { describeUnsentCommunicationEmail } from "@/lib/communication/email-follow-up";
@@ -49,16 +46,12 @@ export default function JobsClient({
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [advancingJobId, setAdvancingJobId] = useState<number | null>(null);
   const [assigningJobId, setAssigningJobId] = useState<number | null>(null);
   const [recordingAccessJobId, setRecordingAccessJobId] = useState<
     number | null
   >(null);
   const [completingShortlistingJobId, setCompletingShortlistingJobId] =
     useState<number | null>(null);
-  const [postingRequirementJobId, setPostingRequirementJobId] = useState<
-    number | null
-  >(null);
   const [notifyingInterviewerJobId, setNotifyingInterviewerJobId] = useState<
     number | null
   >(null);
@@ -99,23 +92,6 @@ export default function JobsClient({
     }
   }
 
-  async function handleAdvanceLifecycle(
-    id: number,
-    nextLifecycle: RequirementLifecycle,
-  ) {
-    setActionError("");
-    setAdvancingJobId(id);
-
-    try {
-      await transitionJobLifecycle(id, nextLifecycle);
-      router.refresh();
-    } catch (error) {
-      setActionError(getErrorMessage(error));
-    } finally {
-      setAdvancingJobId(null);
-    }
-  }
-
   async function handleAssignInterviewer(
     jobId: number,
     interviewerId: number | null,
@@ -147,20 +123,6 @@ export default function JobsClient({
       setActionError(getErrorMessage(error));
     } finally {
       setRecordingAccessJobId(null);
-    }
-  }
-
-  async function handleCompleteRequirement(jobId: number) {
-    setActionError("");
-    setPostingRequirementJobId(jobId);
-
-    try {
-      await completeJobRequirement(jobId);
-      router.refresh();
-    } catch (error) {
-      setActionError(getErrorMessage(error));
-    } finally {
-      setPostingRequirementJobId(null);
     }
   }
 
@@ -302,7 +264,7 @@ export default function JobsClient({
             </h2>
 
             <p className="mt-3 text-center text-zinc-600">
-              Try a different search or post a new role draft.
+              Try a different search or post a new role.
             </p>
           </div>
         </div>
@@ -339,17 +301,13 @@ export default function JobsClient({
               assignedInterviewer={job.assignedInterviewer}
               interviewers={interviewers}
               clientCompletedAt={job.clientCompletedAt}
-              isAdvancing={advancingJobId === job.id}
               isAssigning={assigningJobId === job.id}
               isRecordingAccess={recordingAccessJobId === job.id}
               isCompletingShortlisting={completingShortlistingJobId === job.id}
-              isPostingRequirement={postingRequirementJobId === job.id}
               isNotifyingInterviewer={notifyingInterviewerJobId === job.id}
-              onAdvanceLifecycle={handleAdvanceLifecycle}
               onAssignInterviewer={handleAssignInterviewer}
               onMarkAccessReceived={handleMarkAccessReceived}
               onCompleteShortlisting={handleCompleteShortlisting}
-              onCompleteRequirement={handleCompleteRequirement}
               onNotifyInterviewer={handleNotifyInterviewer}
               onEdit={handleEditJob}
               onDelete={handleDeleteJob}
@@ -379,11 +337,6 @@ export default function JobsClient({
             ? completingShortlistingJobId === activeEditingJob.id
             : false
         }
-        isPostingRequirement={
-          activeEditingJob
-            ? postingRequirementJobId === activeEditingJob.id
-            : false
-        }
         isNotifyingInterviewer={
           activeEditingJob
             ? notifyingInterviewerJobId === activeEditingJob.id
@@ -398,11 +351,6 @@ export default function JobsClient({
         onCompleteShortlisting={
           activeEditingJob
             ? () => handleCompleteShortlisting(activeEditingJob.id)
-            : undefined
-        }
-        onCompleteRequirement={
-          activeEditingJob
-            ? () => handleCompleteRequirement(activeEditingJob.id)
             : undefined
         }
         onNotifyInterviewer={

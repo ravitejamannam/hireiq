@@ -25,12 +25,10 @@ type JobModalProps = {
   isSaving?: boolean;
   isRecordingAccess?: boolean;
   isCompletingShortlisting?: boolean;
-  isPostingRequirement?: boolean;
   isNotifyingInterviewer?: boolean;
   assignedInterviewer?: AssignedInterviewerSummary | null;
   onMarkAccessReceived?: () => void;
   onCompleteShortlisting?: () => void;
-  onCompleteRequirement?: () => void;
   onNotifyInterviewer?: () => void;
 };
 
@@ -44,12 +42,10 @@ export default function JobModal({
   isSaving,
   isRecordingAccess,
   isCompletingShortlisting,
-  isPostingRequirement,
   isNotifyingInterviewer,
   assignedInterviewer,
   onMarkAccessReceived,
   onCompleteShortlisting,
-  onCompleteRequirement,
   onNotifyInterviewer,
 }: JobModalProps) {
   if (!isOpen) return null;
@@ -98,12 +94,10 @@ export default function JobModal({
           isSaving={isSaving}
           isRecordingAccess={isRecordingAccess}
           isCompletingShortlisting={isCompletingShortlisting}
-          isPostingRequirement={isPostingRequirement}
           isNotifyingInterviewer={isNotifyingInterviewer}
           assignedInterviewer={assignedInterviewer}
           onMarkAccessReceived={onMarkAccessReceived}
           onCompleteShortlisting={onCompleteShortlisting}
-          onCompleteRequirement={onCompleteRequirement}
           onNotifyInterviewer={onNotifyInterviewer}
         />
       </div>

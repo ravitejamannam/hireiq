@@ -85,6 +85,8 @@ export default async function ClientCandidateDetailPage({
           requirementTitle: application.job.title,
           companyName: application.job.company.name,
           requirementStatus: application.job.status,
+          interviews: application.interviews,
+          codingTests: application.codingTests,
           evaluation: evaluation
             ? {
                 overallScore: evaluation.overallScore,

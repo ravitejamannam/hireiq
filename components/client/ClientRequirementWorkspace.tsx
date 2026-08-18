@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import type {
   JobDescriptionAiGenerationStatus,
   JobStatus,
@@ -9,14 +8,6 @@ import type {
   RoleCategory,
 } from "@prisma/client";
 
-import {
-  acceptGeneratedJobDescription,
-  completeJobRequirement,
-  discardGeneratedJobDescription,
-  generateJobDescription,
-  submitClientRequirement,
-  updateClientRequirement,
-} from "@/app/actions/job-actions";
 import {
   clientJobStatusLabels,
   clientRequirementLifecycleLabels,
@@ -29,13 +20,6 @@ import JobDistributionPanel from "@/components/client/JobDistributionPanel";
 import type { ClientCandidateCardData } from "@/components/client/ClientCandidateCard";
 import type { SafeProviderConnection } from "@/lib/jobs/distribution/connection-service";
 import type { SafeJobDistribution } from "@/lib/jobs/distribution/distribution-service";
-
-const roleCategoryOptions = [
-  { value: "ENGINEERING", label: "Engineering" },
-  { value: "SALES", label: "Sales" },
-  { value: "DESIGN", label: "Design" },
-  { value: "FINANCE", label: "Finance" },
-] as const satisfies ReadonlyArray<{ value: RoleCategory; label: string }>;
 
 const roleCategoryLabels: Record<RoleCategory, string> = {
   ENGINEERING: "Engineering",
@@ -71,21 +55,6 @@ export type ClientRequirementWorkspaceData = {
   pipelineCounts: ClientPipelineCounts;
 };
 
-type FormState = {
-  title: string;
-  roleCategory: RoleCategory | "";
-  experienceRange: string;
-  location: string;
-  compensationRange: string;
-  targetHireDate: string;
-  numberOfPositions: string;
-  mustHaveRequirements: string;
-  niceToHaveRequirements: string;
-  jobDescription: string;
-  evaluationCriteria: string;
-  primarySkills: string;
-};
-
 type ClientRequirementWorkspaceProps = {
   requirement: ClientRequirementWorkspaceData;
   candidates: ClientCandidateCardData[];
@@ -96,76 +65,18 @@ type ClientRequirementWorkspaceProps = {
   distributions: SafeJobDistribution[];
 };
 
-function getErrorMessage(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : "Something went wrong. Please try again.";
-}
-
-function formatDateInputValue(value: string | null | undefined) {
-  if (!value) return "";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function toFormState(requirement: ClientRequirementWorkspaceData): FormState {
-  return {
-    title: requirement.title,
-    roleCategory: requirement.roleCategory ?? "",
-    experienceRange: requirement.experienceRange ?? "",
-    location: requirement.location ?? "",
-    compensationRange: requirement.compensationRange ?? "",
-    targetHireDate: formatDateInputValue(requirement.targetHireDate),
-    numberOfPositions:
-      requirement.numberOfPositions === null ||
-      requirement.numberOfPositions === undefined
-        ? ""
-        : String(requirement.numberOfPositions),
-    mustHaveRequirements: requirement.mustHaveRequirements ?? "",
-    niceToHaveRequirements: requirement.niceToHaveRequirements ?? "",
-    jobDescription: requirement.jobDescription ?? "",
-    evaluationCriteria: requirement.evaluationCriteria ?? "",
-    primarySkills: requirement.primarySkills ?? "",
-  };
-}
-
-function parseDraftFields(form: FormState) {
-  return {
-    roleCategory: form.roleCategory === "" ? null : form.roleCategory,
-    experienceRange: form.experienceRange.trim() || null,
-    location: form.location.trim() || null,
-    compensationRange: form.compensationRange.trim() || null,
-    targetHireDate: form.targetHireDate
-      ? new Date(`${form.targetHireDate}T00:00:00.000Z`)
-      : null,
-    numberOfPositions: form.numberOfPositions.trim()
-      ? Number(form.numberOfPositions)
-      : null,
-    mustHaveRequirements: form.mustHaveRequirements.trim() || null,
-    niceToHaveRequirements: form.niceToHaveRequirements.trim() || null,
-    jobDescription: form.jobDescription.trim() || null,
-    evaluationCriteria: form.evaluationCriteria.trim() || null,
-    primarySkills: form.primarySkills.trim() || null,
-  };
-}
-
 function lifecycleGuidance(lifecycle: RequirementLifecycle) {
   switch (lifecycle) {
-    case "REQUIREMENT_DRAFTED":
-      return "You can edit this requirement. Submit it when all required fields are complete.";
-    case "CLIENT_NOTIFIED":
-      return "Review and complete this requirement.";
     case "REQUIREMENT_POSTED":
-      return "Requirement completed.";
+      return "This role is posted. HireIQ will assign an interviewer next.";
+    case "INTERVIEWER_NOTIFIED":
+      return "The assigned interviewer has been notified.";
+    case "SOURCING_SHORTLISTING":
+      return "Sourcing and shortlisting are in progress.";
+    case "BILLING_GENERATED":
+      return "Billing has been generated for this requirement.";
     default:
-      return "Requirement completed.";
+      return "This requirement is posted and can no longer be edited.";
   }
 }
 
@@ -186,164 +97,9 @@ export default function ClientRequirementWorkspace({
   connections,
   distributions,
 }: ClientRequirementWorkspaceProps) {
-  const router = useRouter();
   const [section, setSection] = useState<"overview" | "candidates">(
     initialSection,
   );
-  const [form, setForm] = useState(() => toFormState(requirement));
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [busyAction, setBusyAction] = useState<
-    "draft" | "submit" | "complete" | "generate" | "accept" | "discard" | null
-  >(null);
-
-  const isEditable =
-    requirement.requirementLifecycle === "REQUIREMENT_DRAFTED" ||
-    requirement.requirementLifecycle === "CLIENT_NOTIFIED";
-  const canSubmit =
-    requirement.requirementLifecycle === "REQUIREMENT_DRAFTED";
-  const canUseAi =
-    isEditable && requirement.hasDraftSpecification;
-  const canComplete =
-    requirement.requirementLifecycle === "CLIENT_NOTIFIED";
-  const isCompleted =
-    requirement.requirementLifecycle === "REQUIREMENT_POSTED" ||
-    requirement.requirementLifecycle === "INTERVIEWER_NOTIFIED" ||
-    requirement.requirementLifecycle === "SOURCING_SHORTLISTING" ||
-    requirement.requirementLifecycle === "BILLING_GENERATED";
-
-  function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((current) => ({ ...current, [key]: value }));
-    setErrorMessage(null);
-    setSuccessMessage(null);
-  }
-
-  function handleSaveDraft() {
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setBusyAction("draft");
-
-    startTransition(async () => {
-      try {
-        await updateClientRequirement(
-          requirement.id,
-          form.title,
-          parseDraftFields(form),
-          requirement.specificationUpdatedAt,
-        );
-        setSuccessMessage("Draft saved.");
-        router.refresh();
-      } catch (error) {
-        setErrorMessage(getErrorMessage(error));
-      } finally {
-        setBusyAction(null);
-      }
-    });
-  }
-
-  function handleSubmitRequirement() {
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setBusyAction("submit");
-
-    startTransition(async () => {
-      try {
-        await updateClientRequirement(
-          requirement.id,
-          form.title,
-          parseDraftFields(form),
-          requirement.specificationUpdatedAt,
-        );
-        await submitClientRequirement(requirement.id);
-        setSuccessMessage("Requirement submitted.");
-        router.refresh();
-      } catch (error) {
-        setErrorMessage(getErrorMessage(error));
-      } finally {
-        setBusyAction(null);
-      }
-    });
-  }
-
-  function handleComplete() {
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setBusyAction("complete");
-
-    startTransition(async () => {
-      try {
-        await updateClientRequirement(
-          requirement.id,
-          form.title,
-          parseDraftFields(form),
-          requirement.specificationUpdatedAt,
-        );
-        await completeJobRequirement(requirement.id);
-        setSuccessMessage("Requirement completed.");
-        router.refresh();
-      } catch (error) {
-        setErrorMessage(getErrorMessage(error));
-      } finally {
-        setBusyAction(null);
-      }
-    });
-  }
-
-  function runAiAction(
-    action: "generate" | "accept" | "discard",
-    run: () => Promise<unknown>,
-    successMessage: string,
-  ) {
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setBusyAction(action);
-
-    startTransition(async () => {
-      try {
-        await run();
-        setSuccessMessage(successMessage);
-        router.refresh();
-      } catch (error) {
-        setErrorMessage(getErrorMessage(error));
-      } finally {
-        setBusyAction(null);
-      }
-    });
-  }
-
-  function handleGenerateJobDescription() {
-    runAiAction(
-      "generate",
-      () => generateJobDescription(requirement.id),
-      "Job description proposal generated.",
-    );
-  }
-
-  function handleAcceptGeneratedJobDescription() {
-    runAiAction(
-      "accept",
-      async () => {
-        await acceptGeneratedJobDescription(requirement.id);
-        if (requirement.aiProposedJobDescription) {
-          updateField("jobDescription", requirement.aiProposedJobDescription);
-        }
-      },
-      "Job description updated.",
-    );
-  }
-
-  function handleDiscardGeneratedJobDescription() {
-    runAiAction(
-      "discard",
-      () => discardGeneratedJobDescription(requirement.id),
-      "Generated job description discarded.",
-    );
-  }
-
-  const inputClassName =
-    "mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none transition focus:border-black disabled:cursor-not-allowed disabled:bg-zinc-100";
-  const textareaClassName = `${inputClassName} min-h-28 resize-y`;
 
   return (
     <div>
@@ -376,7 +132,7 @@ export default function ClientRequirementWorkspace({
         {lifecycleGuidance(requirement.requirementLifecycle)}
         {requirement.clientCompletedAt ? (
           <span className="ml-2 text-zinc-500">
-            Completed {formatClientDate(new Date(requirement.clientCompletedAt))}
+            Posted {formatClientDate(new Date(requirement.clientCompletedAt))}
           </span>
         ) : null}
       </div>
@@ -394,367 +150,6 @@ export default function ClientRequirementWorkspace({
           requirementId={requirement.id}
           candidates={candidates}
         />
-      ) : (
-        <>
-      {errorMessage ? (
-        <div
-          role="alert"
-          className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-        >
-          {errorMessage}
-        </div>
-      ) : null}
-
-      {successMessage ? (
-        <div
-          role="status"
-          className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-        >
-          {successMessage}
-        </div>
-      ) : null}
-
-      {isEditable ? (
-        <form
-          className="mt-8 space-y-8"
-          onSubmit={(event) => {
-            event.preventDefault();
-            handleSaveDraft();
-          }}
-        >
-          <section className="rounded-xl border border-zinc-200 bg-white p-6">
-            <h2 className="text-lg font-bold text-black">Role / Requirement</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="requirement-title"
-                  className="block text-sm font-medium text-black"
-                >
-                  Title
-                </label>
-                <input
-                  id="requirement-title"
-                  value={form.title}
-                  disabled={isPending}
-                  onChange={(event) => updateField("title", event.target.value)}
-                  className={inputClassName}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="requirement-role-category"
-                  className="block text-sm font-medium text-black"
-                >
-                  Role Category
-                </label>
-                <select
-                  id="requirement-role-category"
-                  value={form.roleCategory}
-                  disabled={isPending}
-                  onChange={(event) =>
-                    updateField(
-                      "roleCategory",
-                      event.target.value as RoleCategory | "",
-                    )
-                  }
-                  className={inputClassName}
-                >
-                  <option value="">Select role category</option>
-                  {roleCategoryOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor="requirement-experience"
-                  className="block text-sm font-medium text-black"
-                >
-                  Experience
-                </label>
-                <input
-                  id="requirement-experience"
-                  value={form.experienceRange}
-                  disabled={isPending}
-                  onChange={(event) =>
-                    updateField("experienceRange", event.target.value)
-                  }
-                  className={inputClassName}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="requirement-location"
-                  className="block text-sm font-medium text-black"
-                >
-                  Location
-                </label>
-                <input
-                  id="requirement-location"
-                  value={form.location}
-                  disabled={isPending}
-                  onChange={(event) =>
-                    updateField("location", event.target.value)
-                  }
-                  className={inputClassName}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="requirement-compensation"
-                  className="block text-sm font-medium text-black"
-                >
-                  Compensation
-                </label>
-                <input
-                  id="requirement-compensation"
-                  value={form.compensationRange}
-                  disabled={isPending}
-                  onChange={(event) =>
-                    updateField("compensationRange", event.target.value)
-                  }
-                  className={inputClassName}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="requirement-positions"
-                  className="block text-sm font-medium text-black"
-                >
-                  Number of Positions
-                </label>
-                <input
-                  id="requirement-positions"
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={form.numberOfPositions}
-                  disabled={isPending}
-                  onChange={(event) =>
-                    updateField("numberOfPositions", event.target.value)
-                  }
-                  className={inputClassName}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="requirement-target-hire-date"
-                  className="block text-sm font-medium text-black"
-                >
-                  Target Hire Date
-                </label>
-                <input
-                  id="requirement-target-hire-date"
-                  type="date"
-                  value={form.targetHireDate}
-                  disabled={isPending}
-                  onChange={(event) =>
-                    updateField("targetHireDate", event.target.value)
-                  }
-                  className={inputClassName}
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-zinc-200 bg-white p-6">
-            <h2 className="text-lg font-bold text-black">Requirements</h2>
-            <div className="mt-4 grid gap-4">
-              <div>
-                <label
-                  htmlFor="requirement-primary-skills"
-                  className="block text-sm font-medium text-black"
-                >
-                  Primary Skills
-                </label>
-                <textarea
-                  id="requirement-primary-skills"
-                  value={form.primarySkills}
-                  disabled={isPending}
-                  onChange={(event) =>
-                    updateField("primarySkills", event.target.value)
-                  }
-                  className={textareaClassName}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="requirement-must-have"
-                  className="block text-sm font-medium text-black"
-                >
-                  Must Have
-                </label>
-                <textarea
-                  id="requirement-must-have"
-                  value={form.mustHaveRequirements}
-                  disabled={isPending}
-                  onChange={(event) =>
-                    updateField("mustHaveRequirements", event.target.value)
-                  }
-                  className={textareaClassName}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="requirement-nice-to-have"
-                  className="block text-sm font-medium text-black"
-                >
-                  Nice To Have
-                </label>
-                <textarea
-                  id="requirement-nice-to-have"
-                  value={form.niceToHaveRequirements}
-                  disabled={isPending}
-                  onChange={(event) =>
-                    updateField("niceToHaveRequirements", event.target.value)
-                  }
-                  className={textareaClassName}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="requirement-job-description"
-                  className="block text-sm font-medium text-black"
-                >
-                  Job Description
-                </label>
-                <textarea
-                  id="requirement-job-description"
-                  value={form.jobDescription}
-                  disabled={isPending}
-                  onChange={(event) =>
-                    updateField("jobDescription", event.target.value)
-                  }
-                  className={textareaClassName}
-                />
-              </div>
-              {canUseAi ? (
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                  <h3 className="text-sm font-semibold text-black">
-                    AI Job Description
-                  </h3>
-                  <p className="mt-1 text-sm text-zinc-600">
-                    Generate a professional JD from your requirements. The
-                    current description is not changed until you use the
-                    proposal.
-                  </p>
-                  {requirement.aiProposedJobDescription ? (
-                    <div className="mt-3">
-                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                        AI Proposed Description
-                      </p>
-                      <pre className="mt-2 whitespace-pre-wrap rounded-lg border border-zinc-200 bg-white p-3 text-sm text-black">
-                        {requirement.aiProposedJobDescription}
-                      </pre>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          disabled={isPending}
-                          onClick={handleAcceptGeneratedJobDescription}
-                          className="rounded-lg bg-black px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
-                        >
-                          {busyAction === "accept"
-                            ? "Applying..."
-                            : "Use This Description"}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isPending}
-                          onClick={handleGenerateJobDescription}
-                          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:opacity-60"
-                        >
-                          {busyAction === "generate"
-                            ? "Generating..."
-                            : "Regenerate"}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isPending}
-                          onClick={handleDiscardGeneratedJobDescription}
-                          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:opacity-60"
-                        >
-                          {busyAction === "discard" ? "Discarding..." : "Discard"}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={isPending}
-                      onClick={handleGenerateJobDescription}
-                      className="mt-3 rounded-lg bg-black px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
-                    >
-                      {busyAction === "generate"
-                        ? "Generating..."
-                        : "Generate Job Description"}
-                    </button>
-                  )}
-                </div>
-              ) : null}
-              <div>
-                <label
-                  htmlFor="requirement-evaluation-criteria"
-                  className="block text-sm font-medium text-black"
-                >
-                  Evaluation Criteria
-                </label>
-                <textarea
-                  id="requirement-evaluation-criteria"
-                  value={form.evaluationCriteria}
-                  disabled={isPending}
-                  onChange={(event) =>
-                    updateField("evaluationCriteria", event.target.value)
-                  }
-                  className={textareaClassName}
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-zinc-200 bg-white p-6">
-            <h2 className="text-lg font-bold text-black">Client Action</h2>
-            <p className="mt-2 text-sm text-zinc-600">
-              {canComplete
-                ? "Review the requirement. Save a draft at any time, or complete it when all details are confirmed."
-                : "Save your draft at any time. Complete all required fields before submitting. Submission starts the hiring workflow."}
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                type="submit"
-                disabled={isPending}
-                className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:opacity-60"
-              >
-                {busyAction === "draft" ? "Saving..." : "Save Draft"}
-              </button>
-              {canSubmit ? (
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={handleSubmitRequirement}
-                className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
-              >
-                {busyAction === "submit"
-                  ? "Submitting..."
-                  : "Submit Requirement"}
-              </button>
-              ) : null}
-              {canComplete ? (
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={handleComplete}
-                className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
-              >
-                {busyAction === "complete"
-                  ? "Completing..."
-                  : "Complete Requirement"}
-              </button>
-              ) : null}
-            </div>
-          </section>
-        </form>
       ) : (
         <>
           <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
@@ -833,72 +228,68 @@ export default function ClientRequirementWorkspace({
             </dl>
           </section>
 
-          {isCompleted ? (
-            <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
-              <h2 className="text-lg font-bold text-black">Client Action</h2>
-              <p className="mt-2 text-sm text-zinc-600">
-                This requirement is complete and can no longer be edited.
+          <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
+            <h2 className="text-lg font-bold text-black">Client Action</h2>
+            <p className="mt-2 text-sm text-zinc-600">
+              This requirement is posted and can no longer be edited.
+            </p>
+          </section>
+
+          <JobDistributionPanel
+            jobId={requirement.id}
+            hasPublishedSpecification={requirement.hasPublishedSpecification}
+            isOwner={isOwner}
+            connections={connections}
+            distributions={distributions}
+          />
+
+          <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
+            <h2 className="text-lg font-bold text-black">Pipeline summary</h2>
+            {requirement.applicationCount === 0 ? (
+              <p className="mt-4 text-sm text-zinc-600">
+                No candidates are currently in the recruitment pipeline.
               </p>
-            </section>
-          ) : null}
-        </>
-      )}
-
-      <JobDistributionPanel
-        jobId={requirement.id}
-        hasPublishedSpecification={requirement.hasPublishedSpecification}
-        isOwner={isOwner}
-        connections={connections}
-        distributions={distributions}
-      />
-
-      <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
-        <h2 className="text-lg font-bold text-black">Pipeline summary</h2>
-        {requirement.applicationCount === 0 ? (
-          <p className="mt-4 text-sm text-zinc-600">
-            No candidates are currently in the recruitment pipeline.
-          </p>
-        ) : (
-          <dl className="mt-4 grid grid-cols-2 gap-4 text-sm text-zinc-600 sm:grid-cols-3 lg:grid-cols-6">
-            <div>
-              <dt className="font-medium text-black">CV Pool</dt>
-              <dd className="mt-1 text-2xl font-bold text-black">
-                {requirement.pipelineCounts.cvPool}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium text-black">Expert Review</dt>
-              <dd className="mt-1 text-2xl font-bold text-black">
-                {requirement.pipelineCounts.expertReview}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium text-black">Tech Eval</dt>
-              <dd className="mt-1 text-2xl font-bold text-black">
-                {requirement.pipelineCounts.techEvaluation}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium text-black">Shortlisted</dt>
-              <dd className="mt-1 text-2xl font-bold text-black">
-                {requirement.pipelineCounts.shortlisted}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium text-black">Selected</dt>
-              <dd className="mt-1 text-2xl font-bold text-black">
-                {requirement.pipelineCounts.selected}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium text-black">Hired</dt>
-              <dd className="mt-1 text-2xl font-bold text-black">
-                {requirement.pipelineCounts.hired}
-              </dd>
-            </div>
-          </dl>
-        )}
-      </section>
+            ) : (
+              <dl className="mt-4 grid grid-cols-2 gap-4 text-sm text-zinc-600 sm:grid-cols-3 lg:grid-cols-6">
+                <div>
+                  <dt className="font-medium text-black">CV Pool</dt>
+                  <dd className="mt-1 text-2xl font-bold text-black">
+                    {requirement.pipelineCounts.cvPool}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-black">Expert Review</dt>
+                  <dd className="mt-1 text-2xl font-bold text-black">
+                    {requirement.pipelineCounts.expertReview}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-black">Tech Eval</dt>
+                  <dd className="mt-1 text-2xl font-bold text-black">
+                    {requirement.pipelineCounts.techEvaluation}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-black">Shortlisted</dt>
+                  <dd className="mt-1 text-2xl font-bold text-black">
+                    {requirement.pipelineCounts.shortlisted}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-black">Selected</dt>
+                  <dd className="mt-1 text-2xl font-bold text-black">
+                    {requirement.pipelineCounts.selected}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-black">Hired</dt>
+                  <dd className="mt-1 text-2xl font-bold text-black">
+                    {requirement.pipelineCounts.hired}
+                  </dd>
+                </div>
+              </dl>
+            )}
+          </section>
         </>
       )}
     </div>

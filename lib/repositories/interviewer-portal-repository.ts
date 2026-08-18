@@ -140,6 +140,19 @@ function interviewerApplicationSelect(interviewerId: number) {
         interviewAt: "desc" as const,
       },
     },
+    codingTests: {
+      select: {
+        id: true,
+        title: true,
+        score: true,
+        maxScore: true,
+        status: true,
+        takenAt: true,
+      },
+      orderBy: {
+        takenAt: "desc" as const,
+      },
+    },
   } satisfies Prisma.ApplicationSelect;
 }
 

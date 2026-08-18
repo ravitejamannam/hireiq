@@ -45,8 +45,6 @@ const roleCategoryOptions = [
 ] as const satisfies ReadonlyArray<{ value: RoleCategory; label: string }>;
 
 const requirementLifecycleLabels: Record<RequirementLifecycle, string> = {
-  REQUIREMENT_DRAFTED: "Requirement Drafted",
-  CLIENT_NOTIFIED: "Client Notified",
   REQUIREMENT_POSTED: "Requirement Posted",
   INTERVIEWER_NOTIFIED: "Interviewer Notified",
   SOURCING_SHORTLISTING: "Sourcing & Shortlisting",
@@ -100,12 +98,10 @@ type JobFormProps = {
   isSaving?: boolean;
   isRecordingAccess?: boolean;
   isCompletingShortlisting?: boolean;
-  isPostingRequirement?: boolean;
   isNotifyingInterviewer?: boolean;
   assignedInterviewer?: AssignedInterviewerSummary | null;
   onMarkAccessReceived?: () => void;
   onCompleteShortlisting?: () => void;
-  onCompleteRequirement?: () => void;
   onNotifyInterviewer?: () => void;
 };
 
@@ -165,12 +161,10 @@ export default function JobForm({
   isSaving = false,
   isRecordingAccess = false,
   isCompletingShortlisting = false,
-  isPostingRequirement = false,
   isNotifyingInterviewer = false,
   assignedInterviewer = null,
   onMarkAccessReceived,
   onCompleteShortlisting,
-  onCompleteRequirement,
   onNotifyInterviewer,
 }: JobFormProps) {
   const [title, setTitle] = useState(initialValues?.title ?? "");
@@ -212,7 +206,7 @@ export default function JobForm({
     initialValues?.primarySkills ?? "",
   );
   const currentRequirementLifecycle =
-    initialValues?.requirementLifecycle ?? "REQUIREMENT_DRAFTED";
+    initialValues?.requirementLifecycle ?? "REQUIREMENT_POSTED";
   const [sourcingDatabaseSource, setSourcingDatabaseSource] = useState<
     SourcingDatabaseSource | ""
   >(initialValues?.sourcingDatabaseSource ?? "");
@@ -299,7 +293,7 @@ export default function JobForm({
         <div>
           <h3 className="text-lg font-semibold text-black">Role / Requirement</h3>
           <p className="mt-1 text-sm text-zinc-500">
-            Save a draft now; client-completed details can be filled later.
+            All required fields must be complete to post this role.
           </p>
         </div>
 
@@ -718,20 +712,6 @@ export default function JobForm({
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  {currentRequirementLifecycle === "CLIENT_NOTIFIED" &&
-                    onCompleteRequirement && (
-                      <button
-                        type="button"
-                        onClick={onCompleteRequirement}
-                        disabled={isPostingRequirement || isSaving}
-                        className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {isPostingRequirement
-                          ? "Posting..."
-                          : "Post Requirement"}
-                      </button>
-                    )}
-
                   {currentRequirementLifecycle === "REQUIREMENT_POSTED" && (
                     <span className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
                       Requirement Posted
@@ -811,7 +791,7 @@ export default function JobForm({
             ? "Saving..."
             : initialValues
               ? "Save Requirement"
-              : "Save Draft Requirement"}
+              : "Post Role"}
         </button>
       </div>
     </form>

@@ -320,6 +320,30 @@ const clientApplicationDetailSelect = {
       createdAt: "desc" as const,
     },
   },
+  interviews: {
+    select: {
+      id: true,
+      type: true,
+      interviewAt: true,
+      result: true,
+    },
+    orderBy: {
+      interviewAt: "desc" as const,
+    },
+  },
+  codingTests: {
+    select: {
+      id: true,
+      title: true,
+      score: true,
+      maxScore: true,
+      status: true,
+      takenAt: true,
+    },
+    orderBy: {
+      takenAt: "desc" as const,
+    },
+  },
 } satisfies Prisma.ApplicationSelect;
 
 /**

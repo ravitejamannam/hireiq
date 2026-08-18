@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   ApplicationPipelineStatus,
   type EvaluationFitDecision,
@@ -44,7 +43,6 @@ type TechnicalEvaluationCardProps = {
   evaluationState: TechnicalEvaluationState;
   isMoving?: boolean;
   onStartTechEvaluation?: (id: number) => void;
-  onOpenEvaluation?: (id: number) => void;
   onMoveToShortlisted?: (id: number) => void;
   onReject?: (id: number) => void;
 };
@@ -85,7 +83,6 @@ export default function TechnicalEvaluationCard({
   evaluationState,
   isMoving = false,
   onStartTechEvaluation,
-  onOpenEvaluation,
   onMoveToShortlisted,
   onReject,
 }: TechnicalEvaluationCardProps) {
@@ -181,26 +178,6 @@ export default function TechnicalEvaluationCard({
           >
             {isMoving ? "Moving..." : "Start Tech Evaluation"}
           </button>
-        )}
-
-        {isTechEvaluation && onOpenEvaluation && (
-          <button
-            type="button"
-            onClick={() => onOpenEvaluation(id)}
-            disabled={isMoving}
-            className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Open Technical Evaluation
-          </button>
-        )}
-
-        {isTechEvaluation && (
-          <Link
-            href="/dashboard/interviews"
-            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100"
-          >
-            View Interviews
-          </Link>
         )}
 
         {isTechEvaluation && onMoveToShortlisted && (

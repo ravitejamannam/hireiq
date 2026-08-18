@@ -34,8 +34,6 @@ const notificationTypeLabels: Record<NotificationType, string> = {
 };
 
 const requirementLifecycleLabels: Record<RequirementLifecycle, string> = {
-  REQUIREMENT_DRAFTED: "Requirement Drafted",
-  CLIENT_NOTIFIED: "Client Notified",
   REQUIREMENT_POSTED: "Requirement Posted",
   INTERVIEWER_NOTIFIED: "Interviewer Notified",
   SOURCING_SHORTLISTING: "Sourcing & Shortlisting",

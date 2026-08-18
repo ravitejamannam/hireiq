@@ -1,32 +1,21 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApplicationPipelineStatus } from "@prisma/client";
 
 import { transitionApplicationStatus } from "@/app/actions/application-actions";
-import {
-  getTechnicalEvaluationForApplication,
-  saveTechnicalEvaluation,
-} from "@/app/actions/evaluation-actions";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import WorkflowRequirementNav, {
   useRequirementIdFilter,
 } from "@/components/dashboard/WorkflowRequirementNav";
 import TechnicalEvaluationCard from "@/components/technical-evaluations/TechnicalEvaluationCard";
 import type { TechnicalEvaluationState } from "@/components/technical-evaluations/TechnicalEvaluationCard";
-import TechnicalEvaluationModal from "@/components/technical-evaluations/TechnicalEvaluationModal";
-import type { TechnicalEvaluationFormValues } from "@/components/technical-evaluations/TechnicalEvaluationForm";
 import type { getTechnicalEvaluationApplications } from "@/lib/repositories/application-repository";
-import type { ScorecardEntry } from "@/lib/validation/evaluation-validation";
 
 type Application = Awaited<
   ReturnType<typeof getTechnicalEvaluationApplications>
 >[number];
-
-type EvaluationDetail = NonNullable<
-  Awaited<ReturnType<typeof getTechnicalEvaluationForApplication>>
->;
 
 type StatusFilter = "ALL" | "EXPERT_REVIEW" | "TECH_EVALUATION";
 
@@ -59,25 +48,6 @@ function getEvaluationState(
   return "IN_PROGRESS";
 }
 
-function normalizeScorecard(scorecard: unknown): ScorecardEntry[] | null {
-  if (!scorecard || !Array.isArray(scorecard)) return null;
-
-  return scorecard
-    .map((entry) => {
-      if (!entry || typeof entry !== "object") return null;
-      const record = entry as Record<string, unknown>;
-      if (typeof record.skill !== "string" || typeof record.score !== "number") {
-        return null;
-      }
-      return {
-        skill: record.skill,
-        score: record.score,
-        comment: typeof record.comment === "string" ? record.comment : null,
-      };
-    })
-    .filter((entry): entry is ScorecardEntry => entry !== null);
-}
-
 function TechnicalEvaluationsClientInner({
   initialApplications,
 }: TechnicalEvaluationsClientProps) {
@@ -91,14 +61,6 @@ function TechnicalEvaluationsClientInner({
   const [movingApplicationId, setMovingApplicationId] = useState<number | null>(
     null,
   );
-  const [selectedApplicationId, setSelectedApplicationId] = useState<
-    number | null
-  >(null);
-  const [selectedEvaluation, setSelectedEvaluation] =
-    useState<EvaluationDetail | null>(null);
-  const [isLoadingEvaluation, setIsLoadingEvaluation] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [modalError, setModalError] = useState("");
 
   const requirementOptions = Array.from(
     new Map(
@@ -111,52 +73,6 @@ function TechnicalEvaluationsClientInner({
       ]),
     ).values(),
   );
-
-  const selectedApplication = useMemo(
-    () =>
-      initialApplications.find(
-        (application) => application.id === selectedApplicationId,
-      ) ?? null,
-    [initialApplications, selectedApplicationId],
-  );
-
-  async function openTechnicalEvaluation(applicationId: number) {
-    const application = initialApplications.find(
-      (item) => item.id === applicationId,
-    );
-
-    if (!application) return;
-
-    setModalError("");
-    setSelectedApplicationId(applicationId);
-    setSelectedEvaluation(null);
-
-    if (!application.job.assignedInterviewerId) {
-      setModalError("Interviewer must be assigned before technical evaluation.");
-      return;
-    }
-
-    setIsLoadingEvaluation(true);
-
-    try {
-      const evaluation = await getTechnicalEvaluationForApplication(
-        application.id,
-      );
-      setSelectedEvaluation(evaluation);
-    } catch (error) {
-      setModalError(getErrorMessage(error));
-      setSelectedEvaluation(null);
-    } finally {
-      setIsLoadingEvaluation(false);
-    }
-  }
-
-  function closeTechnicalEvaluation() {
-    if (isSaving) return;
-    setSelectedApplicationId(null);
-    setSelectedEvaluation(null);
-    setModalError("");
-  }
 
   const filteredApplications = initialApplications.filter((application) => {
     if (
@@ -206,35 +122,14 @@ function TechnicalEvaluationsClientInner({
     }
   }
 
-  async function handleSave(values: TechnicalEvaluationFormValues) {
-    if (!selectedApplication) return;
-
-    setModalError("");
-    setIsSaving(true);
-
-    try {
-      await saveTechnicalEvaluation(selectedApplication.id, values);
-      const refreshed = await getTechnicalEvaluationForApplication(
-        selectedApplication.id,
-      );
-      setSelectedEvaluation(refreshed);
-      router.refresh();
-    } catch (error) {
-      setModalError(getErrorMessage(error));
-      throw error;
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
   return (
     <DashboardLayout>
       <WorkflowRequirementNav requirements={requirementOptions} />
       <div>
         <h1 className="text-3xl font-bold text-black">Technical Evaluations</h1>
         <p className="mt-2 text-zinc-600">
-          Record technical scorecards, questions, and fit decisions for
-          interviewed candidates.
+          Move candidates through Technical Evaluation after the interviewer
+          records interviews, coding tests, and the scorecard.
         </p>
       </div>
 
@@ -329,9 +224,6 @@ function TechnicalEvaluationsClientInner({
                 onStartTechEvaluation={(id) =>
                   handleTransition(id, ApplicationPipelineStatus.TECH_EVALUATION)
                 }
-                onOpenEvaluation={(id) => {
-                  void openTechnicalEvaluation(id);
-                }}
                 onMoveToShortlisted={(id) =>
                   handleTransition(id, ApplicationPipelineStatus.SHORTLISTED)
                 }
@@ -343,53 +235,13 @@ function TechnicalEvaluationsClientInner({
           })}
         </div>
       )}
-
-      {selectedApplication && (
-        <TechnicalEvaluationModal
-          isOpen
-          candidateName={selectedApplication.candidate.name}
-          role={selectedApplication.candidate.role}
-          currentEmployer={selectedApplication.candidate.currentEmployer}
-          location={selectedApplication.candidate.location}
-          experienceYears={selectedApplication.candidate.experienceYears}
-          skills={selectedApplication.candidate.skills}
-          expectedCTC={selectedApplication.candidate.expectedCTC}
-          source={selectedApplication.source}
-          jobTitle={selectedApplication.job.title}
-          companyName={selectedApplication.job.company.name}
-          interviewerName={
-            selectedApplication.job.assignedInterviewer?.name ?? null
-          }
-          evaluationId={selectedEvaluation?.id ?? null}
-          questions={selectedEvaluation?.questions ?? []}
-          initialValues={{
-            overallScore: selectedEvaluation?.overallScore ?? null,
-            scorecard: normalizeScorecard(selectedEvaluation?.scorecard),
-            notes: selectedEvaluation?.notes ?? null,
-            recordingUrl: selectedEvaluation?.recordingUrl ?? null,
-            recommendation: selectedEvaluation?.recommendation ?? null,
-            hireProbability: selectedEvaluation?.hireProbability ?? null,
-            fitDecision: selectedEvaluation?.fitDecision ?? null,
-            evaluatedAt: selectedEvaluation?.evaluatedAt ?? null,
-          }}
-          isSaving={isSaving || isLoadingEvaluation}
-          errorMessage={modalError}
-          onClose={closeTechnicalEvaluation}
-          onSave={handleSave}
-          onQuestionsChanged={async () => {
-            if (!selectedApplication) return;
-            const refreshed = await getTechnicalEvaluationForApplication(
-              selectedApplication.id,
-            );
-            setSelectedEvaluation(refreshed);
-          }}
-        />
-      )}
     </DashboardLayout>
   );
 }
 
-export default function TechnicalEvaluationsClient(props: TechnicalEvaluationsClientProps) {
+export default function TechnicalEvaluationsClient(
+  props: TechnicalEvaluationsClientProps,
+) {
   return (
     <Suspense fallback={null}>
       <TechnicalEvaluationsClientInner {...props} />

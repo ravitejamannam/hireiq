@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import ClientRequirementCard from "@/components/client/ClientRequirementCard";
-import CreateFirstRoleForm from "@/components/client/CreateFirstRoleForm";
 import StatCard from "@/components/dashboard/StatCard";
 import { requireClientPortal } from "@/lib/auth/authorization";
 import { getClientDashboardStats } from "@/lib/repositories/dashboard-repository";
@@ -45,12 +44,20 @@ export default async function ClientDashboardPage() {
               Recent roles for your company and their pipeline progress.
             </p>
           </div>
-          <Link
-            href="/client/requirements"
-            className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100"
-          >
-            View all requirements
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/client/requirements"
+              className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100"
+            >
+              View all requirements
+            </Link>
+            <Link
+              href="/client/requirements"
+              className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800"
+            >
+              + Post Role
+            </Link>
+          </div>
         </div>
 
         {stats.requirements.length === 0 ? (
@@ -59,11 +66,14 @@ export default async function ClientDashboardPage() {
               You haven&apos;t created a hiring requirement yet.
             </p>
             <p className="mt-2 text-sm text-zinc-500">
-              Create a draft role to start the HireIQ hiring workflow.
+              Create a role to start the HireIQ hiring workflow.
             </p>
-            <div className="mx-auto mt-4 max-w-md text-left">
-              <CreateFirstRoleForm />
-            </div>
+            <Link
+              href="/client/requirements"
+              className="mt-6 inline-flex rounded-lg bg-black px-5 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800"
+            >
+              + Post Role
+            </Link>
           </div>
         ) : (
           <div className="mt-6 grid gap-4">

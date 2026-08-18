@@ -1,6 +1,9 @@
 import type {
   ApplicationPipelineStatus,
+  CodingTestStatus,
   EvaluationFitDecision,
+  InterviewResult,
+  InterviewType,
   JobStatus,
   Recommendation,
 } from "@prisma/client";
@@ -9,8 +12,12 @@ import ClientHireConfirmation from "@/components/client/ClientHireConfirmation";
 import {
   clientJobStatusLabels,
   formatClientDate,
+  formatClientDateTime,
   formatClientOptional,
+  getClientCodingTestStatusLabel,
   getClientFitDecisionLabel,
+  getClientInterviewResultLabel,
+  getClientInterviewTypeLabel,
   getClientPipelineStatusLabel,
   getClientRecommendationLabel,
   getClientSourceLabel,
@@ -55,6 +62,20 @@ export type ClientCandidateProfileData = {
   requirementTitle: string;
   companyName: string;
   requirementStatus: JobStatus;
+  interviews: Array<{
+    id: number;
+    type: InterviewType;
+    interviewAt: Date;
+    result: InterviewResult;
+  }>;
+  codingTests: Array<{
+    id: number;
+    title: string;
+    score: number;
+    maxScore: number;
+    status: CodingTestStatus;
+    takenAt: Date;
+  }>;
   evaluation: ClientCandidateEvaluation | null;
 };
 
@@ -209,7 +230,83 @@ export default function ClientCandidateProfile({
                 : "Evaluation not available yet."}
             </dd>
           </div>
-        </dl>
+          </dl>
+        </section>
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-6">
+        <h2 className="text-lg font-bold text-black">Interviews</h2>
+        {candidate.interviews.length === 0 ? (
+          <p className="mt-4 text-sm text-zinc-600">
+            No interviews recorded yet.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {candidate.interviews.map((interview) => (
+              <article
+                key={interview.id}
+                className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+              >
+                <dl className="grid gap-3 text-sm text-zinc-600 sm:grid-cols-3">
+                  <div>
+                    <dt className="font-medium text-black">Type</dt>
+                    <dd>{getClientInterviewTypeLabel(interview.type)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-black">Scheduled</dt>
+                    <dd>
+                      {formatClientDateTime(new Date(interview.interviewAt))}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-black">Result</dt>
+                    <dd>{getClientInterviewResultLabel(interview.result)}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-6">
+        <h2 className="text-lg font-bold text-black">Coding tests</h2>
+        {candidate.codingTests.length === 0 ? (
+          <p className="mt-4 text-sm text-zinc-600">
+            No coding tests recorded yet.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {candidate.codingTests.map((codingTest) => (
+              <article
+                key={codingTest.id}
+                className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+              >
+                <dl className="grid gap-3 text-sm text-zinc-600 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <dt className="font-medium text-black">Title</dt>
+                    <dd>{codingTest.title}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-black">Score</dt>
+                    <dd>
+                      {codingTest.score} / {codingTest.maxScore}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-black">Status</dt>
+                    <dd>
+                      {getClientCodingTestStatusLabel(codingTest.status)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-black">Taken</dt>
+                    <dd>{formatClientDateTime(new Date(codingTest.takenAt))}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-6">

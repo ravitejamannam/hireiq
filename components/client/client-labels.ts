@@ -1,5 +1,8 @@
 import type {
   ApplicationPipelineStatus,
+  CodingTestStatus,
+  InterviewResult,
+  InterviewType,
   JobStatus,
   RequirementLifecycle,
 } from "@prisma/client";
@@ -24,6 +27,53 @@ export function formatClientDate(value: Date | null | undefined) {
     month: "short",
     year: "numeric",
   }).format(value);
+}
+
+export function formatClientDateTime(value: Date | null | undefined) {
+  if (!value || Number.isNaN(value.getTime())) {
+    return "Not set";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(value);
+}
+
+export const clientInterviewTypeLabels: Record<InterviewType, string> = {
+  PHONE_SCREEN: "Phone Screen",
+  TECHNICAL: "Technical",
+  SYSTEM_DESIGN: "System Design",
+  HR: "HR",
+};
+
+export const clientInterviewResultLabels: Record<InterviewResult, string> = {
+  PENDING: "Pending",
+  PASSED: "Passed",
+  FAILED: "Failed",
+  CANCELLED: "Cancelled",
+};
+
+export const clientCodingTestStatusLabels: Record<CodingTestStatus, string> = {
+  PENDING: "Pending",
+  IN_PROGRESS: "In Progress",
+  COMPLETED: "Completed",
+  FAILED: "Failed",
+};
+
+export function getClientInterviewTypeLabel(type: InterviewType) {
+  return clientInterviewTypeLabels[type];
+}
+
+export function getClientInterviewResultLabel(result: InterviewResult) {
+  return clientInterviewResultLabels[result];
+}
+
+export function getClientCodingTestStatusLabel(status: CodingTestStatus) {
+  return clientCodingTestStatusLabels[status];
 }
 
 export type ClientPipelineCounts = {

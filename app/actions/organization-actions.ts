@@ -16,7 +16,6 @@ import {
 } from "@/lib/auth/rate-limit";
 import { readRequestIp } from "@/lib/auth/request-ip";
 import { createClientCompanyForUser } from "@/lib/organizations/company-onboarding";
-import { createClientRequirementDraftForCompany } from "@/lib/organizations/client-requirement-draft";
 import {
   consumeEmailVerificationTokenForUser,
   issueEmailVerificationTokenForUser,
@@ -122,23 +121,6 @@ export async function createClientCompany(input: {
   }
 
   return created;
-}
-
-export async function createClientRequirementDraft(title: unknown) {
-  const client = await requireClientPortal();
-  const job = await createClientRequirementDraftForCompany({
-    companyId: client.companyId,
-    title,
-  });
-
-  try {
-    revalidatePath("/client");
-    revalidatePath("/client/requirements");
-  } catch {
-    // revalidatePath requires a Next.js request context
-  }
-
-  return job;
 }
 
 /**

@@ -39,17 +39,13 @@ type JobCardProps = {
   assignedInterviewer: InterviewerOption | null;
   interviewers: InterviewerOption[];
   clientCompletedAt: Date | null;
-  isAdvancing?: boolean;
   isAssigning?: boolean;
   isRecordingAccess?: boolean;
   isCompletingShortlisting?: boolean;
-  isPostingRequirement?: boolean;
   isNotifyingInterviewer?: boolean;
-  onAdvanceLifecycle: (id: number, nextLifecycle: RequirementLifecycle) => void;
   onAssignInterviewer: (jobId: number, interviewerId: number | null) => void;
   onMarkAccessReceived: (jobId: number) => void;
   onCompleteShortlisting: (jobId: number) => void;
-  onCompleteRequirement: (jobId: number) => void;
   onNotifyInterviewer: (jobId: number) => void;
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
@@ -62,8 +58,6 @@ const jobStatusLabels: Record<JobStatus, string> = {
 };
 
 const requirementLifecycleLabels: Record<RequirementLifecycle, string> = {
-  REQUIREMENT_DRAFTED: "Requirement Drafted",
-  CLIENT_NOTIFIED: "Client Notified",
   REQUIREMENT_POSTED: "Requirement Posted",
   INTERVIEWER_NOTIFIED: "Interviewer Notified",
   SOURCING_SHORTLISTING: "Sourcing & Shortlisting",
@@ -71,15 +65,6 @@ const requirementLifecycleLabels: Record<RequirementLifecycle, string> = {
 };
 
 export { requirementLifecycleLabels };
-
-const nextRequirementLifecycle: Partial<
-  Record<RequirementLifecycle, RequirementLifecycle>
-> = {
-  REQUIREMENT_DRAFTED: "CLIENT_NOTIFIED",
-  // CLIENT_NOTIFIED → REQUIREMENT_POSTED happens via completeJobRequirement
-  // REQUIREMENT_POSTED → INTERVIEWER_NOTIFIED happens via notifyAssignedInterviewer
-  // INTERVIEWER_NOTIFIED → SOURCING_SHORTLISTING happens via mark access received
-};
 
 const roleCategoryLabels: Record<RoleCategory, string> = {
   ENGINEERING: "Engineering",
@@ -177,28 +162,22 @@ export default function JobCard({
   assignedInterviewer,
   interviewers,
   clientCompletedAt,
-  isAdvancing = false,
   isAssigning = false,
   isRecordingAccess = false,
   isCompletingShortlisting = false,
-  isPostingRequirement = false,
   isNotifyingInterviewer = false,
-  onAdvanceLifecycle,
   onAssignInterviewer,
   onMarkAccessReceived,
   onCompleteShortlisting,
-  onCompleteRequirement,
   onNotifyInterviewer,
   onEdit,
   onDelete,
 }: JobCardProps) {
-  const nextLifecycle = nextRequirementLifecycle[requirementLifecycle];
   const isBillingBlocked = requirementLifecycle === "SOURCING_SHORTLISTING";
   const slaStatus = getSlaStatus({
     shortlistingCompletedAt,
     shortlistingDueAt,
   });
-  const canCompleteRequirement = requirementLifecycle === "CLIENT_NOTIFIED";
   const canNotifyInterviewer =
     requirementLifecycle === "REQUIREMENT_POSTED" &&
     Boolean(assignedInterviewerId);
@@ -368,30 +347,6 @@ export default function JobCard({
           >
             Open Workspace
           </Link>
-
-          {nextLifecycle && (
-            <button
-              type="button"
-              onClick={() => onAdvanceLifecycle(id, nextLifecycle)}
-              disabled={isAdvancing}
-              className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
-            >
-              {isAdvancing
-                ? "Moving..."
-                : `Move to ${requirementLifecycleLabels[nextLifecycle]}`}
-            </button>
-          )}
-
-          {canCompleteRequirement && (
-            <button
-              type="button"
-              onClick={() => onCompleteRequirement(id)}
-              disabled={isPostingRequirement}
-              className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isPostingRequirement ? "Posting..." : "Post Requirement"}
-            </button>
-          )}
 
           {requirementLifecycle === "REQUIREMENT_POSTED" && (
             <span className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700">

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   ApplicationPipelineStatus,
   type SourcingDatabaseSource,
@@ -56,7 +55,6 @@ export default function ExpertReviewCard({
   jobTitle,
   companyName,
   hasEvaluation,
-  evaluationId,
   isMoving = false,
   onStartReview,
   onOpenReview,
@@ -118,21 +116,9 @@ export default function ExpertReviewCard({
             <div className="sm:col-span-2">
               <dt className="font-medium text-black">Evaluation</dt>
               <dd>
-                {hasEvaluation ? (
-                  <span className="inline-flex flex-wrap items-center gap-2">
-                    Evaluation recorded
-                    {evaluationId ? (
-                      <Link
-                        href="/dashboard/evaluations"
-                        className="font-medium text-black underline underline-offset-2"
-                      >
-                        View Evaluation
-                      </Link>
-                    ) : null}
-                  </span>
-                ) : (
-                  "No evaluation recorded"
-                )}
+                {hasEvaluation
+                  ? "Evaluation recorded"
+                  : "No evaluation recorded"}
               </dd>
             </div>
           </>

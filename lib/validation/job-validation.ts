@@ -57,7 +57,7 @@ export type GenericJobRequirementInput = {
 
 /**
  * Timestamps owned by dedicated workflows. Generic Job CRUD must reject these.
- * clientCompletedAt → completeJobRequirement
+ * clientCompletedAt → createPostedJobWithPublishedSpecification
  * sourcingAccessReceivedAt / shortlistingDueAt → recordSourcingAccessHandoff
  * shortlistingCompletedAt → recordShortlistCompletionHandoff
  */
@@ -93,14 +93,11 @@ type JobRequirementData = {
 
 type ValidateRequirementFieldsOptions = {
   allowRequirementLifecycle?: boolean;
-  requireDraftLifecycle?: boolean;
 };
 
 const allowedRequirementLifecycleTransitions: Partial<
   Record<RequirementLifecycle, RequirementLifecycle>
 > = {
-  REQUIREMENT_DRAFTED: "CLIENT_NOTIFIED",
-  CLIENT_NOTIFIED: "REQUIREMENT_POSTED",
   REQUIREMENT_POSTED: "INTERVIEWER_NOTIFIED",
   INTERVIEWER_NOTIFIED: "SOURCING_SHORTLISTING",
 };
@@ -208,15 +205,6 @@ export function validateJobLifecycleTransition(
 ) {
   const validatedNextLifecycle =
     validateRequirementLifecycleValue(nextLifecycle);
-
-  if (
-    currentLifecycle === "CLIENT_NOTIFIED" &&
-    validatedNextLifecycle === "REQUIREMENT_POSTED"
-  ) {
-    throw new JobValidationError(
-      "Requirement must be completed through the completion workflow.",
-    );
-  }
 
   if (
     currentLifecycle === "REQUIREMENT_POSTED" &&
@@ -466,13 +454,6 @@ function validateRequirementFields(
     );
 
     if (!options.allowRequirementLifecycle) {
-      throw new JobValidationError("Invalid requirement lifecycle transition.");
-    }
-
-    if (
-      options.requireDraftLifecycle &&
-      validatedRequirementLifecycle !== "REQUIREMENT_DRAFTED"
-    ) {
       throw new JobValidationError("Invalid requirement lifecycle transition.");
     }
 

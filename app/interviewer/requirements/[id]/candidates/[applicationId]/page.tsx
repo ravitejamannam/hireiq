@@ -90,6 +90,7 @@ export default async function InterviewerCandidateDetailPage({
           experienceRange: application.job.experienceRange,
         }}
         interviews={application.interviews}
+        codingTests={application.codingTests}
         evaluation={
           evaluation
             ? {

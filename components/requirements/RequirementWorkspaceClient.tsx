@@ -7,11 +7,9 @@ import { ApplicationPipelineStatus } from "@prisma/client";
 
 import {
   assignInterviewerToJob,
-  completeJobRequirement,
   completeJobShortlisting,
   markJobSourcingAccessReceived,
   notifyAssignedInterviewer,
-  transitionJobLifecycle,
 } from "@/app/actions/job-actions";
 import { transitionApplicationStatus } from "@/app/actions/application-actions";
 import { getAdminHiringMonitorNote } from "@/components/applications/admin-hiring-notes";
@@ -43,7 +41,6 @@ import type { getInterviewers } from "@/lib/repositories/interviewer-repository"
 import type { getJobById } from "@/lib/repositories/job-repository";
 import { isInterviewerAssignmentLocked } from "@/lib/jobs/interviewer-assignment-lock";
 import { ADMIN_PIPELINE_TRANSITIONS } from "@/lib/validation/application-pipeline";
-import type { RequirementLifecycle } from "@prisma/client";
 
 type Requirement = NonNullable<Awaited<ReturnType<typeof getJobById>>>;
 type Application = Awaited<ReturnType<typeof getApplicationsByJobId>>[number];
@@ -476,37 +473,6 @@ export default function RequirementWorkspaceClient({
               </div>
 
               <div className="flex flex-wrap gap-3">
-                {requirement.requirementLifecycle === "REQUIREMENT_DRAFTED" && (
-                  <button
-                    type="button"
-                    disabled={isLifecycleBusy}
-                    onClick={() =>
-                      void runLifecycleAction(() =>
-                        transitionJobLifecycle(
-                          requirement.id,
-                          "CLIENT_NOTIFIED" as RequirementLifecycle,
-                        ),
-                      )
-                    }
-                    className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
-                  >
-                    {isLifecycleBusy ? "Working..." : "Notify Client"}
-                  </button>
-                )}
-                {requirement.requirementLifecycle === "CLIENT_NOTIFIED" && (
-                  <button
-                    type="button"
-                    disabled={isLifecycleBusy}
-                    onClick={() =>
-                      void runLifecycleAction(() =>
-                        completeJobRequirement(requirement.id),
-                      )
-                    }
-                    className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
-                  >
-                    {isLifecycleBusy ? "Working..." : "Post Requirement"}
-                  </button>
-                )}
                 {requirement.requirementLifecycle === "REQUIREMENT_POSTED" &&
                   requirement.assignedInterviewerId && (
                     <button
@@ -717,19 +683,11 @@ export default function RequirementWorkspaceClient({
 
       {activeTab === "interviews" && (
         <div className="mt-8">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-bold text-black">Interviews</h2>
-              <p className="mt-1 text-sm text-zinc-600">
-                Interviews linked to candidates in this requirement.
-              </p>
-            </div>
-            <Link
-              href="/dashboard/interviews"
-              className="rounded-lg border border-black bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-100"
-            >
-              View Interviews
-            </Link>
+          <div>
+            <h2 className="text-xl font-bold text-black">Interviews</h2>
+            <p className="mt-1 text-sm text-zinc-600">
+              Interviews recorded by the assigned interviewer.
+            </p>
           </div>
 
           {interviews.length === 0 ? (

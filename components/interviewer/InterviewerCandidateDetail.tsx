@@ -1,5 +1,6 @@
 import type {
   ApplicationPipelineStatus,
+  CodingTestStatus,
   EvaluationFitDecision,
   InterviewResult,
   InterviewType,
@@ -17,7 +18,9 @@ import {
   getClientRecommendationLabel,
   getClientSourceLabel,
 } from "@/components/client/client-labels";
+import InterviewerCodingTestPanel from "@/components/interviewer/InterviewerCodingTestPanel";
 import InterviewerEvaluationWorkspace from "@/components/interviewer/InterviewerEvaluationWorkspace";
+import InterviewerInterviewPanel from "@/components/interviewer/InterviewerInterviewPanel";
 import InterviewerShortlistActions from "@/components/interviewer/InterviewerShortlistActions";
 
 type Question = {
@@ -74,32 +77,16 @@ type InterviewerCandidateDetailProps = {
     interviewAt: Date;
     result: InterviewResult;
   }>;
+  codingTests: Array<{
+    id: number;
+    title: string;
+    score: number;
+    maxScore: number;
+    status: CodingTestStatus;
+    takenAt: Date;
+  }>;
   evaluation: EvaluationData | null;
 };
-
-const interviewTypeLabels: Record<InterviewType, string> = {
-  PHONE_SCREEN: "Phone Screen",
-  TECHNICAL: "Technical",
-  SYSTEM_DESIGN: "System Design",
-  HR: "HR",
-};
-
-const interviewResultLabels: Record<InterviewResult, string> = {
-  PENDING: "Pending",
-  PASSED: "Passed",
-  FAILED: "Failed",
-  CANCELLED: "Cancelled",
-};
-
-function formatDateTime(value: Date) {
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(value);
-}
 
 export default function InterviewerCandidateDetail({
   applicationId,
@@ -107,6 +94,7 @@ export default function InterviewerCandidateDetail({
   application,
   requirement,
   interviews,
+  codingTests,
   evaluation,
 }: InterviewerCandidateDetailProps) {
   return (
@@ -211,38 +199,15 @@ export default function InterviewerCandidateDetail({
         </dl>
       </section>
 
-      <section className="rounded-xl border border-zinc-200 bg-white p-6">
-        <h2 className="text-lg font-bold text-black">Interview Context</h2>
-        {interviews.length === 0 ? (
-          <p className="mt-3 text-sm text-zinc-600">
-            No interviews recorded for this application.
-          </p>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {interviews.map((interview) => (
-              <article
-                key={interview.id}
-                className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
-              >
-                <dl className="grid gap-3 text-sm text-zinc-600 sm:grid-cols-3">
-                  <div>
-                    <dt className="font-medium text-black">Type</dt>
-                    <dd>{interviewTypeLabels[interview.type]}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-black">Scheduled</dt>
-                    <dd>{formatDateTime(interview.interviewAt)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-black">Result</dt>
-                    <dd>{interviewResultLabels[interview.result]}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+      <InterviewerInterviewPanel
+        applicationId={applicationId}
+        interviews={interviews}
+      />
+
+      <InterviewerCodingTestPanel
+        applicationId={applicationId}
+        codingTests={codingTests}
+      />
 
       {evaluation?.recordingUrl ? (
         <section className="rounded-xl border border-zinc-200 bg-white p-6">

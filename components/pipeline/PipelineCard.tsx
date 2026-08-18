@@ -133,10 +133,10 @@ export default function PipelineCard({
           Applications
         </Link>
         <Link
-          href="/dashboard/evaluations"
+          href="/dashboard/technical-evaluations"
           className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-black hover:bg-zinc-100"
         >
-          Evaluations
+          Technical Evaluations
         </Link>
       </div>
 

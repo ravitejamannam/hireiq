@@ -1,9 +1,18 @@
 "use server";
 
-import { requireAdmin } from "@/lib/auth/authorization";
-import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { InterviewResult, InterviewType } from "@prisma/client";
+
+import {
+  assertInterviewerOwnsApplication,
+  assertInterviewerOwnsInterview,
+} from "@/lib/auth/interviewer-assignment";
+import { prisma } from "@/lib/prisma";
+import { validateApplicationId } from "@/lib/validation/application-validation";
+import {
+  validateInterviewId,
+  validateInterviewInput,
+} from "@/lib/validation/interview-validation";
 
 export async function createInterview(
   applicationId: number,
@@ -11,17 +20,22 @@ export async function createInterview(
   interviewAt: Date,
   result: InterviewResult,
 ) {
-  await requireAdmin();
+  const validatedApplicationId = validateApplicationId(applicationId);
+  const { application } = await assertInterviewerOwnsApplication(
+    validatedApplicationId,
+  );
+  const fields = validateInterviewInput(type, interviewAt, result);
+
   const interview = await prisma.interview.create({
     data: {
-      applicationId,
-      type,
-      interviewAt,
-      result,
+      applicationId: application.id,
+      type: fields.type,
+      interviewAt: fields.interviewAt,
+      result: fields.result,
     },
   });
 
-  revalidatePath("/dashboard/interviews");
+  revalidateInterviewerEvidencePaths(application.jobId, application.id);
 
   return interview;
 }
@@ -33,31 +47,64 @@ export async function updateInterview(
   interviewAt: Date,
   result: InterviewResult,
 ) {
-  await requireAdmin();
-  const interview = await prisma.interview.update({
+  const interviewId = validateInterviewId(id);
+  validateApplicationId(applicationId);
+  const { interview } = await assertInterviewerOwnsInterview(interviewId);
+  const fields = validateInterviewInput(type, interviewAt, result);
+
+  const updated = await prisma.interview.update({
     where: {
-      id,
+      id: interview.id,
     },
     data: {
-      applicationId,
-      type,
-      interviewAt,
-      result,
+      type: fields.type,
+      interviewAt: fields.interviewAt,
+      result: fields.result,
     },
   });
 
-  revalidatePath("/dashboard/interviews");
+  revalidateInterviewerEvidencePaths(
+    interview.application.jobId,
+    interview.applicationId,
+  );
 
-  return interview;
+  return updated;
 }
 
 export async function deleteInterview(id: number) {
-  await requireAdmin();
+  const interviewId = validateInterviewId(id);
+  const { interview } = await assertInterviewerOwnsInterview(interviewId);
+
   await prisma.interview.delete({
     where: {
-      id,
+      id: interview.id,
     },
   });
 
-  revalidatePath("/dashboard/interviews");
+  revalidateInterviewerEvidencePaths(
+    interview.application.jobId,
+    interview.applicationId,
+  );
+}
+
+function revalidateInterviewerEvidencePaths(
+  jobId: number,
+  applicationId: number,
+) {
+  try {
+    revalidatePath("/interviewer");
+    revalidatePath("/interviewer/requirements");
+    revalidatePath(`/interviewer/requirements/${jobId}`);
+    revalidatePath(
+      `/interviewer/requirements/${jobId}/candidates/${applicationId}`,
+    );
+    revalidatePath(`/client/requirements/${jobId}`);
+    revalidatePath(
+      `/client/requirements/${jobId}/candidates/${applicationId}`,
+    );
+    revalidatePath(`/dashboard/requirements/${jobId}`);
+    revalidatePath("/dashboard/technical-evaluations");
+  } catch {
+    // revalidatePath requires a Next.js request context
+  }
 }

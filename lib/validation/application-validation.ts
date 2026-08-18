@@ -423,11 +423,7 @@ export function assertJobAllowsSourcingIntake(job: {
     );
   }
 
-  if (
-    job.requirementLifecycle === "REQUIREMENT_DRAFTED" ||
-    job.requirementLifecycle === "CLIENT_NOTIFIED" ||
-    job.requirementLifecycle === "REQUIREMENT_POSTED"
-  ) {
+  if (job.requirementLifecycle === "REQUIREMENT_POSTED") {
     throw new ApplicationValidationError(
       "Requirement must be notified to the interviewer before sourcing.",
     );

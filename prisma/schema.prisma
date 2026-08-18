@@ -51,8 +51,6 @@ enum JobStatus {
 }
 
 enum RequirementLifecycle {
-  REQUIREMENT_DRAFTED
-  CLIENT_NOTIFIED
   REQUIREMENT_POSTED
   INTERVIEWER_NOTIFIED
   SOURCING_SHORTLISTING
@@ -358,7 +356,7 @@ model Job {
   evaluationCriteria  String?
   primarySkills       String?
 
-  requirementLifecycle RequirementLifecycle @default(REQUIREMENT_DRAFTED)
+  requirementLifecycle RequirementLifecycle @default(REQUIREMENT_POSTED)
   clientCompletedAt    DateTime?
 
   sourcingDatabaseSource SourcingDatabaseSource?
