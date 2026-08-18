@@ -4,6 +4,7 @@ import Link from "next/link";
 import ClientCandidateProfile from "@/components/client/ClientCandidateProfile";
 import { selectPrimaryClientEvaluation } from "@/components/client/client-labels";
 import { requireClientPortal } from "@/lib/auth/authorization";
+import { getOrMaterializeCandidateProfile } from "@/lib/candidates/candidate-profile-service";
 import { getClientApplicationForRequirement } from "@/lib/repositories/application-repository";
 
 type ClientCandidateDetailPageProps = {
@@ -46,6 +47,9 @@ export default async function ClientCandidateDetailPage({
   }
 
   const evaluation = selectPrimaryClientEvaluation(application.evaluations);
+  const profile = await getOrMaterializeCandidateProfile(
+    application.candidate.id,
+  );
 
   return (
     <div>
@@ -67,13 +71,14 @@ export default async function ClientCandidateDetailPage({
       <ClientCandidateProfile
         candidate={{
           applicationId: application.id,
-          name: application.candidate.name,
-          role: application.candidate.role,
-          currentEmployer: application.candidate.currentEmployer,
-          location: application.candidate.location,
-          experienceYears: application.candidate.experienceYears,
-          skills: application.candidate.skills,
-          expectedCTC: application.candidate.expectedCTC,
+          name: profile.name,
+          headline: profile.headline,
+          currentEmployer: profile.currentEmployer,
+          location: profile.location,
+          experienceYears: profile.experienceYears,
+          skills: profile.skillsText,
+          expectedCTC: profile.expectedCTC,
+          linkedInUrl: profile.linkedInUrl,
           pipelineStatus: application.status,
           source: application.source,
           expertScore: application.expertScore,

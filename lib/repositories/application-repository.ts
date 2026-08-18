@@ -276,6 +276,7 @@ const clientApplicationDetailSelect = {
   createdAt: true,
   candidate: {
     select: {
+      id: true,
       name: true,
       role: true,
       experienceYears: true,

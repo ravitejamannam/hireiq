@@ -47,12 +47,13 @@ type InterviewerCandidateDetailProps = {
   applicationId: number;
   candidate: {
     name: string;
-    role: string;
-    experienceYears: number;
+    headline: string | null;
+    experienceYears: number | null;
     location: string | null;
     currentEmployer: string | null;
     skills: string | null;
     expectedCTC: string | null;
+    linkedInUrl: string | null;
   };
   application: {
     status: ApplicationPipelineStatus;
@@ -115,12 +116,18 @@ export default function InterviewerCandidateDetail({
           Candidate profile
         </p>
         <h1 className="mt-2 text-3xl font-bold text-black">{candidate.name}</h1>
-        <p className="mt-2 text-zinc-600">{candidate.role}</p>
+        <p className="mt-2 text-zinc-600">
+          {formatClientOptional(candidate.headline)}
+        </p>
 
         <dl className="mt-6 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <dt className="font-medium text-black">Experience</dt>
-            <dd>{candidate.experienceYears} years</dd>
+            <dd>
+              {candidate.experienceYears === null
+                ? formatClientOptional(null)
+                : `${candidate.experienceYears} years`}
+            </dd>
           </div>
           <div>
             <dt className="font-medium text-black">Location</dt>
@@ -133,6 +140,23 @@ export default function InterviewerCandidateDetail({
           <div>
             <dt className="font-medium text-black">Expected CTC</dt>
             <dd>{formatClientOptional(candidate.expectedCTC)}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">LinkedIn</dt>
+            <dd>
+              {candidate.linkedInUrl ? (
+                <a
+                  href={candidate.linkedInUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-black underline underline-offset-2"
+                >
+                  View profile
+                </a>
+              ) : (
+                formatClientOptional(null)
+              )}
+            </dd>
           </div>
           <div>
             <dt className="font-medium text-black">Pipeline status</dt>

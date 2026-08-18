@@ -13,6 +13,7 @@ import {
   ROLE_NO_LONGER_ACCEPTING,
 } from "@/lib/apply/hosted-apply-errors";
 import { toPublicHostedApplyPage } from "@/lib/apply/public-page";
+import { ingestHostedApplySubmission } from "@/lib/ingestion/hosted-apply-ingestion";
 import { hashSecureToken } from "@/lib/auth/secure-token";
 import {
   consumeAuthRateLimit,
@@ -112,6 +113,10 @@ export async function resolvePublicHostedApply(token: string) {
   return toPublicHostedApplyPage(payload);
 }
 
+async function ingestReceivedSubmission(submissionId: number) {
+  await ingestHostedApplySubmission(submissionId);
+}
+
 export async function submitHostedApply(input: {
   token: string;
   idempotencyKey: unknown;
@@ -123,6 +128,7 @@ export async function submitHostedApply(input: {
     select: { id: true, status: true },
   });
   if (existingByKey) {
+    await ingestReceivedSubmission(existingByKey.id);
     return { success: true as const };
   }
 
@@ -164,11 +170,19 @@ export async function submitHostedApply(input: {
       jobId: row.distribution.jobId,
       submissionId: created.id,
     });
+    await ingestReceivedSubmission(created.id);
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
+      const raced = await prisma.hostedApplySubmission.findUnique({
+        where: { idempotencyKey },
+        select: { id: true },
+      });
+      if (raced) {
+        await ingestReceivedSubmission(raced.id);
+      }
       return { success: true as const };
     }
 

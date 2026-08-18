@@ -1,13 +1,15 @@
 import { DistributionProvider } from "@prisma/client";
 
 import type { JobDistributionProviderAdapter } from "@/lib/jobs/distribution/adapter";
+import { IndeedProvider } from "@/lib/jobs/distribution/indeed/indeed-provider";
+import { LinkedInProvider } from "@/lib/jobs/distribution/linkedin/linkedin-provider";
 import { ManualProvider } from "@/lib/jobs/distribution/manual-provider";
-import { UnavailableProvider } from "@/lib/jobs/distribution/unavailable-provider";
+import { NaukriProvider } from "@/lib/jobs/distribution/naukri/naukri-provider";
 
 const adapters: Record<DistributionProvider, JobDistributionProviderAdapter> = {
-  LINKEDIN: new UnavailableProvider(DistributionProvider.LINKEDIN),
-  INDEED: new UnavailableProvider(DistributionProvider.INDEED),
-  NAUKRI: new UnavailableProvider(DistributionProvider.NAUKRI),
+  LINKEDIN: new LinkedInProvider(),
+  INDEED: new IndeedProvider(),
+  NAUKRI: new NaukriProvider(),
   MANUAL: new ManualProvider(),
 };
 

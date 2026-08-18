@@ -142,6 +142,24 @@ enum HostedApplySubmissionStatus {
   RECEIVED
 }
 
+/// T85 provider-neutral ingestion channel. Not Application.source / T69.
+enum ApplicationIngestionChannel {
+  HOSTED_APPLY
+  LINKEDIN
+  INDEED
+  NAUKRI
+  REFERRAL
+  MANUAL
+}
+
+/// T85 ingestion processing state. Not an Application pipeline status.
+enum ApplicationIngestionStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
 enum InterviewerAvailability {
   AVAILABLE
   NOT_AVAILABLE
@@ -202,6 +220,94 @@ enum BillingStatus {
   CANCELLED
 }
 
+/// T90 identity signal kinds. Not matching/ranking scores.
+enum CandidateIdentitySignalKind {
+  EMAIL
+  PHONE
+  PROVIDER_CANDIDATE_ID
+  LINKEDIN_URL
+}
+
+/// T90 append-only identity decision. UNLINK is recorded as NO_LINK.
+enum CandidateIdentityDecisionType {
+  LINK
+  NO_LINK
+  NEEDS_REVIEW
+}
+
+/// T91/T95 evidence artifact source.
+/// HOSTED_APPLY_SUBMISSION = T91 hosted-apply cover letter.
+/// INGESTION_EVENT = reserved for genuine ingestion evidence text (none in V1).
+/// RECRUITER_ENTERED_TEXT = T95 Admin-attached application text.
+enum CandidateEvidenceSourceType {
+  HOSTED_APPLY_SUBMISSION
+  INGESTION_EVENT
+  RECRUITER_ENTERED_TEXT
+}
+
+/// T91 who supplied the captured artifact. Not verification or ranking.
+enum CandidateEvidenceOrigin {
+  CANDIDATE_PROVIDED
+  PROVIDER_PROVIDED
+  RECRUITER_ENTERED
+  SYSTEM_RECORDED
+}
+
+/// T92 run lifecycle. V1 is synchronous Admin execution. No PENDING.
+enum CandidateIntelligenceRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+/// T92 V1 extractor. Cover-letter / inlineText claims only.
+enum CandidateIntelligenceExtractorType {
+  COVER_LETTER_CLAIMS
+}
+
+/// T92 V1 claim types. Education, certification, periods, years, and summaries are deferred.
+enum CandidateClaimType {
+  SKILL
+  EMPLOYER
+  JOB_TITLE
+  LOCATION
+}
+
+/// T93 synchronous Admin matching. No PENDING. No ranking.
+enum CandidateMatchRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+/// T93 V1 never emits NOT_SATISFIED. Missing skills are UNKNOWN.
+enum CandidateMatchResult {
+  SATISFIED
+  UNKNOWN
+  UNSUPPORTED
+}
+
+/// T93 requirement category. Must/nice blobs are UNSUPPORTED in V1.
+enum CandidateMatchRequirementCategory {
+  SKILL
+  LOCATION
+  MUST_HAVE
+  NICE_TO_HAVE
+}
+
+/// T94 synchronous Admin evidence-coverage ranking. No PENDING. No quality score.
+enum JobRankingRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+/// T94 coverage status. Unranked applications are not assigned rank 0.
+enum JobRankingCoverageStatus {
+  RANKED
+  UNRANKED_NO_MATCH
+}
+
 model Company {
   id        Int    @id @default(autoincrement())
   name      String
@@ -221,6 +327,18 @@ model Company {
   providerConnections   ProviderConnection[]
   jobDistributions      JobDistribution[]
   hostedApplySubmissions HostedApplySubmission[]
+  ingestionEvents        ApplicationIngestionEvent[]
+  companyPersons         CompanyPerson[]
+  identityMemberships    CandidateIdentityMembership[]
+  identitySignals        CandidateIdentitySignal[]
+  identityDecisions      CandidateIdentityDecision[]
+  candidateEvidence      CandidateEvidence[]
+  candidateIntelligenceRuns CandidateIntelligenceRun[]
+  candidateClaims           CandidateClaim[]
+  candidateMatchRuns        CandidateMatchRun[]
+  requirementMatches        RequirementMatch[]
+  jobRankingRuns            JobRankingRun[]
+  jobRankingResults         JobRankingResult[]
 }
 
 model Job {
@@ -269,6 +387,9 @@ model Job {
   currentPublishedSpecificationVersion JobSpecificationVersion? @relation("JobPublishedSpec", fields: [currentPublishedSpecificationVersionId], references: [id], onDelete: SetNull)
   distributions JobDistribution[]
   hostedApplySubmissions HostedApplySubmission[]
+  ingestionEvents ApplicationIngestionEvent[]
+  matchRuns CandidateMatchRun[]
+  rankingRuns JobRankingRun[]
 
   @@unique([id, companyId])
   @@index([companyId, status])
@@ -311,6 +432,9 @@ model JobSpecificationVersion {
   publishedForJob Job? @relation("JobPublishedSpec")
   distributions JobDistribution[]
   hostedApplySubmissions HostedApplySubmission[]
+  ingestionEvents ApplicationIngestionEvent[]
+  matchRuns CandidateMatchRun[]
+  rankingRuns JobRankingRun[]
 
   @@unique([jobId, versionNumber])
   @@index([jobId, status])
@@ -388,9 +512,330 @@ model Candidate {
 
   company      Company        @relation(fields: [companyId], references: [id])
   applications Application[]
+  ingestionEvents ApplicationIngestionEvent[]
+  profile      CandidateProfile?
+  identityMembership CandidateIdentityMembership?
+  identitySignals    CandidateIdentitySignal[]
+  identityDecisionsLeft  CandidateIdentityDecision[] @relation("IdentityDecisionLeftCandidate")
+  identityDecisionsRight CandidateIdentityDecision[] @relation("IdentityDecisionRightCandidate")
+  evidence               CandidateEvidence[]
+  intelligenceRuns       CandidateIntelligenceRun[]
+  intelligenceClaims     CandidateClaim[]
+  matchRuns              CandidateMatchRun[]
+  rankingResults         JobRankingResult[]
 
   @@unique([id, companyId])
   @@index([companyId])
+}
+
+/// T89 deterministic descriptive profile. 1:1 with Candidate.
+/// Not identity. Not evidence. Not matching/ranking.
+/// Email/phone stay on ApplicationIngestionEvent / HostedApplySubmission.
+model CandidateProfile {
+  id              Int     @id @default(autoincrement())
+  candidateId     Int     @unique
+  companyId       Int
+  headline        String?
+  location        String?
+  experienceYears Int?
+  skillsText      String?
+  currentEmployer String?
+  expectedCTC     String?
+  linkedInUrl     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  candidate Candidate @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Cascade)
+
+  @@unique([candidateId, companyId])
+  @@index([companyId])
+}
+
+/// T90 company-scoped logical person. Not a Candidate merge.
+/// No email, phone, name, profile, or score fields.
+model CompanyPerson {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company      Company                       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  memberships  CandidateIdentityMembership[]
+
+  @@unique([id, companyId])
+  @@index([companyId])
+}
+
+/// T90 membership: a Candidate belongs to at most one CompanyPerson.
+model CandidateIdentityMembership {
+  id              Int      @id @default(autoincrement())
+  companyPersonId Int
+  candidateId     Int
+  companyId       Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  companyPerson CompanyPerson @relation(fields: [companyPersonId, companyId], references: [id, companyId], onDelete: Restrict)
+  candidate     Candidate     @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Cascade)
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([candidateId])
+  @@unique([candidateId, companyId])
+  @@unique([companyPersonId, candidateId])
+  @@index([companyId])
+  @@index([companyPersonId])
+}
+
+/// T90 identity index. Provenance remains on ApplicationIngestionEvent.
+/// normalizedValue follows existing ingestion plaintext-normalized storage.
+model CandidateIdentitySignal {
+  id                       Int                          @id @default(autoincrement())
+  companyId                Int
+  candidateId              Int
+  kind                     CandidateIdentitySignalKind
+  normalizedValue          String
+  sourceChannel            ApplicationIngestionChannel?
+  ingestionEventId         Int?
+  hostedApplySubmissionId  Int?
+  providerConnectionId     Int?
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @updatedAt
+
+  company               Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  candidate             Candidate                    @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Cascade)
+  ingestionEvent        ApplicationIngestionEvent?   @relation(fields: [ingestionEventId, companyId], references: [id, companyId], onDelete: Restrict)
+  hostedApplySubmission HostedApplySubmission?       @relation(fields: [hostedApplySubmissionId, companyId], references: [id, companyId], onDelete: Restrict)
+  providerConnection    ProviderConnection?          @relation(fields: [providerConnectionId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@unique([companyId, candidateId, kind, normalizedValue])
+  @@index([companyId, kind, normalizedValue])
+  @@index([candidateId])
+  @@index([ingestionEventId])
+}
+
+/// T90 append-only identity audit. Corrections insert a new row.
+model CandidateIdentityDecision {
+  id               Int                            @id @default(autoincrement())
+  companyId        Int
+  decision         CandidateIdentityDecisionType
+  reasonCodes      String[]
+  leftCandidateId  Int
+  rightCandidateId Int
+  actorUserId      Int?
+  createdAt        DateTime                       @default(now())
+
+  company        Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  leftCandidate  Candidate  @relation("IdentityDecisionLeftCandidate", fields: [leftCandidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  rightCandidate Candidate  @relation("IdentityDecisionRightCandidate", fields: [rightCandidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  actorUser      User?      @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([leftCandidateId])
+  @@index([rightCandidateId])
+}
+
+/// T91 append-only evidence artifact. Not a claim, identity, or profile.
+/// Cover letters snapshot HostedApplySubmission; no file/blob storage.
+/// Recruiter-entered text uniqueness is a SQL partial unique index on current
+/// artifacts only (`revokedAt` and `supersededById` null).
+model CandidateEvidence {
+  id                      Int                         @id @default(autoincrement())
+  companyId               Int
+  candidateId             Int
+  applicationId           Int?
+  sourceType              CandidateEvidenceSourceType
+  origin                  CandidateEvidenceOrigin
+  ingestionEventId        Int?
+  hostedApplySubmissionId Int?                        @unique
+  actorUserId             Int?
+  inlineText              String?
+  contentSha256           String?
+  supersededById          Int?
+  revokedAt               DateTime?
+  createdAt               DateTime                    @default(now())
+
+  company               Company                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  candidate             Candidate                  @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  application           Application?               @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+  ingestionEvent        ApplicationIngestionEvent? @relation(fields: [ingestionEventId, companyId], references: [id, companyId], onDelete: Restrict)
+  hostedApplySubmission HostedApplySubmission?     @relation(fields: [hostedApplySubmissionId, companyId], references: [id, companyId], onDelete: Restrict)
+  actorUser             User?                      @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  supersededBy          CandidateEvidence?         @relation("EvidenceSupersession", fields: [supersededById], references: [id], onDelete: Restrict)
+  supersedes            CandidateEvidence[]        @relation("EvidenceSupersession")
+  intelligenceRuns      CandidateIntelligenceRun[]
+  intelligenceClaims    CandidateClaim[]
+  requirementMatches    RequirementMatch[]
+
+  @@unique([id, companyId])
+  @@index([companyId, candidateId, createdAt])
+  @@index([companyId, applicationId])
+  @@index([supersededById])
+}
+
+/// T92 derived extraction run. Not profile, identity, evidence, matching, or ranking.
+/// At most one COMPLETED row per extraction key (SQL partial unique).
+model CandidateIntelligenceRun {
+  id               Int                                @id @default(autoincrement())
+  companyId        Int
+  candidateId      Int
+  evidenceId       Int
+  status           CandidateIntelligenceRunStatus
+  extractorType    CandidateIntelligenceExtractorType
+  extractorVersion String
+  modelProvider    String
+  modelName        String
+  promptVersion    String
+  createdAt        DateTime                           @default(now())
+  completedAt      DateTime?
+  errorCode        String?
+  durationMs       Int?
+
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  candidate Candidate         @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  evidence  CandidateEvidence @relation(fields: [evidenceId, companyId], references: [id, companyId], onDelete: Restrict)
+  claims    CandidateClaim[]
+
+  @@unique([id, companyId])
+  @@index([companyId, candidateId, createdAt])
+  @@index([companyId, evidenceId])
+  @@index([status])
+}
+
+/// T92 derived claim. Always cites CandidateEvidence. Not verified truth.
+model CandidateClaim {
+  id               Int                @id @default(autoincrement())
+  companyId        Int
+  candidateId      Int
+  runId            Int
+  evidenceId       Int
+  claimType        CandidateClaimType
+  value            String
+  normalizedValue  String?
+  createdAt        DateTime           @default(now())
+
+  company   Company                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  candidate Candidate                 @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  run       CandidateIntelligenceRun  @relation(fields: [runId, companyId], references: [id, companyId], onDelete: Restrict)
+  evidence  CandidateEvidence         @relation(fields: [evidenceId, companyId], references: [id, companyId], onDelete: Restrict)
+  requirementMatches RequirementMatch[]
+
+  @@unique([id, companyId])
+  @@index([companyId, candidateId, claimType])
+  @@index([runId])
+  @@index([evidenceId])
+}
+
+/// T93 Application ↔ published JobSpecificationVersion match run.
+/// Not ranking. Not intelligence. Not identity. Snapshot hash is T92 run ids only.
+model CandidateMatchRun {
+  id                         Int                      @id @default(autoincrement())
+  companyId                  Int
+  applicationId              Int
+  candidateId                Int
+  jobId                      Int
+  jobSpecificationVersionId  Int
+  status                     CandidateMatchRunStatus
+  matcherVersion             String
+  requirementParseVersion    String
+  aliasMapVersion            String
+  intelligenceSnapshotHash   String
+  createdAt                  DateTime                 @default(now())
+  completedAt                DateTime?
+  errorCode                  String?
+
+  company                  Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  application              Application             @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+  candidate                Candidate               @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  job                      Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  jobSpecificationVersion  JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  requirementMatches       RequirementMatch[]
+  rankingResults           JobRankingResult[]
+
+  @@unique([id, companyId])
+  @@index([companyId, applicationId, createdAt])
+  @@index([companyId, candidateId, createdAt])
+  @@index([companyId, jobSpecificationVersionId, createdAt])
+}
+
+/// T93 requirement-level result. SATISFIED cites claim+evidence. No scores.
+model RequirementMatch {
+  id              Int                                @id @default(autoincrement())
+  companyId       Int
+  runId           Int
+  requirementKey  String
+  sourceField     String
+  category        CandidateMatchRequirementCategory
+  result          CandidateMatchResult
+  reasonCode      String
+  claimId         Int?
+  evidenceId      Int?
+  createdAt       DateTime                           @default(now())
+
+  company  Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  run      CandidateMatchRun  @relation(fields: [runId, companyId], references: [id, companyId], onDelete: Restrict)
+  claim    CandidateClaim?    @relation(fields: [claimId, companyId], references: [id, companyId], onDelete: Restrict)
+  evidence CandidateEvidence? @relation(fields: [evidenceId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@index([companyId, runId])
+  @@index([companyId, claimId])
+  @@index([companyId, evidenceId])
+}
+
+/// T94 Job-scoped evidence-coverage ranking snapshot.
+/// Not candidate quality. Not matching. Not intelligence. Pins one published spec.
+model JobRankingRun {
+  id                         Int                 @id @default(autoincrement())
+  companyId                  Int
+  jobId                      Int
+  jobSpecificationVersionId  Int
+  status                     JobRankingRunStatus
+  rankingPolicyVersion       String
+  matcherVersion             String
+  requirementParseVersion    String
+  aliasMapVersion            String
+  applicationSetHash         String
+  createdAt                  DateTime            @default(now())
+  completedAt                DateTime?
+  errorCode                  String?
+  durationMs                 Int?
+  rankedCount                Int                 @default(0)
+  unrankedCount              Int                 @default(0)
+
+  company                  Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job                      Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  jobSpecificationVersion  JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  results                  JobRankingResult[]
+
+  @@unique([id, companyId])
+  @@index([companyId, jobId, createdAt])
+  @@index([companyId, jobSpecificationVersionId, createdAt])
+}
+
+/// T94 per-application coverage result. Rank is cohort-relative. No scores.
+model JobRankingResult {
+  id                    Int                       @id @default(autoincrement())
+  runId                 Int
+  companyId             Int
+  applicationId         Int
+  candidateId           Int
+  candidateMatchRunId   Int?
+  rank                  Int?
+  satisfiedSkillCount   Int?
+  unknownSkillCount     Int?
+  coverageStatus        JobRankingCoverageStatus
+  createdAt             DateTime                  @default(now())
+
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  run                JobRankingRun       @relation(fields: [runId, companyId], references: [id, companyId], onDelete: Restrict)
+  application        Application         @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+  candidate          Candidate           @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  candidateMatchRun  CandidateMatchRun?  @relation(fields: [candidateMatchRunId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@index([companyId, runId])
+  @@index([companyId, applicationId])
+  @@index([companyId, candidateId])
+  @@index([companyId, candidateMatchRunId])
 }
 
 model Application {
@@ -417,7 +862,12 @@ model Application {
   reports     Report[]
   evaluations Evaluation[]
   billingLineItem BillingLineItem?
+  ingestionEvents ApplicationIngestionEvent[]
+  evidence        CandidateEvidence[]
+  matchRuns       CandidateMatchRun[]
+  rankingResults  JobRankingResult[]
 
+  @@unique([id, companyId])
   @@unique([candidateId, jobId])
   @@index([candidateId])
   @@index([jobId, status])
@@ -580,6 +1030,8 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
   jobSpecificationVersions JobSpecificationVersion[]
+  identityDecisions        CandidateIdentityDecision[]
+  candidateEvidence        CandidateEvidence[]
 
   @@index([companyId])
   @@index([role])
@@ -681,7 +1133,9 @@ model ProviderConnection {
 
   company       Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
   distributions JobDistribution[]
+  identitySignals CandidateIdentitySignal[]
 
+  @@unique([id, companyId])
   @@unique([companyId, provider])
   @@index([companyId, status])
 }
@@ -711,6 +1165,7 @@ model JobDistribution {
   attempts                 DistributionAttempt[]
   applyTokens              ApplyToken[]
   hostedApplySubmissions   HostedApplySubmission[]
+  ingestionEvents          ApplicationIngestionEvent[]
 
   @@index([companyId])
   @@index([jobId, provider])
@@ -733,6 +1188,7 @@ model ProviderPosting {
   updatedAt DateTime @updatedAt
 
   distribution JobDistribution @relation(fields: [distributionId], references: [id], onDelete: Restrict)
+  ingestionEvents ApplicationIngestionEvent[]
 
   @@index([provider, externalPostingId])
 }
@@ -802,10 +1258,63 @@ model HostedApplySubmission {
   company                  Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
   job                      Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
   pinnedSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  ingestionEvent           ApplicationIngestionEvent?
+  identitySignals          CandidateIdentitySignal[]
+  evidence                 CandidateEvidence[]
 
+  @@unique([id, companyId])
   @@unique([distributionId, emailNormalized])
   @@index([applyTokenId])
   @@index([distributionId])
   @@index([jobId])
+  @@index([createdAt])
+}
+
+/// T85 evidence that an application arrived through a channel.
+/// Not an Application. Not a Candidate. Not a hiring-pipeline state.
+model ApplicationIngestionEvent {
+  id                        Int                          @id @default(autoincrement())
+  companyId                 Int
+  jobId                     Int
+  applicationId             Int?
+  candidateId               Int?
+  sourceChannel             ApplicationIngestionChannel
+  distributionId            Int?
+  providerPostingId         Int?
+  hostedApplySubmissionId   Int?                         @unique
+  externalApplicationId     String?
+  externalCandidateId       String?
+  jobSpecificationVersionId Int
+  status                    ApplicationIngestionStatus   @default(RECEIVED)
+  applicantName             String
+  applicantEmailNormalized  String?
+  applicantPhone            String?
+  applicantLocation         String?
+  applicantExperienceYears  Int?
+  applicantLinkedInUrl      String?
+  errorCode                 String?
+  errorMessage              String?
+  receivedAt                DateTime                     @default(now())
+  processedAt               DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company                    Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job                        Job                      @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  application                Application?             @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  candidate                  Candidate?               @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  distribution               JobDistribution?         @relation(fields: [distributionId], references: [id], onDelete: Restrict)
+  providerPosting            ProviderPosting?         @relation(fields: [providerPostingId], references: [id], onDelete: Restrict)
+  hostedApplySubmission      HostedApplySubmission?   @relation(fields: [hostedApplySubmissionId], references: [id], onDelete: Restrict)
+  pinnedSpecificationVersion JobSpecificationVersion  @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  identitySignals            CandidateIdentitySignal[]
+  evidence                   CandidateEvidence[]
+
+  @@unique([id, companyId])
+  @@index([companyId])
+  @@index([jobId])
+  @@index([status])
+  @@index([sourceChannel])
   @@index([createdAt])
 }

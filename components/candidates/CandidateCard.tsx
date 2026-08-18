@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 type CandidateCardProps = {
   id: number;
   name: string;
@@ -37,6 +39,12 @@ export default function CandidateCard({
         <p className="mt-1 text-2xl font-bold text-black">{experience} Years</p>
 
         <div className="mt-6 flex justify-end gap-3">
+          <Link
+            href={`/dashboard/candidates/${id}`}
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+          >
+            View profile
+          </Link>
           <button
             onClick={() => onEdit(id)}
             className="

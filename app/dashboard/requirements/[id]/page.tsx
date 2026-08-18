@@ -1,6 +1,12 @@
 import { notFound } from "next/navigation";
 
 import RequirementWorkspaceClient from "@/components/requirements/RequirementWorkspaceClient";
+import {
+  AuthenticationError,
+  AuthorizationError,
+} from "@/lib/auth/authorization";
+import { getJobEvidenceCapture } from "@/lib/candidates/evidence-capture/evidence-capture-service";
+import { getJobRanking } from "@/lib/candidates/ranking/ranking-service";
 import { getApplicationsByJobId } from "@/lib/repositories/application-repository";
 import { getBillingForRequirement } from "@/lib/repositories/billing-repository";
 import { getEvaluationsByJobId } from "@/lib/repositories/evaluation-repository";
@@ -44,6 +50,34 @@ export default async function RequirementWorkspacePage({
     notFound();
   }
 
+  let ranking = null;
+  try {
+    ranking = await getJobRanking(requirementId);
+  } catch (error) {
+    if (
+      error instanceof AuthenticationError ||
+      error instanceof AuthorizationError
+    ) {
+      ranking = null;
+    } else {
+      throw error;
+    }
+  }
+
+  let evidenceCapture = null;
+  try {
+    evidenceCapture = await getJobEvidenceCapture(requirementId);
+  } catch (error) {
+    if (
+      error instanceof AuthenticationError ||
+      error instanceof AuthorizationError
+    ) {
+      evidenceCapture = null;
+    } else {
+      throw error;
+    }
+  }
+
   return (
     <RequirementWorkspaceClient
       requirement={requirement}
@@ -52,6 +86,8 @@ export default async function RequirementWorkspacePage({
       interviews={interviews}
       interviewers={interviewers}
       billingRecords={billingRecords}
+      ranking={ranking}
+      evidenceCapture={evidenceCapture}
     />
   );
 }

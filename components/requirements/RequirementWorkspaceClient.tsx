@@ -32,12 +32,17 @@ import BillingRecordsPanel, {
   type BillingRecordView,
 } from "@/components/billing/BillingRecordsPanel";
 import PipelineCard from "@/components/pipeline/PipelineCard";
+import JobEvidenceCapturePanel from "@/components/requirements/JobEvidenceCapturePanel";
+import JobRankingPanel from "@/components/requirements/JobRankingPanel";
+import type { JobEvidenceCapturePageData } from "@/lib/candidates/evidence-capture/evidence-capture-types";
+import type { JobRankingPageData } from "@/lib/candidates/ranking/ranking-types";
 import type { getApplicationsByJobId } from "@/lib/repositories/application-repository";
 import type { getEvaluationsByJobId } from "@/lib/repositories/evaluation-repository";
 import type { getInterviewsByJobId } from "@/lib/repositories/interview-repository";
 import type { getInterviewers } from "@/lib/repositories/interviewer-repository";
 import type { getJobById } from "@/lib/repositories/job-repository";
 import { isInterviewerAssignmentLocked } from "@/lib/jobs/interviewer-assignment-lock";
+import { ADMIN_PIPELINE_TRANSITIONS } from "@/lib/validation/application-pipeline";
 import type { RequirementLifecycle } from "@prisma/client";
 
 type Requirement = NonNullable<Awaited<ReturnType<typeof getJobById>>>;
@@ -64,6 +69,8 @@ type RequirementWorkspaceClientProps = {
   interviews: Interview[];
   interviewers: Interviewer[];
   billingRecords: BillingRecordView[];
+  ranking?: JobRankingPageData | null;
+  evidenceCapture?: JobEvidenceCapturePageData | null;
 };
 
 const PIPELINE_STAGES: ApplicationPipelineStatus[] = [
@@ -76,29 +83,7 @@ const PIPELINE_STAGES: ApplicationPipelineStatus[] = [
   ApplicationPipelineStatus.REJECTED,
 ];
 
-const APPLICATION_STATUS_TRANSITIONS: Record<
-  ApplicationPipelineStatus,
-  ApplicationPipelineStatus[]
-> = {
-  [ApplicationPipelineStatus.CV_POOL]: [
-    ApplicationPipelineStatus.EXPERT_REVIEW,
-    ApplicationPipelineStatus.REJECTED,
-  ],
-  [ApplicationPipelineStatus.EXPERT_REVIEW]: [
-    ApplicationPipelineStatus.TECH_EVALUATION,
-    ApplicationPipelineStatus.REJECTED,
-  ],
-  [ApplicationPipelineStatus.TECH_EVALUATION]: [
-    ApplicationPipelineStatus.SHORTLISTED,
-    ApplicationPipelineStatus.REJECTED,
-  ],
-  [ApplicationPipelineStatus.SHORTLISTED]: [
-    ApplicationPipelineStatus.REJECTED,
-  ],
-  [ApplicationPipelineStatus.SELECTED]: [],
-  [ApplicationPipelineStatus.REJECTED]: [],
-  [ApplicationPipelineStatus.HIRED]: [],
-};
+const APPLICATION_STATUS_TRANSITIONS = ADMIN_PIPELINE_TRANSITIONS;
 
 const WORKSPACE_TABS: { id: WorkspaceTab; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -143,6 +128,8 @@ export default function RequirementWorkspaceClient({
   interviews,
   interviewers,
   billingRecords,
+  ranking,
+  evidenceCapture,
 }: RequirementWorkspaceClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("overview");
@@ -315,6 +302,26 @@ export default function RequirementWorkspaceClient({
           </Link>
         </div>
       </div>
+
+      {evidenceCapture ? (
+        <JobEvidenceCapturePanel
+          capture={evidenceCapture}
+          applicationLabels={applications.map((application) => ({
+            id: application.id,
+            label: `${application.candidate.name} (Application #${application.id})`,
+          }))}
+        />
+      ) : null}
+
+      {ranking ? (
+        <JobRankingPanel
+          ranking={ranking}
+          applicationLabels={applications.map((application) => ({
+            id: application.id,
+            label: `${application.candidate.name} (Application #${application.id})`,
+          }))}
+        />
+      ) : null}
 
       <div
         className="mt-8 flex flex-wrap gap-2 border-b border-zinc-200 pb-3"

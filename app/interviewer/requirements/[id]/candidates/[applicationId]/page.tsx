@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import InterviewerCandidateDetail from "@/components/interviewer/InterviewerCandidateDetail";
+import { getOrMaterializeCandidateProfile } from "@/lib/candidates/candidate-profile-service";
 import { getInterviewerApplicationForJob } from "@/lib/repositories/interviewer-portal-repository";
 
 type InterviewerCandidateDetailPageProps = {
@@ -42,6 +43,9 @@ export default async function InterviewerCandidateDetailPage({
   }
 
   const evaluation = application.evaluations[0] ?? null;
+  const profile = await getOrMaterializeCandidateProfile(
+    application.candidate.id,
+  );
 
   return (
     <div>
@@ -62,7 +66,16 @@ export default async function InterviewerCandidateDetailPage({
 
       <InterviewerCandidateDetail
         applicationId={application.id}
-        candidate={application.candidate}
+        candidate={{
+          name: profile.name,
+          headline: profile.headline,
+          experienceYears: profile.experienceYears,
+          location: profile.location,
+          currentEmployer: profile.currentEmployer,
+          skills: profile.skillsText,
+          expectedCTC: profile.expectedCTC,
+          linkedInUrl: profile.linkedInUrl,
+        }}
         application={{
           status: application.status,
           source: application.source,

@@ -41,6 +41,7 @@ import {
   MANUAL_DISTRIBUTION_ACTIVE,
   PROVIDER_UNAVAILABLE_MESSAGE,
   PUBLISHED_SPEC_REQUIRED,
+  INVALID_TRANSITION,
   assertDistributionTransition,
   assertJobIsDistributable,
   assertPublishedSpecification,
@@ -350,7 +351,15 @@ async function persistAttemptOutcome(input: {
         },
       });
 
-      if (input.applyMode !== ApplyMode.HIREIQ_HOSTED) {
+      const persistPosting =
+        input.applyMode !== ApplyMode.HIREIQ_HOSTED ||
+        Boolean(result.externalPostingId);
+
+      if (persistPosting) {
+        const existingPosting = await tx.providerPosting.findUnique({
+          where: { distributionId: input.distributionId },
+          select: { externalPostingId: true },
+        });
         await tx.providerPosting.upsert({
           where: { distributionId: input.distributionId },
           create: {
@@ -363,7 +372,9 @@ async function persistAttemptOutcome(input: {
             providerUpdatedAt: completedAt,
           },
           update: {
-            externalPostingId: result.externalPostingId,
+            ...(existingPosting?.externalPostingId
+              ? {}
+              : { externalPostingId: result.externalPostingId }),
             externalUrl: result.externalUrl,
             providerStatus: result.providerStatus,
             providerUpdatedAt: completedAt,
@@ -895,6 +906,106 @@ export async function closeJobDistributionForCompany(input: {
     await revokeLiveApplyTokens(distributionId);
   }
   return closed;
+}
+
+export async function updateJobDistributionForCompany(input: {
+  companyId: number;
+  distributionId: unknown;
+}) {
+  const distributionId = validateJobDistributionId(input.distributionId);
+  const row = await loadDistributionRow(prisma, distributionId, input.companyId);
+  if (!row) {
+    throw new JobDistributionError(DISTRIBUTION_NOT_FOUND);
+  }
+  if (
+    row.status !== JobDistributionStatus.PUBLISHED &&
+    row.status !== JobDistributionStatus.PAUSED
+  ) {
+    throw new JobDistributionError(INVALID_TRANSITION);
+  }
+
+  const adapter = getDistributionAdapter(row.provider);
+  const connection = await loadActiveConnection({
+    companyId: input.companyId,
+    provider: row.provider,
+  });
+  const payload = buildPayloadForRow(row);
+  const attempt = await prisma.distributionAttempt.create({
+    data: {
+      distributionId: row.id,
+      operation: DistributionAttemptOperation.UPDATE,
+      idempotencyKey: newIdempotencyKey(`dist-${row.id}-update`),
+      requestFingerprint: fingerprintPublicPayload(payload),
+      status: DistributionAttemptStatus.IN_FLIGHT,
+    },
+  });
+
+  const result = await adapter.update({
+    payload,
+    idempotencyKey: `dist-${distributionId}-update`,
+    distributionId,
+    connection,
+  });
+
+  return persistAttemptOutcome({
+    distributionId,
+    companyId: input.companyId,
+    attemptId: attempt.id,
+    fromStatus: row.status,
+    successStatus: row.status,
+    result,
+    provider: row.provider,
+    applyMode: row.applyMode,
+  });
+}
+
+export async function reconcileJobDistributionForCompany(input: {
+  companyId: number;
+  distributionId: unknown;
+}) {
+  const distributionId = validateJobDistributionId(input.distributionId);
+  const row = await loadDistributionRow(prisma, distributionId, input.companyId);
+  if (!row) {
+    throw new JobDistributionError(DISTRIBUTION_NOT_FOUND);
+  }
+
+  const adapter = getDistributionAdapter(row.provider);
+  if (!adapter.capabilities().fetchPosting || !row.posting?.externalPostingId) {
+    throw new JobDistributionError(
+      "This distribution cannot be reconciled without a provider posting id.",
+    );
+  }
+
+  const connection = await loadActiveConnection({
+    companyId: input.companyId,
+    provider: row.provider,
+  });
+  const payload = buildPayloadForRow(row);
+  const attempt = await prisma.distributionAttempt.create({
+    data: {
+      distributionId: row.id,
+      operation: DistributionAttemptOperation.FETCH,
+      idempotencyKey: newIdempotencyKey(`dist-${row.id}-fetch`),
+      requestFingerprint: fingerprintPublicPayload(payload),
+      status: DistributionAttemptStatus.IN_FLIGHT,
+    },
+  });
+
+  const result = await adapter.fetchPosting({
+    externalPostingId: row.posting.externalPostingId,
+    connection,
+  });
+
+  return persistAttemptOutcome({
+    distributionId,
+    companyId: input.companyId,
+    attemptId: attempt.id,
+    fromStatus: row.status,
+    successStatus: row.status,
+    result,
+    provider: row.provider,
+    applyMode: row.applyMode,
+  });
 }
 
 export { PUBLISHED_SPEC_REQUIRED, DRAFT_CANNOT_DISTRIBUTE };

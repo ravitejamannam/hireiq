@@ -42,12 +42,13 @@ export type ClientCandidateEvaluation = {
 export type ClientCandidateProfileData = {
   applicationId: number;
   name: string;
-  role: string;
+  headline: string | null;
   currentEmployer: string | null;
   location: string | null;
-  experienceYears: number;
+  experienceYears: number | null;
   skills: string | null;
   expectedCTC: string | null;
+  linkedInUrl: string | null;
   pipelineStatus: ApplicationPipelineStatus;
   source: string | null;
   expertScore: number | null;
@@ -103,7 +104,9 @@ export default function ClientCandidateProfile({
           Candidate
         </p>
         <h1 className="mt-2 text-3xl font-bold text-black">{candidate.name}</h1>
-        <p className="mt-2 text-zinc-600">{candidate.role}</p>
+        <p className="mt-2 text-zinc-600">
+          {formatClientOptional(candidate.headline)}
+        </p>
       </div>
 
       <ClientHireConfirmation
@@ -116,8 +119,8 @@ export default function ClientCandidateProfile({
         <h2 className="text-lg font-bold text-black">Candidate Profile</h2>
         <dl className="mt-4 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2">
           <div>
-            <dt className="font-medium text-black">Current Role</dt>
-            <dd>{candidate.role}</dd>
+            <dt className="font-medium text-black">Headline</dt>
+            <dd>{formatClientOptional(candidate.headline)}</dd>
           </div>
           <div>
             <dt className="font-medium text-black">Current Employer</dt>
@@ -129,11 +132,32 @@ export default function ClientCandidateProfile({
           </div>
           <div>
             <dt className="font-medium text-black">Experience</dt>
-            <dd>{candidate.experienceYears} years</dd>
+            <dd>
+              {candidate.experienceYears === null
+                ? formatClientOptional(null)
+                : `${candidate.experienceYears} years`}
+            </dd>
           </div>
           <div>
             <dt className="font-medium text-black">Expected CTC</dt>
             <dd>{formatClientOptional(candidate.expectedCTC)}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-black">LinkedIn</dt>
+            <dd>
+              {candidate.linkedInUrl ? (
+                <a
+                  href={candidate.linkedInUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-black underline underline-offset-2"
+                >
+                  View profile
+                </a>
+              ) : (
+                formatClientOptional(null)
+              )}
+            </dd>
           </div>
           <div className="sm:col-span-2">
             <dt className="font-medium text-black">Skills</dt>

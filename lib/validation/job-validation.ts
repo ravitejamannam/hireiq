@@ -240,7 +240,9 @@ export function validateJobLifecycleTransition(
     currentLifecycle === "SOURCING_SHORTLISTING" &&
     validatedNextLifecycle === "BILLING_GENERATED"
   ) {
-    throw new JobValidationError("Billing workflow is not available yet.");
+    throw new JobValidationError(
+      "Billing must be generated through the hire billing workflow.",
+    );
   }
 
   if (

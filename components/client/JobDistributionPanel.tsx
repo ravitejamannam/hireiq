@@ -32,6 +32,38 @@ const PROVIDERS: Array<{
   { value: "NAUKRI", label: "Naukri", live: false },
 ];
 
+function isPartnerGatedProvider(provider: DistributionProvider) {
+  return (
+    provider === "LINKEDIN" ||
+    provider === "INDEED" ||
+    provider === "NAUKRI"
+  );
+}
+
+function isPauseUnsupportedProvider(provider: DistributionProvider) {
+  return provider === "INDEED" || provider === "NAUKRI";
+}
+
+function providerOptionLabel(provider: {
+  value: DistributionProvider;
+  label: string;
+  live: boolean;
+}) {
+  if (provider.value === "LINKEDIN") {
+    return "LinkedIn (partner integration unavailable)";
+  }
+  if (provider.value === "INDEED") {
+    return "Indeed (partner integration unavailable)";
+  }
+  if (provider.value === "NAUKRI") {
+    return "Naukri (partner integration unavailable)";
+  }
+  if (provider.live) {
+    return provider.label;
+  }
+  return `${provider.label} (unavailable API)`;
+}
+
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Distribution failed.";
 }
@@ -109,8 +141,9 @@ export default function JobDistributionPanel({
     <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
       <h2 className="text-lg font-bold text-black">Distribution</h2>
       <p className="mt-2 text-sm text-zinc-600">
-        Provider-neutral posting. LinkedIn, Indeed, and Naukri are unavailable
-        until a later partner integration. This is not T69 database sourcing.
+        Provider-neutral posting. LinkedIn, Indeed, and Naukri are partner-gated
+        and are not live job boards in this environment. This is not T69
+        database sourcing.
       </p>
 
       {!hasPublishedSpecification ? (
@@ -149,8 +182,7 @@ export default function JobDistributionPanel({
           >
             {PROVIDERS.map((provider) => (
               <option key={provider.value} value={provider.value}>
-                {provider.label}
-                {provider.live ? "" : " (unavailable API)"}
+                {providerOptionLabel(provider)}
               </option>
             ))}
           </select>
@@ -202,14 +234,20 @@ export default function JobDistributionPanel({
 
       <p className="mt-4 text-sm text-zinc-600">
         Connection:{" "}
-        {selectedConnection?.status === ProviderConnectionStatus.ACTIVE
-          ? `Active${selectedConnection.hasCredential ? " (credential stored)" : ""}`
+        {isPartnerGatedProvider(selectedProvider)
+          ? selectedConnection?.status === ProviderConnectionStatus.ACTIVE
+            ? `Active${selectedConnection.hasCredential ? " (credential stored)" : ""}`
+            : "Partner integration unavailable"
+          : selectedConnection?.status === ProviderConnectionStatus.ACTIVE
+            ? `Active${selectedConnection.hasCredential ? " (credential stored)" : ""}`
           : selectedProvider === "MANUAL"
             ? "Not required for Manual"
             : "Not connected"}
       </p>
 
-      {isOwner && selectedProvider !== "MANUAL" ? (
+      {isOwner &&
+      selectedProvider !== "MANUAL" &&
+      !isPartnerGatedProvider(selectedProvider) ? (
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="block text-sm font-medium text-black">
             Provider account id
@@ -315,25 +353,33 @@ export default function JobDistributionPanel({
         >
           Retry
         </button>
-        <button
-          type="button"
-          disabled={
-            isPending ||
-            selectedDistribution?.status !== JobDistributionStatus.PUBLISHED
-          }
-          className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black disabled:text-zinc-400"
-          onClick={() =>
-            selectedDistribution &&
-            run("Paused.", () =>
-              pauseJobDistribution({
-                jobId,
-                distributionId: selectedDistribution.id,
-              }),
-            )
-          }
-        >
-          Pause
-        </button>
+        {!isPauseUnsupportedProvider(selectedProvider) ? (
+          <button
+            type="button"
+            disabled={
+              isPending ||
+              selectedDistribution?.status !== JobDistributionStatus.PUBLISHED
+            }
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black disabled:text-zinc-400"
+            onClick={() =>
+              selectedDistribution &&
+              run("Paused.", () =>
+                pauseJobDistribution({
+                  jobId,
+                  distributionId: selectedDistribution.id,
+                }),
+              )
+            }
+          >
+            Pause
+          </button>
+        ) : (
+          <p className="self-center text-sm text-zinc-600">
+            {selectedProvider === "INDEED"
+              ? "Indeed does not support pause or resume."
+              : "Naukri does not support pause or resume."}
+          </p>
+        )}
         <button
           type="button"
           disabled={isPending || !selectedDistribution}

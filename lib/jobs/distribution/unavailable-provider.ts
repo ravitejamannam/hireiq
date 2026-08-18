@@ -13,8 +13,9 @@ import {
 import type { PublicDistributionPayload } from "@/lib/jobs/distribution/payload";
 
 /**
- * LinkedIn / Indeed / Naukri in T83: no live API, no fabricated posting IDs.
- * T86–T88 own real adapters after partnership.
+ * Unused in T86–T88 production registry. LinkedIn, Indeed, and Naukri each
+ * register a fail-closed adapter (no live API, no fabricated posting IDs)
+ * without partner access. Keep this class for a future unconfigured provider.
  */
 export class UnavailableProvider implements JobDistributionProviderAdapter {
   constructor(readonly provider: DistributionProvider) {}

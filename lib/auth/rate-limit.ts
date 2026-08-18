@@ -40,6 +40,10 @@ export const AUTH_RATE_LIMITS = {
   hostedApplyPostIp: { windowMs: 60 * 60 * 1000, max: 10 },
   hostedApplyPostTokenIp: { windowMs: 60 * 60 * 1000, max: 5 },
   hostedApplyPostEmailDistribution: { windowMs: 60 * 60 * 1000, max: 3 },
+  linkedinWebhookIp: { windowMs: 15 * 60 * 1000, max: 60 },
+  indeedWebhookIp: { windowMs: 15 * 60 * 1000, max: 60 },
+  aiCandidateIntelligenceUser: { windowMs: 60 * 60 * 1000, max: 10 },
+  aiCandidateIntelligenceCandidate: { windowMs: 60 * 60 * 1000, max: 10 },
 } as const;
 
 export type AuthRateLimitName = keyof typeof AUTH_RATE_LIMITS;
@@ -137,6 +141,10 @@ export function rateLimitKeyForCompany(companyId: number) {
 
 export function rateLimitKeyForJob(jobId: number) {
   return `job:${jobId}`;
+}
+
+export function rateLimitKeyForCandidate(candidateId: number) {
+  return `candidate:${candidateId}`;
 }
 
 export function rateLimitKeyForDigest(kind: string, digest: string) {
