@@ -42,6 +42,7 @@ import {
   PROVIDER_UNAVAILABLE_MESSAGE,
   PUBLISHED_SPEC_REQUIRED,
   INVALID_TRANSITION,
+  ROLE_CATEGORY_REQUIRED,
   assertDistributionTransition,
   assertJobIsDistributable,
   assertPublishedSpecification,
@@ -244,10 +245,14 @@ export async function createJobDistributionForCompany(input: {
 
   const version = await prisma.jobSpecificationVersion.findUnique({
     where: { id: job.currentPublishedSpecificationVersionId! },
-    select: { id: true, jobId: true, status: true },
+    select: { id: true, jobId: true, status: true, roleCategory: true },
   });
 
   const pinned = assertPublishedSpecification(version, job.id);
+
+  if (applyMode === ApplyMode.HIREIQ_HOSTED && !pinned.roleCategory) {
+    throw new JobDistributionError(ROLE_CATEGORY_REQUIRED);
+  }
 
   let providerConnectionId: number | null = null;
   if (providerRequiresActiveConnection(provider)) {
@@ -591,6 +596,15 @@ export async function publishJobDistributionForCompany(input: {
   let hostedApplyToken: { tokenHash: string; applyUrl: string } | undefined;
   let hostedApplyUrl = started.row.applyUrlSnapshot;
   if (started.row.applyMode === ApplyMode.HIREIQ_HOSTED) {
+    if (!started.row.pinnedSpecificationVersion.roleCategory) {
+      return persistPublish({
+        ok: false,
+        retryable: false,
+        code: "ROLE_CATEGORY_REQUIRED",
+        message: ROLE_CATEGORY_REQUIRED,
+      });
+    }
+
     try {
       requirePublicAppOrigin();
     } catch {

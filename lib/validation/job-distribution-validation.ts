@@ -32,6 +32,8 @@ export const DUPLICATE_DISTRIBUTION =
   "An active distribution already exists for this provider.";
 export const INVALID_TRANSITION = "Invalid distribution status transition.";
 export const PROVIDER_UNAVAILABLE_MESSAGE = "This provider is not available.";
+export const ROLE_CATEGORY_REQUIRED =
+  "A role category is required to enable HireIQ hosted apply.";
 
 export function validatePositiveInteger(value: unknown, message: string) {
   if (
@@ -159,6 +161,7 @@ export function assertPublishedSpecification(version: {
   id: number;
   jobId: number;
   status: JobSpecificationVersionStatus;
+  roleCategory?: import("@prisma/client").RoleCategory | null;
 } | null, jobId: number) {
   if (!version) {
     throw new JobDistributionError(PUBLISHED_SPEC_REQUIRED);

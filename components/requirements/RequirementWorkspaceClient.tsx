@@ -32,8 +32,10 @@ import BillingRecordsPanel, {
 import PipelineCard from "@/components/pipeline/PipelineCard";
 import JobEvidenceCapturePanel from "@/components/requirements/JobEvidenceCapturePanel";
 import JobRankingPanel from "@/components/requirements/JobRankingPanel";
+import AssessmentLeaderboardPanel from "@/components/assess/AssessmentLeaderboardPanel";
 import type { JobEvidenceCapturePageData } from "@/lib/candidates/evidence-capture/evidence-capture-types";
 import type { JobRankingPageData } from "@/lib/candidates/ranking/ranking-types";
+import type { AssessmentLeaderboardPage } from "@/lib/assessments/assessment-service";
 import type { getApplicationsByJobId } from "@/lib/repositories/application-repository";
 import type { getEvaluationsByJobId } from "@/lib/repositories/evaluation-repository";
 import type { getInterviewsByJobId } from "@/lib/repositories/interview-repository";
@@ -68,6 +70,7 @@ type RequirementWorkspaceClientProps = {
   billingRecords: BillingRecordView[];
   ranking?: JobRankingPageData | null;
   evidenceCapture?: JobEvidenceCapturePageData | null;
+  assessmentLeaderboard?: AssessmentLeaderboardPage | null;
 };
 
 const PIPELINE_STAGES: ApplicationPipelineStatus[] = [
@@ -127,6 +130,7 @@ export default function RequirementWorkspaceClient({
   billingRecords,
   ranking,
   evidenceCapture,
+  assessmentLeaderboard,
 }: RequirementWorkspaceClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("overview");
@@ -318,6 +322,10 @@ export default function RequirementWorkspaceClient({
             label: `${application.candidate.name} (Application #${application.id})`,
           }))}
         />
+      ) : null}
+
+      {assessmentLeaderboard ? (
+        <AssessmentLeaderboardPanel board={assessmentLeaderboard} />
       ) : null}
 
       <div

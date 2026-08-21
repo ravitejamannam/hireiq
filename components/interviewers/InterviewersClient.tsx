@@ -6,9 +6,12 @@ import { useRouter } from "next/navigation";
 import {
   createInterviewer,
   deleteInterviewer,
+  resendInterviewerInvite,
+  revokeInterviewerInvite,
   updateInterviewer,
 } from "@/app/actions/interviewer-actions";
 import type { getInterviewers } from "@/lib/repositories/interviewer-repository";
+import { resolveInterviewerLoginStatus } from "@/lib/interviewers/interviewer-invitation-errors";
 import InterviewerCard from "@/components/interviewers/InterviewerCard";
 import InterviewerModal from "@/components/interviewers/InterviewerModal";
 import type { InterviewerFormData } from "@/components/interviewers/InterviewerForm";
@@ -69,6 +72,7 @@ export default function InterviewersClient({
           interviewer.name,
           interviewer.category,
           interviewer.availability,
+          interviewer.email,
         );
       }
 
@@ -93,6 +97,26 @@ export default function InterviewersClient({
     }
   }
 
+  async function handleResendInvite(id: number) {
+    setActionError("");
+    try {
+      await resendInterviewerInvite(id);
+      router.refresh();
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    }
+  }
+
+  async function handleRevokeInvite(invitationId: number) {
+    setActionError("");
+    try {
+      await revokeInterviewerInvite(invitationId);
+      router.refresh();
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    }
+  }
+
   return (
     <>
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -104,7 +128,9 @@ export default function InterviewersClient({
             Interviewer Directory
           </h1>
           <p className="mt-2 max-w-2xl text-zinc-600">
-            Manage expert availability and view assigned requirement workload.
+            Create a profile and invite a work email. The interviewer sets their
+            own password. Assign requirements only after they have a login when
+            you need email delivery.
           </p>
         </div>
         <button
@@ -129,28 +155,43 @@ export default function InterviewersClient({
             No interviewers yet
           </h2>
           <p className="mt-3 text-center text-zinc-600">
-            Add internal experts before assigning requirements.
+            Invite internal experts before assigning requirements.
           </p>
         </div>
       ) : (
         <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {initialInterviewers.map((interviewer) => (
-            <InterviewerCard
-              key={interviewer.id}
-              id={interviewer.id}
-              name={interviewer.name}
-              category={interviewer.category}
-              availability={interviewer.availability}
-              assignedJobs={interviewer.assignedJobs}
-              onEdit={handleEditInterviewer}
-              onDelete={handleDeleteInterviewer}
-            />
-          ))}
+          {initialInterviewers.map((interviewer) => {
+            const activeUser = interviewer.users[0] ?? null;
+            const pendingInvite = interviewer.invitations[0] ?? null;
+            const loginStatus = resolveInterviewerLoginStatus({
+              hasActiveUser: Boolean(activeUser),
+              pendingInviteEmail: pendingInvite?.email ?? null,
+            });
+
+            return (
+              <InterviewerCard
+                key={interviewer.id}
+                id={interviewer.id}
+                name={interviewer.name}
+                category={interviewer.category}
+                availability={interviewer.availability}
+                assignedJobs={interviewer.assignedJobs}
+                loginStatus={loginStatus}
+                loginEmail={activeUser?.email ?? pendingInvite?.email ?? null}
+                pendingInvitationId={pendingInvite?.id ?? null}
+                onEdit={handleEditInterviewer}
+                onDelete={handleDeleteInterviewer}
+                onResendInvite={handleResendInvite}
+                onRevokeInvite={handleRevokeInvite}
+              />
+            );
+          })}
         </div>
       )}
 
       <InterviewerModal
         isOpen={isModalOpen}
+        requireEmail={!editingInterviewer}
         initialValues={
           editingInterviewer
             ? {

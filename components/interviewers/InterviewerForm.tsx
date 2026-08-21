@@ -28,10 +28,13 @@ export type InterviewerFormData = {
   name: string;
   category: InterviewerCategory;
   availability: InterviewerAvailability;
+  email?: string;
 };
 
 type InterviewerFormProps = {
   initialValues?: InterviewerFormData;
+  /** Email is required when creating; omitted when editing profile. */
+  requireEmail?: boolean;
   errorMessage?: string;
   isSaving?: boolean;
   onCancel: () => void;
@@ -40,12 +43,14 @@ type InterviewerFormProps = {
 
 export default function InterviewerForm({
   initialValues,
+  requireEmail = false,
   errorMessage,
   isSaving = false,
   onCancel,
   onSave,
 }: InterviewerFormProps) {
   const [name, setName] = useState(initialValues?.name ?? "");
+  const [email, setEmail] = useState(initialValues?.email ?? "");
   const [category, setCategory] = useState<InterviewerCategory | "">(
     initialValues?.category ?? "",
   );
@@ -54,6 +59,7 @@ export default function InterviewerForm({
   >(initialValues?.availability ?? "");
 
   const [nameError, setNameError] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [categoryError, setCategoryError] = useState("");
   const [availabilityError, setAvailabilityError] = useState("");
 
@@ -62,11 +68,17 @@ export default function InterviewerForm({
 
     let valid = true;
     setNameError("");
+    setEmailError("");
     setCategoryError("");
     setAvailabilityError("");
 
     if (!name.trim()) {
       setNameError("Interviewer name is required.");
+      valid = false;
+    }
+
+    if (requireEmail && !email.trim()) {
+      setEmailError("Work email is required.");
       valid = false;
     }
 
@@ -86,6 +98,7 @@ export default function InterviewerForm({
       name: name.trim(),
       category,
       availability,
+      ...(requireEmail ? { email: email.trim() } : {}),
     });
   }
 
@@ -111,6 +124,32 @@ export default function InterviewerForm({
         />
         {nameError && <p className="mt-2 text-sm text-red-600">{nameError}</p>}
       </div>
+
+      {requireEmail ? (
+        <div>
+          <label
+            htmlFor="interviewer-email"
+            className="block text-sm font-medium text-black"
+          >
+            Work email
+          </label>
+          <input
+            id="interviewer-email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="interviewer@hireiq.com"
+            className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-black placeholder:text-zinc-400 outline-none transition focus:border-black"
+          />
+          <p className="mt-2 text-sm text-zinc-600">
+            They will receive an invite to set their own password. Admin does
+            not set passwords.
+          </p>
+          {emailError && (
+            <p className="mt-2 text-sm text-red-600">{emailError}</p>
+          )}
+        </div>
+      ) : null}
 
       <div>
         <label htmlFor="interviewer-category" className="block text-sm font-medium text-black">
@@ -161,7 +200,11 @@ export default function InterviewerForm({
           disabled={isSaving}
           className="rounded-lg bg-black px-5 py-3 font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
         >
-          {isSaving ? "Saving..." : initialValues ? "Save Interviewer" : "Create Interviewer"}
+          {isSaving
+            ? "Saving..."
+            : initialValues
+              ? "Save Interviewer"
+              : "Create and invite"}
         </button>
       </div>
     </form>

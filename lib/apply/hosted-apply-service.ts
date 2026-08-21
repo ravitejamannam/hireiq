@@ -14,6 +14,7 @@ import {
 } from "@/lib/apply/hosted-apply-errors";
 import { toPublicHostedApplyPage } from "@/lib/apply/public-page";
 import { ingestHostedApplySubmission } from "@/lib/ingestion/hosted-apply-ingestion";
+import { mintAssessmentInviteForApplication } from "@/lib/assessments/assessment-service";
 import { hashSecureToken } from "@/lib/auth/secure-token";
 import {
   consumeAuthRateLimit,
@@ -114,7 +115,20 @@ export async function resolvePublicHostedApply(token: string) {
 }
 
 async function ingestReceivedSubmission(submissionId: number) {
-  await ingestHostedApplySubmission(submissionId);
+  return ingestHostedApplySubmission(submissionId);
+}
+
+async function assessmentUrlForApplication(applicationId: number | null) {
+  if (!applicationId) {
+    return null;
+  }
+
+  try {
+    const minted = await mintAssessmentInviteForApplication(applicationId);
+    return minted?.assessmentUrl ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function submitHostedApply(input: {
@@ -128,8 +142,11 @@ export async function submitHostedApply(input: {
     select: { id: true, status: true },
   });
   if (existingByKey) {
-    await ingestReceivedSubmission(existingByKey.id);
-    return { success: true as const };
+    const ingested = await ingestReceivedSubmission(existingByKey.id);
+    return {
+      success: true as const,
+      assessmentUrl: await assessmentUrlForApplication(ingested.applicationId),
+    };
   }
 
   const fields = validateHostedApplySubmitBody(input.body);
@@ -170,24 +187,40 @@ export async function submitHostedApply(input: {
       jobId: row.distribution.jobId,
       submissionId: created.id,
     });
-    await ingestReceivedSubmission(created.id);
+    const ingested = await ingestReceivedSubmission(created.id);
+    return {
+      success: true as const,
+      assessmentUrl: await assessmentUrlForApplication(ingested.applicationId),
+    };
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
-      const raced = await prisma.hostedApplySubmission.findUnique({
-        where: { idempotencyKey },
+      const raced = await prisma.hostedApplySubmission.findFirst({
+        where: {
+          OR: [
+            { idempotencyKey },
+            {
+              distributionId: row.distribution.id,
+              emailNormalized: fields.emailNormalized,
+            },
+          ],
+        },
         select: { id: true },
       });
       if (raced) {
-        await ingestReceivedSubmission(raced.id);
+        const ingested = await ingestReceivedSubmission(raced.id);
+        return {
+          success: true as const,
+          assessmentUrl: await assessmentUrlForApplication(
+            ingested.applicationId,
+          ),
+        };
       }
-      return { success: true as const };
+      return { success: true as const, assessmentUrl: null };
     }
 
     throw error;
   }
-
-  return { success: true as const };
 }

@@ -6,6 +6,7 @@ import type { InterviewerFormData } from "@/components/interviewers/InterviewerF
 type InterviewerModalProps = {
   isOpen: boolean;
   initialValues?: InterviewerFormData;
+  requireEmail?: boolean;
   errorMessage?: string;
   isSaving?: boolean;
   onClose: () => void;
@@ -15,6 +16,7 @@ type InterviewerModalProps = {
 export default function InterviewerModal({
   isOpen,
   initialValues,
+  requireEmail = false,
   errorMessage,
   isSaving,
   onClose,
@@ -46,6 +48,7 @@ export default function InterviewerModal({
 
         <InterviewerForm
           initialValues={initialValues}
+          requireEmail={requireEmail}
           errorMessage={errorMessage}
           isSaving={isSaving}
           onCancel={onClose}

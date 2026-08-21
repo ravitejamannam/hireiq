@@ -1,9 +1,24 @@
 "use server";
 
-import { requireAdmin } from "@/lib/auth/authorization";
-import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 
+import { requireAdmin, requireUser } from "@/lib/auth/authorization";
+import {
+  consumeAuthRateLimit,
+  RateLimitError,
+  rateLimitKeyForIp,
+  rateLimitKeyForUser,
+} from "@/lib/auth/rate-limit";
+import { readRequestIp } from "@/lib/auth/request-ip";
+import { InterviewerInvitationError } from "@/lib/interviewers/interviewer-invitation-errors";
+import {
+  acceptInterviewerInvitationAndCreateLogin,
+  acceptInterviewerInvitationForExistingUser,
+  createInterviewerWithInvite,
+  resendInterviewerInvitation,
+  revokeInterviewerInvitation,
+} from "@/lib/interviewers/interviewer-invitation-service";
 import { prisma } from "@/lib/prisma";
 import {
   ensureInterviewerExists,
@@ -11,30 +26,50 @@ import {
   validateInterviewerId,
   validateInterviewerInput,
 } from "@/lib/validation/interviewer-validation";
+import { UserValidationError } from "@/lib/validation/user-validation";
 import type {
   InterviewerAvailability,
   InterviewerCategory,
 } from "@prisma/client";
 
+export type { InterviewerLoginStatus } from "@/lib/interviewers/interviewer-invitation-errors";
+
 export async function createInterviewer(
   name: string,
   category: InterviewerCategory,
   availability: InterviewerAvailability,
+  email: unknown,
 ) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const validatedInterviewer = validateInterviewerInput(
     name,
     category,
     availability,
   );
 
-  const interviewer = await prisma.interviewer.create({
-    data: validatedInterviewer,
+  try {
+    await consumeAuthRateLimit({
+      name: "interviewerInvite",
+      key: rateLimitKeyForUser(admin.id),
+    });
+  } catch (error) {
+    if (error instanceof RateLimitError) {
+      throw new InterviewerInvitationError(error.message);
+    }
+    throw error;
+  }
+
+  const result = await createInterviewerWithInvite({
+    actorUserId: admin.id,
+    name: validatedInterviewer.name,
+    category: validatedInterviewer.category,
+    availability: validatedInterviewer.availability,
+    email,
   });
 
   revalidatePath("/dashboard/interviewers");
 
-  return interviewer;
+  return result;
 }
 
 export async function updateInterviewer(
@@ -94,4 +129,91 @@ export async function deleteInterviewer(id: number) {
 
   revalidatePath("/dashboard/interviewers");
   revalidatePath("/dashboard/jobs");
+}
+
+export async function resendInterviewerInvite(interviewerId: number) {
+  const admin = await requireAdmin();
+  const id = validateInterviewerId(interviewerId);
+
+  try {
+    await consumeAuthRateLimit({
+      name: "interviewerInvite",
+      key: rateLimitKeyForUser(admin.id),
+    });
+  } catch (error) {
+    if (error instanceof RateLimitError) {
+      throw new InterviewerInvitationError(error.message);
+    }
+    throw error;
+  }
+
+  const result = await resendInterviewerInvitation({
+    actorUserId: admin.id,
+    interviewerId: id,
+  });
+
+  revalidatePath("/dashboard/interviewers");
+  return result;
+}
+
+export async function revokeInterviewerInvite(invitationId: number) {
+  await requireAdmin();
+  const result = await revokeInterviewerInvitation({ invitationId });
+  revalidatePath("/dashboard/interviewers");
+  return result;
+}
+
+export async function signUpInterviewerFromInvitation(input: {
+  token: unknown;
+  name: unknown;
+  password: unknown;
+}) {
+  const ip = await readRequestIp();
+
+  try {
+    await consumeAuthRateLimit({
+      name: "inviteAcceptIp",
+      key: rateLimitKeyForIp(ip),
+    });
+  } catch (error) {
+    if (error instanceof RateLimitError) {
+      return { ok: false as const, error: error.message };
+    }
+    throw error;
+  }
+
+  try {
+    const created = await acceptInterviewerInvitationAndCreateLogin(input);
+    return {
+      ok: true as const,
+      email: created.email,
+      interviewerId: created.interviewerId,
+    };
+  } catch (error) {
+    if (error instanceof InterviewerInvitationError) {
+      return { ok: false as const, error: error.message };
+    }
+    if (error instanceof UserValidationError) {
+      return { ok: false as const, error: error.message };
+    }
+    return {
+      ok: false as const,
+      error: "Unable to create your interviewer account.",
+    };
+  }
+}
+
+export async function acceptInterviewerInvite(token: unknown) {
+  const user = await requireUser();
+  const ip = await readRequestIp();
+
+  await consumeAuthRateLimit({
+    name: "inviteAcceptIp",
+    key: rateLimitKeyForIp(ip),
+  });
+
+  return acceptInterviewerInvitationForExistingUser({
+    userId: user.id,
+    token,
+  });
 }

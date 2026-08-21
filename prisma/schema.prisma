@@ -37,6 +37,13 @@ enum CodingTestStatus {
   FAILED
 }
 
+enum AssessmentAttemptStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+}
+
 enum Recommendation {
   STRONG_HIRE
   HIRE
@@ -490,6 +497,7 @@ model Interviewer {
   evaluations  Evaluation[]
   notifications Notification[]
   users         User[]
+  invitations   InterviewerInvitation[]
 }
 
 model Candidate {
@@ -864,6 +872,7 @@ model Application {
   evidence        CandidateEvidence[]
   matchRuns       CandidateMatchRun[]
   rankingResults  JobRankingResult[]
+  assessmentInvite AssessmentInvite?
 
   @@unique([id, companyId])
   @@unique([candidateId, jobId])
@@ -1024,6 +1033,7 @@ model User {
 
   organizationMemberships OrganizationMember[]
   sentInvitations         Invitation[]             @relation("InvitationInviter")
+  sentInterviewerInvitations InterviewerInvitation[] @relation("InterviewerInvitationInviter")
   invitedMembers          OrganizationMember[]     @relation("MembershipInviter")
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
@@ -1074,6 +1084,28 @@ model Invitation {
   invitedBy User    @relation("InvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Restrict)
 
   @@index([companyId, email])
+  @@index([expiresAt])
+}
+
+/// Admin-invited HireIQ interviewer login. Not a company Invitation.
+model InterviewerInvitation {
+  id              Int       @id @default(autoincrement())
+  interviewerId   Int
+  email           String
+  tokenHash       String    @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  invitedByUserId Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  interviewer Interviewer @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
+  invitedBy   User        @relation("InterviewerInvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([interviewerId])
+  @@index([email])
   @@index([expiresAt])
 }
 
@@ -1315,4 +1347,79 @@ model ApplicationIngestionEvent {
   @@index([status])
   @@index([sourceChannel])
   @@index([createdAt])
+}
+
+/// HireIQ-owned MCQ bank. Not tenant data. Not interviewer-authored.
+model AssessmentBankQuestion {
+  id           Int          @id @default(autoincrement())
+  roleCategory RoleCategory
+  sortOrder    Int
+  prompt       String
+  choices      Json
+  correctIndex Int
+  weight       Int          @default(1)
+  skillTag     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers AssessmentAnswer[]
+
+  @@unique([roleCategory, sortOrder])
+  @@index([roleCategory])
+}
+
+/// Opaque public invite. SHA-256 at rest. One per Application.
+model AssessmentInvite {
+  id            Int      @id @default(autoincrement())
+  applicationId Int      @unique
+  tokenHash     String   @unique
+  roleCategory  RoleCategory
+  questionIds   Int[]
+  scoringKey    Json
+  expiresAt     DateTime
+  startedAt     DateTime?
+  submittedAt   DateTime?
+  revokedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  application Application        @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  attempt     AssessmentAttempt?
+
+  @@index([expiresAt])
+}
+
+model AssessmentAttempt {
+  id        Int                      @id @default(autoincrement())
+  inviteId  Int                      @unique
+  status    AssessmentAttemptStatus  @default(PENDING)
+  score     Int                      @default(0)
+  maxScore  Int
+  startedAt DateTime?
+  submittedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invite  AssessmentInvite   @relation(fields: [inviteId], references: [id], onDelete: Restrict)
+  answers AssessmentAnswer[]
+}
+
+model AssessmentAnswer {
+  id            Int     @id @default(autoincrement())
+  attemptId     Int
+  questionId    Int
+  selectedIndex Int
+  isCorrect     Boolean
+  weight        Int
+
+  createdAt DateTime @default(now())
+
+  attempt  AssessmentAttempt      @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  question AssessmentBankQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
 }

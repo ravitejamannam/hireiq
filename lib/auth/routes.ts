@@ -30,6 +30,7 @@ export function safeInternalCallbackPath(value: unknown) {
   if (
     value.startsWith("/verify-email/") ||
     value.startsWith("/invite/") ||
+    value.startsWith("/interviewer-invite/") ||
     value === "/post-auth" ||
     value === "/onboarding" ||
     value.startsWith("/onboarding/")

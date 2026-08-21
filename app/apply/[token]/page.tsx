@@ -162,7 +162,16 @@ export default async function HostedApplyPage({ params }: ApplyPageProps) {
         <section className="mt-10 border-t border-zinc-200 pt-8">
           <h2 className="text-lg font-semibold text-black">Apply</h2>
           <p className="mt-2 text-sm text-zinc-600">
-            No HireIQ account is required. Resume upload is not available yet.
+            No HireIQ account is required. After you apply you will be sent to
+            a 48-hour role assessment. Resume upload is not available yet.
+          </p>
+          <p className="mt-2 text-sm">
+            <a
+              href={`/apply/${encodeURIComponent(token)}/leaderboard`}
+              className="font-semibold text-black underline underline-offset-2"
+            >
+              View public leaderboard
+            </a>
           </p>
           <div className="mt-6">
             <HostedApplyForm token={token} />

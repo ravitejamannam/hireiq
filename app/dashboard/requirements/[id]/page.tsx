@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth/authorization";
 import { getJobEvidenceCapture } from "@/lib/candidates/evidence-capture/evidence-capture-service";
 import { getJobRanking } from "@/lib/candidates/ranking/ranking-service";
+import { getAssessmentLeaderboardForJob } from "@/lib/assessments/assessment-service";
 import { getApplicationsByJobId } from "@/lib/repositories/application-repository";
 import { getBillingForRequirement } from "@/lib/repositories/billing-repository";
 import { getEvaluationsByJobId } from "@/lib/repositories/evaluation-repository";
@@ -78,6 +79,14 @@ export default async function RequirementWorkspacePage({
     }
   }
 
+  let assessmentLeaderboard = null;
+  try {
+    assessmentLeaderboard =
+      await getAssessmentLeaderboardForJob(requirementId);
+  } catch {
+    assessmentLeaderboard = null;
+  }
+
   return (
     <RequirementWorkspaceClient
       requirement={requirement}
@@ -88,6 +97,7 @@ export default async function RequirementWorkspacePage({
       billingRecords={billingRecords}
       ranking={ranking}
       evidenceCapture={evidenceCapture}
+      assessmentLeaderboard={assessmentLeaderboard}
     />
   );
 }

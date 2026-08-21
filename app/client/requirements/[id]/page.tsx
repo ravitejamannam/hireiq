@@ -13,6 +13,7 @@ import {
 import { requireClientPortal } from "@/lib/auth/authorization";
 import { getClientApplicationsForRequirement } from "@/lib/repositories/application-repository";
 import { getJobById } from "@/lib/repositories/job-repository";
+import { getAssessmentLeaderboardForJob } from "@/lib/assessments/assessment-service";
 
 type ClientRequirementDetailPageProps = {
   params: Promise<{
@@ -46,14 +47,16 @@ export default async function ClientRequirementDetailPage({
     notFound();
   }
 
-  const [applications, connections, distributions] = await Promise.all([
-    getClientApplicationsForRequirement(requirementId),
-    listProviderConnectionsForCompany(client.companyId),
-    listJobDistributionsForJob({
-      jobId: requirementId,
-      companyId: client.companyId,
-    }),
-  ]);
+  const [applications, connections, distributions, assessmentLeaderboard] =
+    await Promise.all([
+      getClientApplicationsForRequirement(requirementId),
+      listProviderConnectionsForCompany(client.companyId),
+      listJobDistributionsForJob({
+        jobId: requirementId,
+        companyId: client.companyId,
+      }),
+      getAssessmentLeaderboardForJob(requirementId).catch(() => null),
+    ]);
 
   const pipelineCounts = countPipelineStatuses(
     applications.map((application) => application.status),
@@ -144,6 +147,7 @@ export default async function ClientRequirementDetailPage({
         isOwner={client.membershipRole === "OWNER"}
         connections={connections}
         distributions={distributions}
+        assessmentLeaderboard={assessmentLeaderboard}
       />
     </div>
   );

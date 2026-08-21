@@ -56,6 +56,7 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
             success?: boolean;
             error?: string;
             errors?: FieldErrors;
+            assessmentUrl?: string | null;
           }
         | null;
 
@@ -74,6 +75,11 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
         setFormError(
           payload?.error ?? "This application link is unavailable.",
         );
+        return;
+      }
+
+      if (payload.assessmentUrl) {
+        window.location.assign(payload.assessmentUrl);
         return;
       }
 

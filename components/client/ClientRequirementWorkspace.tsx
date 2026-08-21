@@ -20,6 +20,8 @@ import JobDistributionPanel from "@/components/client/JobDistributionPanel";
 import type { ClientCandidateCardData } from "@/components/client/ClientCandidateCard";
 import type { SafeProviderConnection } from "@/lib/jobs/distribution/connection-service";
 import type { SafeJobDistribution } from "@/lib/jobs/distribution/distribution-service";
+import type { AssessmentLeaderboardPage } from "@/lib/assessments/assessment-service";
+import AssessmentLeaderboardPanel from "@/components/assess/AssessmentLeaderboardPanel";
 
 const roleCategoryLabels: Record<RoleCategory, string> = {
   ENGINEERING: "Engineering",
@@ -63,6 +65,7 @@ type ClientRequirementWorkspaceProps = {
   isOwner: boolean;
   connections: SafeProviderConnection[];
   distributions: SafeJobDistribution[];
+  assessmentLeaderboard?: AssessmentLeaderboardPage | null;
 };
 
 function lifecycleGuidance(lifecycle: RequirementLifecycle) {
@@ -96,6 +99,7 @@ export default function ClientRequirementWorkspace({
   isOwner,
   connections,
   distributions,
+  assessmentLeaderboard,
 }: ClientRequirementWorkspaceProps) {
   const [section, setSection] = useState<"overview" | "candidates">(
     initialSection,
@@ -242,6 +246,10 @@ export default function ClientRequirementWorkspace({
             connections={connections}
             distributions={distributions}
           />
+
+          {assessmentLeaderboard ? (
+            <AssessmentLeaderboardPanel board={assessmentLeaderboard} />
+          ) : null}
 
           <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
             <h2 className="text-lg font-bold text-black">Pipeline summary</h2>

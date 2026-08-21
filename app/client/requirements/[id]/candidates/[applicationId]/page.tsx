@@ -6,6 +6,7 @@ import { selectPrimaryClientEvaluation } from "@/components/client/client-labels
 import { requireClientPortal } from "@/lib/auth/authorization";
 import { getOrMaterializeCandidateProfile } from "@/lib/candidates/candidate-profile-service";
 import { getClientApplicationForRequirement } from "@/lib/repositories/application-repository";
+import { getApplicationAssessmentSummary } from "@/lib/assessments/assessment-service";
 
 type ClientCandidateDetailPageProps = {
   params: Promise<{
@@ -50,6 +51,7 @@ export default async function ClientCandidateDetailPage({
   const profile = await getOrMaterializeCandidateProfile(
     application.candidate.id,
   );
+  const assessment = await getApplicationAssessmentSummary(application.id);
 
   return (
     <div>
@@ -87,6 +89,7 @@ export default async function ClientCandidateDetailPage({
           requirementStatus: application.job.status,
           interviews: application.interviews,
           codingTests: application.codingTests,
+          assessment,
           evaluation: evaluation
             ? {
                 overallScore: evaluation.overallScore,

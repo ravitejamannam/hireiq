@@ -22,6 +22,9 @@ import InterviewerCodingTestPanel from "@/components/interviewer/InterviewerCodi
 import InterviewerEvaluationWorkspace from "@/components/interviewer/InterviewerEvaluationWorkspace";
 import InterviewerInterviewPanel from "@/components/interviewer/InterviewerInterviewPanel";
 import InterviewerShortlistActions from "@/components/interviewer/InterviewerShortlistActions";
+import AssessmentScoreReadout, {
+  type AssessmentScoreSummary,
+} from "@/components/assess/AssessmentScoreReadout";
 
 type Question = {
   id: number;
@@ -86,6 +89,7 @@ type InterviewerCandidateDetailProps = {
     takenAt: Date;
   }>;
   evaluation: EvaluationData | null;
+  assessment?: AssessmentScoreSummary | null;
 };
 
 export default function InterviewerCandidateDetail({
@@ -96,6 +100,7 @@ export default function InterviewerCandidateDetail({
   interviews,
   codingTests,
   evaluation,
+  assessment,
 }: InterviewerCandidateDetailProps) {
   return (
     <div className="space-y-8">
@@ -168,6 +173,8 @@ export default function InterviewerCandidateDetail({
           status={application.status}
         />
       </section>
+
+      <AssessmentScoreReadout summary={assessment ?? null} />
 
       <section className="rounded-xl border border-zinc-200 bg-white p-6">
         <h2 className="text-lg font-bold text-black">Requirement Context</h2>

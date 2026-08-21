@@ -217,8 +217,10 @@ export default function JobDistributionPanel({
 
       {applyMode === "HIREIQ_HOSTED" ? (
         <p className="mt-4 text-sm text-zinc-600">
-          HireIQ generates a public apply link on publish. Candidates do not need
-          an account. Resume upload is not available yet.
+          HireIQ generates a public apply link on publish. Candidates do not
+          need an account. After they apply they have 48 hours to complete a
+          role assessment. A role category is required. Resume upload is not
+          available yet.
         </p>
       ) : null}
 
@@ -418,17 +420,25 @@ export default function JobDistributionPanel({
             </dd>
             {selectedDistribution.applyMode === "HIREIQ_HOSTED" &&
             selectedDistribution.applyUrlSnapshot ? (
-              <button
-                type="button"
-                className="mt-2 rounded-lg border border-zinc-300 px-3 py-1 text-sm font-medium text-black"
-                onClick={() =>
-                  navigator.clipboard.writeText(
-                    selectedDistribution.applyUrlSnapshot!,
-                  )
-                }
-              >
-                Copy apply URL
-              </button>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-zinc-300 px-3 py-1 text-sm font-medium text-black"
+                  onClick={() =>
+                    navigator.clipboard.writeText(
+                      selectedDistribution.applyUrlSnapshot!,
+                    )
+                  }
+                >
+                  Copy apply URL
+                </button>
+                <a
+                  href={`${selectedDistribution.applyUrlSnapshot.replace(/\/$/, "")}/leaderboard`}
+                  className="rounded-lg border border-zinc-300 px-3 py-1 text-sm font-medium text-black"
+                >
+                  Open leaderboard
+                </a>
+              </div>
             ) : null}
           </div>
           <div>

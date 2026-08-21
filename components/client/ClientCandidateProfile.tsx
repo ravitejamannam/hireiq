@@ -24,6 +24,9 @@ import {
   parseClientScorecard,
   type ClientScorecardEntry,
 } from "@/components/client/client-labels";
+import AssessmentScoreReadout, {
+  type AssessmentScoreSummary,
+} from "@/components/assess/AssessmentScoreReadout";
 
 export type ClientCandidateQuestion = {
   question: string;
@@ -77,6 +80,7 @@ export type ClientCandidateProfileData = {
     takenAt: Date;
   }>;
   evaluation: ClientCandidateEvaluation | null;
+  assessment?: AssessmentScoreSummary | null;
 };
 
 type ClientCandidateProfileProps = {
@@ -188,6 +192,8 @@ export default function ClientCandidateProfile({
           </div>
         </dl>
       </section>
+
+      <AssessmentScoreReadout summary={candidate.assessment ?? null} />
 
       <section className="rounded-xl border border-zinc-200 bg-white p-6">
         <h2 className="text-lg font-bold text-black">Requirement Context</h2>
