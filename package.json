@@ -10,10 +10,7 @@
     "postinstall": "prisma generate",
     "db:bootstrap-admin": "tsx scripts/bootstrap-admin.ts",
     "db:bootstrap-dev": "tsx scripts/bootstrap-dev.ts",
-    "db:seed-assessment-bank": "tsx scripts/seed-assessment-bank.ts",
-    "qa:v1:seed": "tsx scripts/seed-v1-qa.ts",
-    "qa:v1:reset": "tsx scripts/seed-v1-qa.ts --reset",
-    "qa:full": "tsx scripts/qa/run-all.ts"
+    "db:seed-assessment-bank": "tsx scripts/seed-assessment-bank.ts"
   },
   "dependencies": {
     "@prisma/client": "6.16.3",
