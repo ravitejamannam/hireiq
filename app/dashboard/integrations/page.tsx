@@ -3,6 +3,8 @@ import Link from "next/link";
 import StatCard from "@/components/dashboard/StatCard";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { getWebhookDeliveryHealth, listWebhookDeliveries } from "@/lib/jobs/distribution/webhook-delivery-admin";
+import RunReconciliationButton from "@/components/integrations/RunReconciliationButton";
+import { getLatestReconciliationHealth } from "@/lib/jobs/distribution/reconciliation";
 
 export const dynamic = "force-dynamic";
 
@@ -33,9 +35,10 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
   await requireAdmin();
   const { status } = await searchParams;
 
-  const [health, deliveries] = await Promise.all([
+  const [health, deliveries, recon] = await Promise.all([
     getWebhookDeliveryHealth(),
     listWebhookDeliveries(status ? { status } : {}),
+    getLatestReconciliationHealth(),
   ]);
 
   const tabs = [
@@ -63,6 +66,60 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
         />
         <StatCard title="Rejected" value={health.rejected} />
       </div>
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-zinc-900">Board reconciliation</h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              Compares published roles against what boards report. Detection
+              only — drift never silently changes distribution state.
+            </p>
+          </div>
+          <RunReconciliationButton />
+        </div>
+
+        {recon.lastRunAt ? (
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="rounded-lg bg-emerald-50 p-3 text-center">
+              <p className="text-2xl font-bold text-emerald-700">{recon.counts.ok}</p>
+              <p className="text-xs font-medium text-emerald-600">OK</p>
+            </div>
+            <div className="rounded-lg bg-amber-50 p-3 text-center">
+              <p className="text-2xl font-bold text-amber-700">{recon.counts.drift}</p>
+              <p className="text-xs font-medium text-amber-600">Drift</p>
+            </div>
+            <div className="rounded-lg bg-red-50 p-3 text-center">
+              <p className="text-2xl font-bold text-red-700">{recon.counts.error}</p>
+              <p className="text-xs font-medium text-red-600">Error</p>
+            </div>
+            <div className="rounded-lg bg-zinc-100 p-3 text-center">
+              <p className="text-2xl font-bold text-zinc-700">{recon.counts.skipped}</p>
+              <p className="text-xs font-medium text-zinc-500">Skipped</p>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-zinc-500">No sweep has run yet.</p>
+        )}
+        {recon.lastRunAt ? (
+          <p className="mt-3 text-xs text-zinc-400">
+            Last run: {new Date(recon.lastRunAt).toLocaleString()}
+          </p>
+        ) : null}
+
+        {recon.recentFindings.length > 0 ? (
+          <ul className="mt-4 space-y-2">
+            {recon.recentFindings.slice(0, 5).map((f) => (
+              <li key={f.id} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
+                <span className="font-medium text-amber-900">{f.provider}</span>{" "}
+                <span className="text-amber-800">
+                  dist #{f.distributionId} — {f.finding ?? f.outcome}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
 
       <div className="flex gap-2">
         {tabs.map((tab) => {

@@ -1201,6 +1201,8 @@ model JobDistribution {
   @@index([jobId, provider])
   @@index([jobSpecificationVersionId])
   @@index([status])
+
+  reconciliationRuns DistributionReconciliationRun[] @relation("DistributionReconciliationRuns")
 }
 
 /// External listing identity for one JobDistribution. No fabricated IDs.
@@ -1452,4 +1454,31 @@ enum ProviderWebhookDeliveryStatus {
   ACCEPTED
   QUARANTINED
   REJECTED
+}
+
+/// T96 Phase 4: result of checking one PUBLISHED distribution against its
+/// provider during a reconciliation sweep. Detection only — never mutates
+/// distribution state automatically (auto-heal requires an explicit ticket).
+model DistributionReconciliationRun {
+  id             Int                     @id @default(autoincrement())
+  batchId        String
+  distributionId Int
+  provider       DistributionProvider
+  outcome        ReconciliationOutcome
+  expectedStatus ProviderPostingStatus?
+  observedStatus ProviderPostingStatus?
+  finding        String?
+  checkedAt      DateTime                @default(now())
+
+  distribution JobDistribution @relation("DistributionReconciliationRuns", fields: [distributionId], references: [id], onDelete: Restrict)
+
+  @@index([batchId])
+  @@index([distributionId, checkedAt])
+}
+
+enum ReconciliationOutcome {
+  OK
+  DRIFT
+  ERROR
+  SKIPPED
 }
