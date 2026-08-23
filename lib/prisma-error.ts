@@ -3,8 +3,8 @@ import { Prisma } from "@prisma/client";
 /**
  * Bundle-safe Prisma error inspection.
  *
- * Why not `instanceof`: the app generates its client to lib/generated/prisma
- * while some modules import helpers from @prisma/client. Under bundling
+ * Why not `instanceof`: duplicate module copies of the Prisma runtime can exist across
+ * bundling contexts. Under bundling
  * (Turbopack) these can resolve as separate module copies, breaking
  * instanceof across them — which silently converted handled P2002/P2003
  * paths into unhandled 500s (observed on the identity-signal path).

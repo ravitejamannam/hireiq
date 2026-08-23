@@ -1,6 +1,8 @@
+// Default output (node_modules/.prisma/client): keeps ONE PrismaClient
+// class copy so instanceof-based error handling is bundle-safe, and lets
+// @prisma/client resolve natively.
 generator client {
   provider = "prisma-client-js"
-  output   = "../lib/generated/prisma"
 }
 
 datasource db {

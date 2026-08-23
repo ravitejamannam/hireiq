@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -20,8 +24,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"],
-      "@prisma/client": ["./lib/generated/prisma"]
+      "@/*": [
+        "./*"
+      ]
     }
   },
   "include": [
@@ -32,5 +37,8 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "scripts/tmp-*.ts"]
+  "exclude": [
+    "node_modules",
+    "scripts/tmp-*.ts"
+  ]
 }
