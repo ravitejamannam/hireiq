@@ -248,6 +248,7 @@ enum CandidateEvidenceSourceType {
   HOSTED_APPLY_SUBMISSION
   INGESTION_EVENT
   RECRUITER_ENTERED_TEXT
+  RESUME_DOCUMENT
 }
 
 /// T91 who supplied the captured artifact. Not verification or ranking.
@@ -344,6 +345,7 @@ model Company {
   requirementMatches        RequirementMatch[]
   jobRankingRuns            JobRankingRun[]
   jobRankingResults         JobRankingResult[]
+  resumeDocuments CandidateResumeDocument[]
 }
 
 model Job {
@@ -532,6 +534,7 @@ model Candidate {
 
   @@unique([id, companyId])
   @@index([companyId])
+  resumeDocuments CandidateResumeDocument[] @relation("CandidateResumeDocuments")
 }
 
 /// T89 deterministic descriptive profile. 1:1 with Candidate.
@@ -643,6 +646,43 @@ model CandidateIdentityDecision {
 
 /// T91 append-only evidence artifact. Not a claim, identity, or profile.
 /// Cover letters snapshot HostedApplySubmission; no file/blob storage.
+
+/// T97: resume file metadata. Binaries live in object storage (LOCAL driver
+/// in dev), never in PostgreSQL. Text extraction is versioned and may be
+/// re-run; parse failures retain the stored file for retry.
+enum ResumeParseStatus {
+  PENDING
+  PARSED
+  FAILED
+}
+
+model CandidateResumeDocument {
+  id               Int               @id @default(autoincrement())
+  companyId        Int
+  candidateId      Int
+  applicationId    Int?
+  storageKey       String            @unique
+  fileName         String
+  contentType      String
+  sizeBytes        Int
+  contentSha256    String
+  parseStatus      ResumeParseStatus @default(PENDING)
+  extractedText    String?
+  extractorVersion String?
+  parseErrorCode   String?
+  uploadedByUserId Int?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  candidate   Candidate         @relation("CandidateResumeDocuments", fields: [candidateId], references: [id], onDelete: Restrict)
+  application Application?      @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  uploadedBy  User?             @relation("ResumeUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, contentSha256])
+  @@index([companyId, candidateId])
+}
+
 /// Recruiter-entered text uniqueness is a SQL partial unique index on current
 /// artifacts only (`revokedAt` and `supersededById` null).
 model CandidateEvidence {
@@ -879,6 +919,7 @@ model Application {
   @@index([candidateId])
   @@index([jobId, status])
   @@index([companyId])
+  resumeDocuments CandidateResumeDocument[]
 }
 
 model Evaluation {
@@ -1043,6 +1084,7 @@ model User {
 
   @@index([companyId])
   @@index([role])
+  resumesUploaded CandidateResumeDocument[] @relation("ResumeUploadedBy")
 }
 
 model OrganizationMember {

@@ -19,6 +19,7 @@ const SOURCE_TYPES = [
   CandidateEvidenceSourceType.HOSTED_APPLY_SUBMISSION,
   CandidateEvidenceSourceType.INGESTION_EVENT,
   CandidateEvidenceSourceType.RECRUITER_ENTERED_TEXT,
+  CandidateEvidenceSourceType.RESUME_DOCUMENT,
 ] as const;
 
 const ORIGINS = [
