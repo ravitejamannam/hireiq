@@ -101,10 +101,16 @@ function windowMs() {
   return ASSESSMENT_WINDOW_HOURS * 60 * 60 * 1000;
 }
 
-async function loadQuestionsForCategory(roleCategory: RoleCategory, db: Db) {
+async function loadQuestionsForCategory(
+  roleCategory: RoleCategory,
+  db: Db,
+  options: { incrementUsage?: boolean } = {},
+) {
+  // T102 leakage control: only active questions, ordered least-used first
+  // so exposure spreads across the bank instead of burning the same items.
   const questions = await db.assessmentBankQuestion.findMany({
-    where: { roleCategory },
-    orderBy: { sortOrder: "asc" },
+    where: { roleCategory, active: true },
+    orderBy: [{ timesUsed: "asc" }, { sortOrder: "asc" }],
     select: {
       id: true,
       prompt: true,
@@ -116,6 +122,13 @@ async function loadQuestionsForCategory(roleCategory: RoleCategory, db: Db) {
 
   if (questions.length === 0) {
     throw new AssessmentError(ASSESSMENT_BANK_EMPTY, "UNAVAILABLE");
+  }
+
+  if (options.incrementUsage && questions.length > 0) {
+    await db.assessmentBankQuestion.updateMany({
+      where: { id: { in: questions.map((question) => question.id) } },
+      data: { timesUsed: { increment: 1 } },
+    });
   }
 
   return questions;
@@ -199,7 +212,9 @@ export async function mintAssessmentInviteForApplication(
     return { assessmentUrl };
   }
 
-  const questions = await loadQuestionsForCategory(roleCategory, db);
+  const questions = await loadQuestionsForCategory(roleCategory, db, {
+    incrementUsage: true,
+  });
   const scoringKey: ScoringKey = {};
   for (const question of questions) {
     scoringKey[String(question.id)] = {
@@ -315,7 +330,7 @@ export async function resolvePublicAssessment(rawToken: unknown) {
     throw new AssessmentError(ASSESSMENT_UNAVAILABLE, "UNAVAILABLE");
   }
 
-  let invite = await expireIfNeeded(await loadInviteByRawToken(parsed));
+  const invite = await expireIfNeeded(await loadInviteByRawToken(parsed));
 
   if (invite.attempt.status === AssessmentAttemptStatus.EXPIRED) {
     throw new AssessmentError(ASSESSMENT_WINDOW_CLOSED, "EXPIRED");

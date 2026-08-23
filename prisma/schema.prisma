@@ -1408,6 +1408,11 @@ model AssessmentBankQuestion {
   correctIndex Int
   weight       Int          @default(1)
   skillTag     String?
+  /// T102: retired questions are excluded from future invites but kept
+  /// for historical scoring reproducibility.
+  active       Boolean      @default(true)
+  /// Times this question was included in a minted invite (exposure count).
+  timesUsed    Int          @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
