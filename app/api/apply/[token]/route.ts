@@ -84,6 +84,10 @@ export async function POST(
       token,
       idempotencyKey: request.headers.get("idempotency-key"),
       body,
+      resumeClaim:
+        body && typeof body === "object" && !Array.isArray(body)
+          ? (body as Record<string, unknown>).resumeClaim
+          : undefined,
     });
 
     console.info("[hosted-apply] submit", {

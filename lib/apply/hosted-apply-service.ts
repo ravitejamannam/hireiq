@@ -16,6 +16,7 @@ import { toPublicHostedApplyPage } from "@/lib/apply/public-page";
 import { ingestHostedApplySubmission } from "@/lib/ingestion/hosted-apply-ingestion";
 import { mintAssessmentInviteForApplication } from "@/lib/assessments/assessment-service";
 import { hashSecureToken } from "@/lib/auth/secure-token";
+import { bindPendingResumeToSubmission } from "@/lib/apply/hosted-resume-service";
 import {
   consumeAuthRateLimit,
   rateLimitKeyForDigest,
@@ -135,6 +136,7 @@ export async function submitHostedApply(input: {
   token: string;
   idempotencyKey: unknown;
   body: unknown;
+  resumeClaim?: unknown;
 }) {
   const idempotencyKey = validateIdempotencyKey(input.idempotencyKey);
   const existingByKey = await prisma.hostedApplySubmission.findUnique({
@@ -181,6 +183,18 @@ export async function submitHostedApply(input: {
       },
       select: { id: true },
     });
+
+    // T104: bind a pending public resume upload (if claimed) to this
+    // submission so ingestion can promote it. Fail-closed on invalid
+    // claims — a tampered claim must not silently drop the attachment.
+    if (input.resumeClaim) {
+      await bindPendingResumeToSubmission({
+        applyTokenRaw: input.token,
+        submissionId: created.id,
+        resumeClaim: input.resumeClaim,
+      });
+    }
+
     console.info("[hosted-apply] received", {
       ok: true,
       distributionId: row.distribution.id,

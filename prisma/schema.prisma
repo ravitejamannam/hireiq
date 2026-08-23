@@ -1250,6 +1250,7 @@ model JobDistribution {
   @@index([status])
 
   reconciliationRuns DistributionReconciliationRun[] @relation("DistributionReconciliationRuns")
+  resumeUploads HostedApplyResumeUpload[]
 }
 
 /// External listing identity for one JobDistribution. No fabricated IDs.
@@ -1552,6 +1553,40 @@ model InterviewBookingInvite {
   application Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
 
   @@index([expiresAt])
+}
+
+/// T104: resume uploaded during hosted apply BEFORE the candidate exists.
+/// Promoted into CandidateResumeDocument (+ RESUME_DOCUMENT evidence) inside
+/// the ingestion transaction once the application is created.
+enum HostedResumeParseStatus {
+  PARSED
+  FAILED
+}
+
+model HostedApplyResumeUpload {
+  id                       Int                      @id @default(autoincrement())
+  distributionId           Int
+  jobId                    Int
+  companyId                Int
+  applyTokenHash           String
+  hostedApplySubmissionId  Int?                     @unique
+  claimTokenHash           String                   @unique
+  storageKey               String
+  fileName                 String
+  contentType              String
+  sizeBytes                Int
+  contentSha256            String
+  parseStatus              HostedResumeParseStatus
+  extractedText            String?
+  extractorVersion         String?
+  parseErrorCode           String?
+  expiresAt                DateTime
+  claimedAt                DateTime?
+  createdAt                DateTime                 @default(now())
+
+  distribution JobDistribution @relation(fields: [distributionId], references: [id], onDelete: Restrict)
+
+  @@index([distributionId, createdAt])
 }
 
 /// T98 Phase 7: structured interview kit. A rubric attached to a published

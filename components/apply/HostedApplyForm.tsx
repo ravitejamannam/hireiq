@@ -22,6 +22,44 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [pending, setPending] = useState(false);
+  const [resumeClaim, setResumeClaim] = useState<string | null>(null);
+  const [resumeName, setResumeName] = useState<string | null>(null);
+  const [resumeState, setResumeState] = useState<"idle" | "uploading" | "ready" | "error">("idle");
+
+  async function onResumeSelected(file: File) {
+    setResumeState("uploading");
+    setFormError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch(`/api/apply/${encodeURIComponent(token)}/resume`, {
+        method: "POST",
+        body: form,
+      });
+      const body = (await response.json().catch(() => null)) as
+        | { ok?: boolean; resumeClaim?: string; fileName?: string; error?: string }
+        | null;
+      if (!response.ok || !body?.ok || !body.resumeClaim) {
+        setResumeState("error");
+        setFormError(
+          body?.error === "UNSUPPORTED_FILE_TYPE"
+            ? "Only PDF and TXT resumes are supported."
+            : body?.error === "FILE_TOO_LARGE"
+              ? "Resume must be 10MB or smaller."
+              : body?.error === "APPLY_LINK_INVALID"
+                ? "This application link is no longer accepting resumes."
+                : "Resume upload failed — you can still apply without it.",
+        );
+        return;
+      }
+      setResumeClaim(body.resumeClaim);
+      setResumeName(body.fileName ?? file.name);
+      setResumeState("ready");
+    } catch {
+      setResumeState("error");
+      setFormError("Resume upload failed — you can still apply without it.");
+    }
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -48,6 +86,7 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
           linkedInUrl: linkedInUrl || null,
           coverLetter: coverLetter || null,
           consent,
+          resumeClaim,
         }),
       });
 
@@ -225,6 +264,28 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
           </span>
         ) : null}
       </label>
+
+      <div>
+        <p className="text-sm font-medium text-black">Resume (optional)</p>
+        <p className="mt-1 text-xs text-zinc-500">PDF or TXT, up to 10MB.</p>
+        {resumeState === "ready" ? (
+          <p className="mt-2 text-sm font-medium text-emerald-600">
+            ✓ {resumeName} attached
+          </p>
+        ) : resumeState === "uploading" ? (
+          <p className="mt-2 text-sm text-zinc-500">Uploading…</p>
+        ) : null}
+        <input
+          type="file"
+          accept=".pdf,.txt,application/pdf,text/plain"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void onResumeSelected(file);
+          }}
+          disabled={pending || resumeState === "uploading"}
+          className="mt-2 block w-full cursor-pointer rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-white hover:file:bg-zinc-700"
+        />
+      </div>
 
       <label className="flex items-start gap-2 text-sm text-black">
         <input

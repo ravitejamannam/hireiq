@@ -28,6 +28,7 @@ import {
 } from "@/lib/validation/application-ingestion-validation";
 
 import { createEvidence } from "@/lib/repositories/candidate-evidence-repository";
+import { claimPendingResumeInIngestion } from "@/lib/apply/hosted-resume-service";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -328,6 +329,16 @@ export async function ingestHostedApplySubmission(submissionId: unknown) {
           applicationId = created.id;
         }
       }
+
+      // T104: promote a claimed public resume upload into
+      // CandidateResumeDocument + RESUME_DOCUMENT evidence inside the same
+      // transaction as ingestion (single provenance chain).
+      await claimPendingResumeInIngestion(tx, id, {
+        companyId: fresh.companyId,
+        candidateId,
+        applicationId,
+        occurredAt: fresh.createdAt,
+      });
 
       // T91: capture the hosted-apply submission as candidate evidence inside
       // the same transaction as ingestion. Idempotent via the unique
