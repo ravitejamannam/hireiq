@@ -1,7 +1,11 @@
+import { createHash } from "node:crypto";
+
 import {
   ApplicationIngestionChannel,
   ApplicationIngestionStatus,
   ApplicationPipelineStatus,
+  CandidateEvidenceOrigin,
+  CandidateEvidenceSourceType,
   CandidateStatus,
   JobSpecificationVersionStatus,
   Prisma,
@@ -23,7 +27,13 @@ import {
   validateIngestionSubmissionId,
 } from "@/lib/validation/application-ingestion-validation";
 
+import { createEvidence } from "@/lib/repositories/candidate-evidence-repository";
+
 type Db = Prisma.TransactionClient | typeof prisma;
+
+function sha256Hex(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
 
 const submissionInclude = {
   applyToken: {
@@ -318,6 +328,26 @@ export async function ingestHostedApplySubmission(submissionId: unknown) {
           applicationId = created.id;
         }
       }
+
+      // T91: capture the hosted-apply submission as candidate evidence inside
+      // the same transaction as ingestion. Idempotent via the unique
+      // constraint on hostedApplySubmissionId (one evidence row per submission).
+      await createEvidence(
+        {
+          companyId: fresh.companyId,
+          candidateId,
+          applicationId,
+          sourceType: CandidateEvidenceSourceType.HOSTED_APPLY_SUBMISSION,
+          origin: CandidateEvidenceOrigin.CANDIDATE_PROVIDED,
+          ingestionEventId: locked.id,
+          hostedApplySubmissionId: fresh.id,
+          actorUserId: null,
+          inlineText: fresh.coverLetter ?? null,
+          contentSha256: fresh.coverLetter ? sha256Hex(fresh.coverLetter) : null,
+          createdAt: fresh.createdAt,
+        },
+        tx,
+      );
 
       assertIngestionTransition(
         ApplicationIngestionStatus.PROCESSING,
