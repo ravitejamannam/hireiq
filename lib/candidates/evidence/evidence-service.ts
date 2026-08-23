@@ -32,6 +32,7 @@ import {
   revokeEvidence,
   setSupersededBy,
   type CandidateEvidenceRow,
+  findEvidenceByHostedApplySubmission,
 } from "@/lib/repositories/candidate-evidence-repository";
 import {
   CandidateEvidenceValidationError,
@@ -173,6 +174,17 @@ export async function backfillHostedApplyEvidenceForCandidate(
       !event.hostedApplySubmission ||
       !event.application
     ) {
+      continue;
+    }
+
+    // Idempotency: ingestion (T91/T96) already captures evidence for
+    // hosted-apply submissions transactionally. Skip anything that exists
+    // instead of colliding with the unique constraint.
+    const existing = await findEvidenceByHostedApplySubmission(
+      event.hostedApplySubmissionId,
+      companyId,
+    );
+    if (existing) {
       continue;
     }
     if (

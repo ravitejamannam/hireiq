@@ -41,6 +41,7 @@ export default function AssessmentTakeForm({
   const [remaining, setRemaining] = useState(() => remainingLabel(expiresAt));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [integrity, setIntegrity] = useState({ tabSwitches: 0, pastes: 0, copies: 0 });
   const [result, setResult] = useState<{
     score: number;
     maxScore: number;
@@ -56,6 +57,32 @@ export default function AssessmentTakeForm({
     }, 30000);
     return () => window.clearInterval(timer);
   }, [expiresAt]);
+
+  // T101 integrity telemetry (client-self-reported). Counts focus loss and
+  // clipboard activity during the attempt; submitted with the final answers.
+  useEffect(() => {
+    if (alreadySubmitted) return;
+    function bump(key: "tabSwitches" | "pastes" | "copies") {
+      setIntegrity((prev) => ({ ...prev, [key]: prev[key] + 1 }));
+    }
+    function onVisibility() {
+      if (document.visibilityState === "hidden") bump("tabSwitches");
+    }
+    function onPaste() {
+      bump("pastes");
+    }
+    function onCopy() {
+      bump("copies");
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    document.addEventListener("paste", onPaste);
+    document.addEventListener("copy", onCopy);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener("paste", onPaste);
+      document.removeEventListener("copy", onCopy);
+    };
+  }, [alreadySubmitted]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -76,7 +103,7 @@ export default function AssessmentTakeForm({
       const response = await fetch(`/api/assess/${encodeURIComponent(token)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers: payload }),
+        body: JSON.stringify({ answers: payload, integrity }),
       });
       const body = (await response.json().catch(() => null)) as
         | {

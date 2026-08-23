@@ -66,18 +66,22 @@ export async function POST(
     }
 
     const body = (await request.json().catch(() => null)) as unknown;
-    const answers =
+    const payload =
       body && typeof body === "object" && !Array.isArray(body)
-        ? (body as Record<string, unknown>).answers
-        : null;
+        ? (body as Record<string, unknown>)
+        : {};
 
     const result = await submitPublicAssessment({
       token,
-      answers,
+      answers: payload.answers,
+      integrity: payload.integrity,
     });
 
     return json(result, 200);
   } catch (error) {
+    if (!(error instanceof AssessmentValidationError)) {
+      console.error("[assess] submission failed", error);
+    }
     if (error instanceof RateLimitError) {
       return json({ success: false, error: error.message }, 429);
     }

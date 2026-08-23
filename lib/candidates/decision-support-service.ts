@@ -95,6 +95,7 @@ export async function getDecisionSupportForCandidate(
       score: true,
       maxScore: true,
       submittedAt: true,
+      integritySignals: true,
       invite: { select: { applicationId: true, roleCategory: true } },
     },
   });
@@ -120,11 +121,15 @@ export async function getDecisionSupportForCandidate(
     // Assessment (machine-scored MCQ; independent signal per §12)
     const assessment = assessmentByApp.get(app.id);
     if (assessment?.submittedAt) {
+      const integrity = normalizeIntegrity(assessment.integritySignals);
+      const integrityMeta = integrity
+        ? `self-reported focus signals — ${integrity.tabSwitches} tab switches, ${integrity.pastes} pastes, ${integrity.copies} copies (not proof of misconduct)`
+        : `submitted ${assessment.submittedAt.toLocaleDateString() ?? ""} · independent of matching`;
       signals.push({
         kind: "ASSESSMENT",
         label: `Assessment${assessment.invite.roleCategory ? ` · ${assessment.invite.roleCategory}` : ""} — ${scope}`,
         detail: `${assessment.score}/${assessment.maxScore}`,
-        meta: `submitted ${assessment.submittedAt.toLocaleDateString() ?? ""} · independent of matching`,
+        meta: integrityMeta,
       });
     }
 
@@ -209,4 +214,18 @@ function validateCandidateId(value: unknown): number {
     if (parsed > 0) return parsed;
   }
   throw new DecisionSupportError("INVALID_CANDIDATE_ID");
+}
+
+function normalizeIntegrity(value: unknown): {
+  tabSwitches: number;
+  pastes: number;
+  copies: number;
+} | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const r = value as Record<string, unknown>;
+  const nums = [r.tabSwitches, r.pastes, r.copies].map((n) =>
+    typeof n === "number" && n >= 0 ? n : 0,
+  );
+  if (nums.every((n) => n === 0)) return null;
+  return { tabSwitches: nums[0], pastes: nums[1], copies: nums[2] };
 }

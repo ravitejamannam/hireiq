@@ -25,6 +25,7 @@ import {
   isTerminalAttemptStatus,
   validateAssessmentAnswers,
   validatePublicAssessmentToken,
+  validateIntegritySignals,
 } from "@/lib/assessments/assessment-validation";
 import { hashSecureToken } from "@/lib/auth/secure-token";
 import { prisma } from "@/lib/prisma";
@@ -380,6 +381,7 @@ export async function resolvePublicAssessment(rawToken: unknown) {
 export async function submitPublicAssessment(input: {
   token: unknown;
   answers: unknown;
+  integrity?: unknown;
 }) {
   const parsed = validatePublicAssessmentToken(input.token);
   if (!parsed) {
@@ -397,6 +399,7 @@ export async function submitPublicAssessment(input: {
   }
 
   const selected = validateAssessmentAnswers(invite.questionIds, input.answers);
+  const integritySignals = validateIntegritySignals(input.integrity);
   const scoringKey = parseScoringKey(invite.scoringKey);
   const questions = await prisma.assessmentBankQuestion.findMany({
     where: { id: { in: invite.questionIds } },
@@ -458,6 +461,7 @@ export async function submitPublicAssessment(input: {
         score,
         submittedAt: now,
         startedAt: invite.startedAt ?? now,
+        integritySignals: integritySignals ?? undefined,
       },
     });
     await tx.assessmentInvite.update({

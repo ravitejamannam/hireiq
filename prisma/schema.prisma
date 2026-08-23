@@ -1448,6 +1448,10 @@ model AssessmentAttempt {
   maxScore  Int
   startedAt DateTime?
   submittedAt DateTime?
+  /// T101: client-self-reported focus/copy telemetry captured during the
+  /// attempt. Honest labeling: these are signals, NOT proof of misconduct,
+  /// and are never shown on public surfaces (§14/§40).
+  integritySignals Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
