@@ -18,6 +18,7 @@ import {
 import {
   LinkedInWebhookError,
   processLinkedInWebhook,
+  extractLinkedInExternalEventId,
 } from "@/lib/jobs/distribution/linkedin/webhook";
 import { LINKEDIN_SIGNATURE_HEADER } from "@/lib/jobs/distribution/linkedin/signature";
 
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
       );
       await recordWebhookDelivery({
         provider: DistributionProvider.LINKEDIN,
-        externalEventId: null,
+        externalEventId: extractLinkedInExternalEventId(rawBody),
         status: outcome.status,
         httpStatus: Number.isFinite(httpStatus) ? httpStatus : 500,
         signatureValid,

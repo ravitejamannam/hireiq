@@ -225,3 +225,26 @@ export async function processIndeedWebhook(input: {
     throw error;
   }
 }
+
+/**
+ * Best-effort extraction of the provider's application id for ledger
+ * attribution. Never throws — returns null when the payload cannot be
+ * parsed. Used by webhook routes so quarantined deliveries keep their
+ * dedup identity.
+ */
+export function extractIndeedExternalEventId(rawBody: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(rawBody);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      typeof (parsed as Record<string, unknown>).id === "string"
+    ) {
+      return (parsed as Record<string, unknown>).id as string;
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+}

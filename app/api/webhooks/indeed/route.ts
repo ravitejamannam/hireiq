@@ -18,6 +18,7 @@ import {
 import {
   IndeedWebhookError,
   processIndeedWebhook,
+  extractIndeedExternalEventId,
 } from "@/lib/jobs/distribution/indeed/webhook";
 import { INDEED_SIGNATURE_HEADER } from "@/lib/jobs/distribution/indeed/signature";
 
@@ -99,7 +100,7 @@ export async function POST(request: Request) {
       );
       await recordWebhookDelivery({
         provider: DistributionProvider.INDEED,
-        externalEventId: null,
+        externalEventId: extractIndeedExternalEventId(rawBody),
         status: outcome.status,
         httpStatus: Number.isFinite(httpStatus) ? httpStatus : 500,
         signatureValid,
