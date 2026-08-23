@@ -246,6 +246,95 @@ export async function upsertBlueprintCore(
   return full;
 }
 
+
+// ---------- copy between specifications ----------
+
+export async function listBlueprintSourceOptions(): Promise<
+  Array<{ specVersionId: number; jobTitle: string; requirementId: number; competencyCount: number }>
+> {
+  await requireAdmin();
+
+  const blueprints = await prisma.interviewBlueprint.findMany({
+    where: { active: true },
+    select: {
+      jobSpecificationVersionId: true,
+      competencies: { select: { id: true } },
+      specification: {
+        select: {
+          status: true,
+          job: { select: { id: true, title: true } },
+        },
+      },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return blueprints
+    .filter((b) => b.specification.status === JobSpecificationVersionStatus.PUBLISHED)
+    .map((b) => ({
+      specVersionId: b.jobSpecificationVersionId,
+      jobTitle: b.specification.job.title,
+      requirementId: b.specification.job.id,
+      competencyCount: b.competencies.length,
+    }));
+}
+
+/**
+ * Copy an existing blueprint onto another PUBLISHED specification via the
+ * same versioned replace-all path used by the editor. No new models —
+ * templates-as-rows would be speculative until volume demands them (§53).
+ */
+export async function copyBlueprintForAdmin(input: {
+  sourceSpecVersionId: unknown;
+  targetSpecVersionId: unknown;
+}): Promise<SafeBlueprint> {
+  await requireAdmin();
+  return copyBlueprintCore(input.sourceSpecVersionId, input.targetSpecVersionId);
+}
+
+/** Core copy. Callers must enforce ADMIN auth. */
+export async function copyBlueprintCore(
+  sourceSpecVersionIdInput: unknown,
+  targetSpecVersionIdInput: unknown,
+): Promise<SafeBlueprint> {
+  const sourceId = validateSpecVersionId(sourceSpecVersionIdInput);
+  const targetId = validateSpecVersionId(targetSpecVersionIdInput);
+  if (sourceId === targetId) {
+    throw new BlueprintError("COPY_SAME_SPEC", "Source and target are the same requirement.");
+  }
+
+  const source = await getBlueprintForSpec(sourceId);
+  if (!source || !source.active) {
+    throw new BlueprintError("SOURCE_BLUEPRINT_MISSING");
+  }
+  const target = await prisma.jobSpecificationVersion.findFirst({
+    where: { id: targetId, status: JobSpecificationVersionStatus.PUBLISHED },
+    select: { id: true },
+  });
+  if (!target) {
+    throw new BlueprintError("TARGET_NOT_PUBLISHED");
+  }
+
+  return upsertBlueprintCore(
+    targetId,
+    source.competencies.map((c) => ({
+      name: c.name,
+      description: c.description ?? undefined,
+      weight: c.weight,
+    })),
+    source.competencies.flatMap((c) =>
+      c.questions
+        .filter((q) => q.active)
+        .map((q) => ({
+          competencyName: c.name,
+          question: q.question,
+          guidance: q.guidance ?? undefined,
+          difficulty: q.difficulty ?? undefined,
+        })),
+    ),
+  );
+}
+
 // ---------- interviewer rubric submission ----------
 
 export type CompetencyScoreInput = {

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import BlueprintEditor from "@/components/interviews/BlueprintEditor";
+import BlueprintCopyPanel from "@/components/interviews/BlueprintCopyPanel";
+import { listBlueprintSourceOptions } from "@/lib/interviews/blueprint-service";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { getBlueprintForSpec } from "@/lib/interviews/blueprint-service";
 import { prisma } from "@/lib/prisma";
@@ -33,7 +35,10 @@ export default async function RequirementBlueprintPage({ params }: PageProps) {
     notFound();
   }
 
-  const blueprint = await getBlueprintForSpec(job.currentPublishedSpecificationVersionId);
+  const [blueprint, copySources] = await Promise.all([
+    getBlueprintForSpec(job.currentPublishedSpecificationVersionId),
+    listBlueprintSourceOptions(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -53,6 +58,15 @@ export default async function RequirementBlueprintPage({ params }: PageProps) {
           rubric version; historical interview scores keep their snapshots.
         </p>
       </header>
+
+      {!blueprint ? (
+        <BlueprintCopyPanel
+          targetSpecVersionId={job.currentPublishedSpecificationVersionId}
+          sources={copySources.filter(
+            (s) => s.specVersionId !== job.currentPublishedSpecificationVersionId,
+          )}
+        />
+      ) : null}
 
       <BlueprintEditor
         specVersionId={job.currentPublishedSpecificationVersionId}

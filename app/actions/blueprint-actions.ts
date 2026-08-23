@@ -5,9 +5,11 @@ import { revalidatePath } from "next/cache";
 import { AuthenticationError, requireAdmin } from "@/lib/auth/authorization";
 import {
   BlueprintError,
+  copyBlueprintForAdmin,
   getActiveBlueprintForApplication,
   getBlueprintForSpec,
   getRubricScoresForEvaluation,
+  listBlueprintSourceOptions,
   saveRubricScoresForInterviewer,
   upsertBlueprintForSpec,
 } from "@/lib/interviews/blueprint-service";
@@ -90,6 +92,34 @@ export async function loadRubricScores(evaluationId: number) {
   try {
     await requireInterviewerPortalCompat();
     return { ok: true as const, scores: await getRubricScoresForEvaluation(evaluationId) };
+  } catch (error) {
+    if (error instanceof AuthenticationError) throw error;
+    return { ok: false as const, error: blueprintActionErrorMessage(error) };
+  }
+}
+
+export async function getBlueprintCopySources() {
+  try {
+    await requireAdmin();
+    return { ok: true as const, sources: await listBlueprintSourceOptions() };
+  } catch (error) {
+    if (error instanceof AuthenticationError) throw error;
+    return { ok: false as const, error: blueprintActionErrorMessage(error) };
+  }
+}
+
+export async function copyBlueprintFromRequirement(input: {
+  sourceSpecVersionId: unknown;
+  targetSpecVersionId: unknown;
+}) {
+  try {
+    const blueprint = await copyBlueprintForAdmin({
+      sourceSpecVersionId: input.sourceSpecVersionId,
+      targetSpecVersionId: input.targetSpecVersionId,
+    });
+    revalidatePath(`/dashboard/requirements/${input.targetSpecVersionId}`);
+    revalidatePath(`/dashboard/requirements/${input.targetSpecVersionId}/blueprint`);
+    return { ok: true as const, blueprint };
   } catch (error) {
     if (error instanceof AuthenticationError) throw error;
     return { ok: false as const, error: blueprintActionErrorMessage(error) };
