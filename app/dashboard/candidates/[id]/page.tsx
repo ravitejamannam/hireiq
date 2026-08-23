@@ -7,6 +7,7 @@ import CandidateIntelligencePanel from "@/components/candidates/CandidateIntelli
 import CandidateMatchingPanel from "@/components/candidates/CandidateMatchingPanel";
 import CandidateProfileForm from "@/components/candidates/CandidateProfileForm";
 import CandidateResumePanel from "@/components/candidates/CandidateResumePanel";
+import CandidateSignalsPanel from "@/components/candidates/CandidateSignalsPanel";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import {
   formatClientDate,
@@ -139,6 +140,12 @@ export default async function CandidateProfilePage({
       {candidateId ? (
         <div className="mt-8">
           <CandidateResumePanel candidateId={candidateId} />
+        </div>
+      ) : null}
+
+      {candidateId ? (
+        <div className="mt-8">
+          <CandidateSignalsPanel candidateId={candidateId} />
         </div>
       ) : null}
 

@@ -365,10 +365,14 @@ export async function createSignal(
       select: signalSelect,
     });
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
+    // Match by code, not instanceof: the generated client (custom output)
+    // and @prisma/client are separate class copies, so instanceof checks
+    // fail across them.
+    const errorCode =
+      typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code: unknown }).code)
+        : undefined;
+    if (errorCode === "P2002") {
       return db.candidateIdentitySignal.findFirst({
         where: {
           companyId: data.companyId,

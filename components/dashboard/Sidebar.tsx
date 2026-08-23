@@ -18,7 +18,9 @@ import {
   ClipboardCheck,
   Code,
   ListChecks,
-  Radio,} from "lucide-react";
+  Radio,
+  Gauge,
+} from "lucide-react";
 
 const portalRoleLabels: Record<PortalRole, string> = {
   ADMIN: "Admin",
@@ -109,6 +111,11 @@ const sections: NavSection[] = [
         icon: Radio,
         label: "Integrations",
         href: "/dashboard/integrations",
+      },
+      {
+        icon: Gauge,
+        label: "Calibration",
+        href: "/dashboard/calibration",
       },
     ],
   },
