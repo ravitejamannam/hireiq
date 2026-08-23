@@ -682,7 +682,7 @@ model CandidateResumeDocument {
   application Application?      @relation(fields: [applicationId], references: [id], onDelete: SetNull)
   uploadedBy  User?             @relation("ResumeUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
 
-  @@unique([companyId, contentSha256])
+  @@index([companyId, contentSha256])
   @@index([companyId, candidateId])
 }
 

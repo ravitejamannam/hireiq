@@ -1,4 +1,4 @@
-import { PortalRole, Prisma } from "@prisma/client";
+import { PortalRole } from "@prisma/client";
 
 import {
   AuthorizationError,
@@ -24,6 +24,7 @@ import {
   validateCandidateId,
   validateCandidateProfileUpdate,
 } from "@/lib/validation/candidate-profile-validation";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 function toSafeProfile(
   name: string,
@@ -94,8 +95,7 @@ async function materializeProfile(candidateId: number, companyId: number) {
     return created;
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       const raced = await findProfileByCandidateIdAndCompanyId(
         candidateId,

@@ -22,39 +22,45 @@ export default async function AssessLeaderboardPage({ params }: PageProps) {
   noStore();
   const { token } = await params;
 
+  let board = null;
+  let loadError: string | null = null;
   try {
-    const board = await getAssessmentLeaderboardForInviteToken(token);
-    return (
-      <main className="mx-auto min-h-screen max-w-3xl px-6 py-16">
-        <article className="rounded-2xl border border-zinc-200 bg-white p-10">
-          <p className="text-sm text-zinc-500">{board.companyDisplayName}</p>
-          <h1 className="mt-2 text-3xl font-bold text-black">{board.title}</h1>
-          <p className="mt-2 text-sm text-zinc-600">
-            Public ranking of completed assessments for this role.
-          </p>
-          <AssessmentLeaderboard board={board} />
-          <Link
-            href={`/assess/${encodeURIComponent(token)}`}
-            className="mt-8 inline-block text-sm font-semibold text-black underline underline-offset-2"
-          >
-            Back to assessment
-          </Link>
-        </article>
-      </main>
-    );
+    board = await getAssessmentLeaderboardForInviteToken(token);
   } catch (error) {
     if (error instanceof AssessmentError) {
-      return (
-        <main className="mx-auto flex min-h-screen max-w-2xl items-start px-6 py-16">
-          <div className="w-full rounded-2xl border border-zinc-200 bg-white p-10">
-            <h1 className="text-3xl font-bold text-black">
-              Leaderboard unavailable
-            </h1>
-            <p className="mt-3 text-zinc-600">{error.message}</p>
-          </div>
-        </main>
-      );
+      loadError = error.message;
+    } else {
+      throw error;
     }
-    throw error;
   }
+
+  if (loadError || !board) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-2xl items-start px-6 py-16">
+        <div className="w-full rounded-2xl border border-zinc-200 bg-white p-10">
+          <h1 className="text-3xl font-bold text-black">Leaderboard unavailable</h1>
+          <p className="mt-3 text-zinc-600">{loadError ?? "Not found."}</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto min-h-screen max-w-3xl px-6 py-16">
+      <article className="rounded-2xl border border-zinc-200 bg-white p-10">
+        <p className="text-sm text-zinc-500">{board.companyDisplayName}</p>
+        <h1 className="mt-2 text-3xl font-bold text-black">{board.title}</h1>
+        <p className="mt-2 text-sm text-zinc-600">
+          Public ranking of completed assessments for this role.
+        </p>
+        <AssessmentLeaderboard board={board} />
+        <Link
+          href={`/assess/${encodeURIComponent(token)}`}
+          className="mt-8 inline-block text-sm font-semibold text-black underline underline-offset-2"
+        >
+          Back to assessment
+        </Link>
+      </article>
+    </main>
+  );
 }

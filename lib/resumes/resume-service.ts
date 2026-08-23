@@ -170,12 +170,10 @@ export async function uploadResumeForAdmin(input: {
   // Dedup semantics (§42): identical content that already PARSED is a
   // duplicate and returns the existing record. A prior FAILED parse never
   // blocks retry — the row is updated in place with fresh parse results.
-  const existing = await prisma.candidateResumeDocument.findUnique({
+  const existing = await prisma.candidateResumeDocument.findFirst({
     where: {
-      companyId_contentSha256: {
-        companyId: candidate.companyId,
-        contentSha256: stored.contentSha256,
-      },
+      companyId: candidate.companyId,
+      contentSha256: stored.contentSha256,
     },
   });
 

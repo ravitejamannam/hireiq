@@ -19,6 +19,7 @@ import { assertIngestionTransition } from "@/lib/validation/application-ingestio
 
 import { captureProviderIngestionEvidence } from "@/lib/ingestion/provider-evidence";
 import { LINKEDIN_POSTING_NOT_FOUND } from "@/lib/jobs/distribution/linkedin/errors";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 export type LinkedInIngestionInput = {
   externalPostingId: string;
@@ -160,8 +161,7 @@ async function ensureReceivedEvent(
     });
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       const raced = await prisma.applicationIngestionEvent.findFirst({
         where: {

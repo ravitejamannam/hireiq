@@ -1,4 +1,4 @@
-import { PortalRole, Prisma } from "@prisma/client";
+import { PortalRole } from "@prisma/client";
 
 import { hashPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +12,7 @@ import {
   isPlausibleIdentityEmail,
   normalizeIdentityEmail,
 } from "@/lib/auth/email-normalization";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 export class SignupError extends Error {
   constructor(message = "Unable to create your account with those details.") {
@@ -90,8 +91,7 @@ export async function registerClientAccount(input: {
     userId = created.id;
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       throw new SignupError(GENERIC_SIGNUP_ERROR);
     }

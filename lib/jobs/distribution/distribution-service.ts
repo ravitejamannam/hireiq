@@ -53,6 +53,7 @@ import {
   validateIncludeCompensation,
   validateJobDistributionId,
 } from "@/lib/validation/job-distribution-validation";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -288,8 +289,7 @@ export async function createJobDistributionForCompany(input: {
     return toSafeDistribution(created);
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       if (applyMode === ApplyMode.HIREIQ_HOSTED && provider === "MANUAL") {
         throw new JobDistributionError(MANUAL_DISTRIBUTION_ACTIVE);

@@ -29,6 +29,7 @@ import {
 
 import { createEvidence } from "@/lib/repositories/candidate-evidence-repository";
 import { claimPendingResumeInIngestion } from "@/lib/apply/hosted-resume-service";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -197,8 +198,7 @@ async function ensureReceivedEvent(
     });
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       const raced = await prisma.applicationIngestionEvent.findUnique({
         where: { hostedApplySubmissionId: submission.id },

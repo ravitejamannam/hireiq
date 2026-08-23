@@ -58,46 +58,51 @@ export default async function PublicAssessmentPage({ params }: AssessPageProps) 
     throw error;
   }
 
+  let page = null;
+  let loadError: string | null = null;
   try {
-    const page = await resolvePublicAssessment(token);
-    const alreadySubmitted =
-      page.status === AssessmentAttemptStatus.COMPLETED;
-
-    return (
-      <main className="mx-auto min-h-screen max-w-2xl px-6 py-16">
-        <article className="rounded-2xl border border-zinc-200 bg-white p-10">
-          <p className="text-sm text-zinc-500">{page.companyDisplayName}</p>
-          <h1 className="mt-2 text-3xl font-bold text-black">{page.title}</h1>
-          <p className="mt-2 text-sm text-zinc-600">
-            You have 48 hours from applying to complete this assessment.
-          </p>
-          <div className="mt-8">
-            <AssessmentTakeForm
-              token={token}
-              expiresAt={page.expiresAt}
-              questions={page.questions}
-              alreadySubmitted={alreadySubmitted}
-              score={page.score}
-              maxScore={page.maxScore}
-              leaderboardHref={`/assess/${encodeURIComponent(token)}/leaderboard`}
-            />
-          </div>
-        </article>
-      </main>
-    );
+    page = await resolvePublicAssessment(token);
   } catch (error) {
     if (error instanceof AssessmentError) {
-      return (
-        <Message
-          title={
-            error.code === "EXPIRED"
-              ? "Assessment window closed"
-              : "Assessment unavailable"
-          }
-          body={error.message}
-        />
-      );
+      loadError = error.message;
+    } else {
+      throw error;
     }
-    throw error;
   }
+
+  if (loadError || !page) {
+    return (
+      <Message
+        title={
+          loadError === "EXPIRED" ? "Assessment window closed" : "Assessment unavailable"
+        }
+        body={loadError ?? "Not found."}
+      />
+    );
+  }
+
+  const alreadySubmitted = page.status === AssessmentAttemptStatus.COMPLETED;
+
+  return (
+    <main className="mx-auto min-h-screen max-w-2xl px-6 py-16">
+      <article className="rounded-2xl border border-zinc-200 bg-white p-10">
+        <p className="text-sm text-zinc-500">{page.companyDisplayName}</p>
+        <h1 className="mt-2 text-3xl font-bold text-black">{page.title}</h1>
+        <p className="mt-2 text-sm text-zinc-600">
+          You have 48 hours from applying to complete this assessment.
+        </p>
+        <div className="mt-8">
+          <AssessmentTakeForm
+            token={token}
+            expiresAt={page.expiresAt}
+            questions={page.questions}
+            alreadySubmitted={alreadySubmitted}
+            score={page.score}
+            maxScore={page.maxScore}
+            leaderboardHref={`/assess/${encodeURIComponent(token)}/leaderboard`}
+          />
+        </div>
+      </article>
+    </main>
+  );
 }

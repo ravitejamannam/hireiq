@@ -129,6 +129,7 @@ export async function createJob(
 ) {
   const admin = await requireAdmin();
   const { requirementLifecycle: _ignored, ...postedFields } = requirementFields;
+  void _ignored;
   const job = await createPostedRequirementForCompany({
     companyId,
     createdByUserId: admin.id,

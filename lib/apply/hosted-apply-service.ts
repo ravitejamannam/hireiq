@@ -4,7 +4,7 @@ import {
   JobDistributionStatus,
   JobSpecificationVersionStatus,
   JobStatus,
-  Prisma,
+
 } from "@prisma/client";
 
 import {
@@ -28,6 +28,7 @@ import {
   validateIdempotencyKey,
   validatePublicApplyToken,
 } from "@/lib/validation/hosted-apply-validation";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 const publicSpecSelect = {
   status: true,
@@ -208,8 +209,7 @@ export async function submitHostedApply(input: {
     };
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       const raced = await prisma.hostedApplySubmission.findFirst({
         where: {

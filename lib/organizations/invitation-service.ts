@@ -1,7 +1,7 @@
 import {
   OrganizationMemberRole,
   OrganizationMemberStatus,
-  Prisma,
+
 } from "@prisma/client";
 
 import { normalizeIdentityEmail } from "@/lib/auth/email-normalization";
@@ -19,11 +19,11 @@ import {
   validateInvitationId,
   validateInvitationToken,
 } from "@/lib/validation/organization-membership-validation";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 function isUniqueConflict(error: unknown) {
   return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2002"
+    getPrismaErrorCode(error) === "P2002"
   );
 }
 

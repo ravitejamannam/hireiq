@@ -5,9 +5,8 @@ import {
 
 import { createHash } from "node:crypto";
 
-import { Prisma } from "@prisma/client";
-
 import { prisma } from "@/lib/prisma";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 /**
  * Provider webhook delivery ledger (T96 Phase 2).
@@ -88,8 +87,7 @@ export async function recordWebhookDelivery(input: DeliveryInput) {
     });
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       // Raced replay: the first delivery already owns the row.
       return prisma.providerWebhookDelivery.findUnique({

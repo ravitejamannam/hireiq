@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { } from "@prisma/client";
 
 import { hashPassword } from "@/lib/auth/password";
 import { generateSecureToken, hashSecureToken } from "@/lib/auth/secure-token";
@@ -10,6 +10,7 @@ import {
   normalizeIdentityEmail,
 } from "@/lib/auth/email-normalization";
 import { validateBootstrapPassword } from "@/lib/validation/user-validation";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 /**
  * Password reset updates passwordHash and consumes reset tokens.
@@ -194,8 +195,7 @@ export async function resetPasswordWithToken(input: {
     });
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       throw new PasswordResetError(
         "That reset link is invalid or has expired.",

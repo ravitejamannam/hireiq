@@ -2,7 +2,7 @@ import {
   CandidateEvidenceOrigin,
   CandidateEvidenceSourceType,
   PortalRole,
-  Prisma,
+
 } from "@prisma/client";
 
 import {
@@ -49,6 +49,7 @@ import {
   validateCaptureJobId,
   validateRecruiterEvidenceText,
 } from "@/lib/validation/candidate-evidence-capture-validation";
+import { getPrismaErrorCode, isPrismaKnownRequestError } from "@/lib/prisma-error";
 
 function captureNotFound(code: string): never {
   throw new EvidenceCaptureError("Resource not found.", code);
@@ -176,8 +177,7 @@ export async function executeCaptureJobTextualEvidence(input: {
       });
     } catch (error) {
       if (
-        error instanceof Prisma.PrismaClientKnownRequestError ||
-        error instanceof Prisma.PrismaClientUnknownRequestError
+        isPrismaKnownRequestError(error)
       ) {
         throw new EvidenceCaptureError(
           CAPTURE_GENERIC_ERROR,
@@ -297,8 +297,7 @@ export async function executeAttachRecruiterTextualEvidence(input: {
     return toRecruiterResult(created, false);
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       const raced = await findRecruiterEvidenceByContentHash(
         job.companyId,

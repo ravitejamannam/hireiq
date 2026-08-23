@@ -29,6 +29,7 @@ import {
 } from "@/lib/assessments/assessment-validation";
 import { hashSecureToken } from "@/lib/auth/secure-token";
 import { prisma } from "@/lib/prisma";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -246,8 +247,7 @@ export async function mintAssessmentInviteForApplication(
     });
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       return { assessmentUrl };
     }

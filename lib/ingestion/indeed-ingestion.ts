@@ -20,6 +20,7 @@ import { assertApplicationCreatedAtCvPool } from "@/lib/validation/application-v
 import { assertIngestionTransition } from "@/lib/validation/application-ingestion-validation";
 
 import { captureProviderIngestionEvidence } from "@/lib/ingestion/provider-evidence";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 export type IndeedIngestionInput = {
   jobPostingId: string;
@@ -160,8 +161,7 @@ async function ensureReceivedEvent(
     });
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       const raced = await prisma.applicationIngestionEvent.findFirst({
         where: {

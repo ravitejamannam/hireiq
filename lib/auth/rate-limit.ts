@@ -1,6 +1,7 @@
-import { Prisma } from "@prisma/client";
+import { } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 export class RateLimitError extends Error {
   constructor(message = "Too many attempts. Try again later.") {
@@ -96,8 +97,7 @@ export async function consumeAuthRateLimit(input: {
     }
 
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       const raced = await prisma.authRateLimit.update({
         where: {

@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { } from "@prisma/client";
 
 import { normalizeIdentityEmail } from "@/lib/auth/email-normalization";
 import { generateSecureToken, hashSecureToken } from "@/lib/auth/secure-token";
@@ -8,11 +8,11 @@ import {
   OrganizationMembershipError,
   validateEmailVerificationToken,
 } from "@/lib/validation/organization-membership-validation";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 function isUniqueConflict(error: unknown) {
   return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2002"
+    getPrismaErrorCode(error) === "P2002"
   );
 }
 

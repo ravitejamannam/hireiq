@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import { prisma } from "../lib/prisma";
 import { upsertAssessmentBank } from "../lib/assessments/assessment-service";
 

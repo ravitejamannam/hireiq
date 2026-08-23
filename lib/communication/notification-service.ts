@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import type {
@@ -16,6 +16,7 @@ import {
   validateNotificationJobId,
   validateNotificationType,
 } from "@/lib/validation/notification-validation";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 type NotificationDb = {
   job: Pick<typeof prisma.job, "findUnique">;
@@ -63,8 +64,7 @@ function toNotificationRecord(row: {
 
 function isNotificationUniquenessConflict(error: unknown) {
   return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2002"
+    getPrismaErrorCode(error) === "P2002"
   );
 }
 
@@ -238,7 +238,22 @@ async function persistSuccessfulEmailDelivery(
   notificationId: number,
   email: EmailDeliveryResult,
 ) {
-  if (!email.attempted || !email.sent) {
+  // Observability: never let an email failure disappear silently. The
+  // notification row still exists (in-app channel works), but operators
+  // need to see delivery gaps in server logs.
+  if (!email.attempted) {
+    console.warn("[email] delivery not attempted", {
+      notificationId,
+      reason: email.reason ?? null,
+    });
+    return email;
+  }
+  if (!email.sent) {
+    console.warn("[email] delivery failed", {
+      notificationId,
+      reason: email.reason ?? null,
+      detail: "error" in email ? String(email.error) : null,
+    });
     return email;
   }
 

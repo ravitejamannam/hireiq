@@ -5,6 +5,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -190,8 +191,7 @@ export async function createEvidence(
     });
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002" &&
+      getPrismaErrorCode(error) === "P2002" &&
       data.hostedApplySubmissionId
     ) {
       const existing = await findEvidenceByHostedApplySubmission(

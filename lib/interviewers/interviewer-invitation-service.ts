@@ -1,4 +1,4 @@
-import { PortalRole, Prisma } from "@prisma/client";
+import { PortalRole } from "@prisma/client";
 
 import { hashPassword } from "@/lib/auth/password";
 import { generateSecureToken, hashSecureToken } from "@/lib/auth/secure-token";
@@ -12,11 +12,11 @@ import {
 } from "@/lib/interviewers/interviewer-invitation-errors";
 import { prisma } from "@/lib/prisma";
 import { validateBootstrapPassword } from "@/lib/validation/user-validation";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 function isUniqueConflict(error: unknown) {
   return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2002"
+    getPrismaErrorCode(error) === "P2002"
   );
 }
 

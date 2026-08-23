@@ -2,10 +2,11 @@ import {
   OrganizationMemberRole,
   OrganizationMemberStatus,
   PortalRole,
-  Prisma,
+
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 export class CompanyOnboardingError extends Error {
   constructor(message: string) {
@@ -143,8 +144,7 @@ export async function createClientCompanyForUser(input: {
     return result;
   } catch (error) {
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      getPrismaErrorCode(error) === "P2002"
     ) {
       throw new CompanyOnboardingError(
         "This account already belongs to a company.",

@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 /**
  * Idempotent admin bootstrap for HireIQ development.
  *
