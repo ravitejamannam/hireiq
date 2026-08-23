@@ -16,6 +16,8 @@ import {
 import { prisma } from "@/lib/prisma";
 import { assertApplicationCreatedAtCvPool } from "@/lib/validation/application-validation";
 import { assertIngestionTransition } from "@/lib/validation/application-ingestion-validation";
+
+import { captureProviderIngestionEvidence } from "@/lib/ingestion/provider-evidence";
 import { LINKEDIN_POSTING_NOT_FOUND } from "@/lib/jobs/distribution/linkedin/errors";
 
 export type LinkedInIngestionInput = {
@@ -42,6 +44,7 @@ export type SafeLinkedInIngestionEvent = {
   candidateId: number | null;
   applicationId: number | null;
   errorCode: string | null;
+  externalApplicationId: string | null;
 };
 
 function toSafe(event: {
@@ -56,6 +59,7 @@ function toSafe(event: {
   candidateId: number | null;
   applicationId: number | null;
   errorCode: string | null;
+  externalApplicationId: string | null;
 }): SafeLinkedInIngestionEvent {
   return {
     id: event.id,
@@ -69,6 +73,7 @@ function toSafe(event: {
     candidateId: event.candidateId,
     applicationId: event.applicationId,
     errorCode: event.errorCode,
+    externalApplicationId: event.externalApplicationId,
   };
 }
 
@@ -339,6 +344,26 @@ export async function ingestLinkedInApplication(input: LinkedInIngestionInput) {
           applicationId = created.id;
         }
       }
+
+      // T91/T96: capture provider-supplied applicant data as INGESTION_EVENT
+      // evidence inside the same transaction (provenance chain: Application
+      // → IngestionEvent → CandidateEvidence). Runs only under the event row
+      // lock and before PROCESSED commits, so it is inherently idempotent.
+      await captureProviderIngestionEvidence(tx, {
+        companyId: distribution.job.companyId,
+        candidateId,
+        applicationId,
+        ingestionEventId: locked.id,
+        occurredAt: locked.createdAt,
+        fields: {
+          applicantName: locked.applicantName,
+          applicantEmailNormalized: locked.applicantEmailNormalized ?? null,
+          applicantLocation: locked.applicantLocation ?? null,
+          applicantExperienceYears: locked.applicantExperienceYears ?? null,
+          externalCandidateId: locked.externalCandidateId ?? null,
+          externalApplicationId: locked.externalApplicationId ?? null,
+        },
+      });
 
       assertIngestionTransition(
         ApplicationIngestionStatus.PROCESSING,

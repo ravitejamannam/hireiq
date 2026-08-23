@@ -1423,3 +1423,33 @@ model AssessmentAnswer {
   @@unique([attemptId, questionId])
   @@index([attemptId])
 }
+
+/// T96 Phase 2: durable ledger of every provider webhook delivery.
+/// ACCEPTED  — signature valid, payload processed into ingestion.
+/// QUARANTINED — signature valid but payload unprocessable; raw payload
+///               preserved (size-capped) for admin triage and replay after fix.
+/// REJECTED  — auth/config failure; metadata only, attacker-controlled
+///             payloads are never persisted.
+model ProviderWebhookDelivery {
+  id              Int                            @id @default(autoincrement())
+  provider        DistributionProvider
+  externalEventId String?
+  status          ProviderWebhookDeliveryStatus
+  httpStatus      Int
+  signatureValid  Boolean
+  payloadRaw      String?
+  payloadSha256   String?
+  errorCode       String?
+  errorMessage    String?
+  receivedAt      DateTime                       @default(now())
+  processedAt     DateTime?
+
+  @@unique([provider, externalEventId])
+  @@index([provider, status, receivedAt])
+}
+
+enum ProviderWebhookDeliveryStatus {
+  ACCEPTED
+  QUARANTINED
+  REJECTED
+}
