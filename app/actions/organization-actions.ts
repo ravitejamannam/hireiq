@@ -14,6 +14,7 @@ import {
   rateLimitKeyForIp,
   rateLimitKeyForUser,
 } from "@/lib/auth/rate-limit";
+import { AuthenticationError } from "@/lib/auth/authorization";
 import { readRequestIp } from "@/lib/auth/request-ip";
 import { createClientCompanyForUser } from "@/lib/organizations/company-onboarding";
 import {
@@ -30,6 +31,7 @@ import { notifyHireIqOpsOfNewCompany } from "@/lib/organizations/ops-notificatio
 import { deliverEmailVerificationEmail } from "@/lib/organizations/verification-email";
 import { prisma } from "@/lib/prisma";
 import { OrganizationMembershipError } from "@/lib/validation/organization-membership-validation";
+import { TeamAdminError, suspendOrganizationMemberForOwner, reinstateOrganizationMemberForOwner, removeOrganizationMemberForOwner, transferOwnershipForOwner } from "@/lib/organizations/team-admin-service";
 
 export async function resendVerificationEmail() {
   const user = await requireUser();
@@ -235,4 +237,109 @@ export async function verifyEmailAddress(token: unknown) {
 
 export async function resolvePostAuthPath() {
   return requirePostAuthDestination();
+}
+
+/**
+ * T96 Phase 6 — team administration. All actions re-derive the actor's
+ * ACTIVE OWNER membership server-side; member ids come from the form but
+ * are always scoped through companyId before any mutation.
+ */
+export async function suspendOrganizationMember(memberId: unknown) {
+  try {
+    const client = await requireClientPortal();
+    await assertTeamOwner(client);
+    const result = await suspendOrganizationMemberForOwner({
+      actorUserId: client.id,
+      memberId,
+    });
+    revalidatePath("/client/team");
+    return { ok: true as const, member: result };
+  } catch (error) {
+    if (isAuthError(error)) throw error;
+    return { ok: false as const, error: teamAdminActionErrorMessage(error) };
+  }
+}
+
+export async function reinstateOrganizationMember(memberId: unknown) {
+  try {
+    const client = await requireClientPortal();
+    await assertTeamOwner(client);
+    const result = await reinstateOrganizationMemberForOwner({
+      actorUserId: client.id,
+      memberId,
+    });
+    revalidatePath("/client/team");
+    return { ok: true as const, member: result };
+  } catch (error) {
+    if (isAuthError(error)) throw error;
+    return { ok: false as const, error: teamAdminActionErrorMessage(error) };
+  }
+}
+
+export async function removeOrganizationMember(memberId: unknown) {
+  try {
+    const client = await requireClientPortal();
+    await assertTeamOwner(client);
+    const result = await removeOrganizationMemberForOwner({
+      actorUserId: client.id,
+      memberId,
+    });
+    revalidatePath("/client/team");
+    return { ok: true as const, member: result };
+  } catch (error) {
+    if (isAuthError(error)) throw error;
+    return { ok: false as const, error: teamAdminActionErrorMessage(error) };
+  }
+}
+
+export async function transferOwnership(targetMemberId: unknown) {
+  try {
+    const client = await requireClientPortal();
+    await assertTeamOwner(client);
+    const result = await transferOwnershipForOwner({
+      actorUserId: client.id,
+      targetMemberId,
+    });
+    revalidatePath("/client/team");
+    revalidatePath("/client");
+    return { ok: true as const, ...result };
+  } catch (error) {
+    if (isAuthError(error)) throw error;
+    return { ok: false as const, error: teamAdminActionErrorMessage(error) };
+  }
+}
+
+async function assertTeamOwner(client: { membershipRole: string }) {
+  if (client.membershipRole !== "OWNER") {
+    throw new OrganizationMembershipError("Unauthorized.");
+  }
+}
+
+function isAuthError(error: unknown): boolean {
+  return error instanceof AuthenticationError;
+}
+
+function teamAdminActionErrorMessage(error: unknown): string {
+  if (error instanceof TeamAdminError) {
+    switch (error.code) {
+      case "CANNOT_TARGET_SELF":
+        return "You cannot perform this action on your own membership.";
+      case "TARGET_NOT_MEMBER":
+        return "Only members can be managed here. Owners are not affected by team admin actions.";
+      case "TARGET_NOT_ACTIVE":
+        return error.message;
+      case "INVALID_STATUS_TRANSITION":
+        return "That membership is not in a state that allows this change.";
+      case "MEMBER_NOT_FOUND":
+        return "Team member not found in your company.";
+      case "UNAUTHORIZED":
+        return "Only the company owner can manage team members.";
+      default:
+        return error.message;
+    }
+  }
+  if (error instanceof OrganizationMembershipError) {
+    return "Only the company owner can manage team members.";
+  }
+  return "Team management action failed. Please try again.";
 }
