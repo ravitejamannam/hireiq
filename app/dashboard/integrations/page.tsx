@@ -50,12 +50,20 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold text-zinc-900">Integrations</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Health of provider webhooks. Quarantined deliveries hold real
-          applicants waiting for triage — replay them after fixing parsers.
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-900">Integrations</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Health of provider webhooks. Quarantined deliveries hold real
+            applicants waiting for triage — replay them after fixing parsers.
+          </p>
+          <Link
+            href="/dashboard/integrations/feeds"
+            className="mt-2 inline-block text-sm font-medium text-indigo-600 hover:text-indigo-500"
+          >
+            Manage public job feeds →
+          </Link>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
