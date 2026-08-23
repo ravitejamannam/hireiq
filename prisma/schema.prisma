@@ -401,6 +401,7 @@ model Job {
   @@unique([id, companyId])
   @@index([companyId, status])
   @@index([assignedInterviewerId])
+  interviewSlots InterviewSlot[]
 }
 
 /// Versioned hiring specification. Job remains the operational root.
@@ -501,6 +502,7 @@ model Interviewer {
   notifications Notification[]
   users         User[]
   invitations   InterviewerInvitation[]
+  interviewSlots InterviewSlot[]
 }
 
 model Candidate {
@@ -921,6 +923,7 @@ model Application {
   @@index([jobId, status])
   @@index([companyId])
   resumeDocuments CandidateResumeDocument[]
+  bookingInvite InterviewBookingInvite?
 }
 
 model Evaluation {
@@ -1498,6 +1501,48 @@ enum ProviderWebhookDeliveryStatus {
   ACCEPTED
   QUARANTINED
   REJECTED
+}
+
+/// T100 Phase 9: self-serve interview scheduling.
+/// Admins (or assigned interviewers) publish OPEN slots for a job; the
+/// candidate books one via a token-scoped public page. Booking creates the
+/// Interview row transactionally — double-booking is impossible because
+/// the slot row is claimed by a guarded update, not a check-then-write.
+enum InterviewSlotStatus {
+  OPEN
+  BOOKED
+  CANCELLED
+}
+
+model InterviewSlot {
+  id              Int                 @id @default(autoincrement())
+  jobId           Int
+  interviewerId   Int
+  interviewType   InterviewType
+  startAt         DateTime
+  durationMinutes Int                 @default(45)
+  status          InterviewSlotStatus @default(OPEN)
+  bookedApplicationId Int?
+
+  job        Job         @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  interviewer Interviewer @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
+
+  @@unique([interviewerId, startAt])
+  @@index([jobId, status, startAt])
+}
+
+/// Token-scoped booking invite per application (hash stored only).
+model InterviewBookingInvite {
+  id            Int       @id @default(autoincrement())
+  applicationId Int       @unique
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  @@index([expiresAt])
 }
 
 /// T98 Phase 7: structured interview kit. A rubric attached to a published
