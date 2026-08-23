@@ -296,6 +296,12 @@ export default function RequirementWorkspaceClient({
             Technical Evaluation
           </Link>
           <Link
+            href={`/dashboard/requirements/${requirement.id}/blueprint`}
+            className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+          >
+            Interview Blueprint
+          </Link>
+          <Link
             href={`/dashboard/shortlist?requirementId=${requirement.id}`}
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-black hover:bg-zinc-100"
           >

@@ -445,6 +445,7 @@ model JobSpecificationVersion {
 
   @@unique([jobId, versionNumber])
   @@index([jobId, status])
+  interviewBlueprint InterviewBlueprint?
 }
 
 /// Requirement-scoped billing foundation record.
@@ -947,6 +948,7 @@ model Evaluation {
   @@unique([applicationId, interviewerId])
   @@index([applicationId])
   @@index([interviewerId])
+  competencyScores EvaluationCompetencyScore[] @relation("EvaluationCompetencyScores")
 }
 
 model EvaluationQuestion {
@@ -1496,6 +1498,66 @@ enum ProviderWebhookDeliveryStatus {
   ACCEPTED
   QUARANTINED
   REJECTED
+}
+
+/// T98 Phase 7: structured interview kit. A rubric attached to a published
+/// job specification version. Versioned + snapshot-based so later edits
+/// never rewrite historical evaluation evidence.
+model InterviewBlueprint {
+  id                        Int      @id @default(autoincrement())
+  jobSpecificationVersionId Int      @unique
+  version                   Int      @default(1)
+  active                    Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  specification JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  competencies  BlueprintCompetency[]
+  questions     BlueprintQuestion[]
+}
+
+model BlueprintCompetency {
+  id          Int    @id @default(autoincrement())
+  blueprintId Int
+  name        String
+  description String?
+  weight      Int
+  sortOrder   Int    @default(0)
+
+  blueprint InterviewBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Restrict)
+  questions BlueprintQuestion[]
+
+  @@unique([blueprintId, name])
+}
+
+model BlueprintQuestion {
+  id           Int     @id @default(autoincrement())
+  blueprintId  Int
+  competencyId Int
+  question     String
+  guidance     String?
+  difficulty   String?
+  active       Boolean @default(true)
+
+  blueprint  InterviewBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Restrict)
+  competency BlueprintCompetency @relation(fields: [competencyId], references: [id], onDelete: Restrict)
+
+  @@index([blueprintId, active])
+}
+
+/// Snapshot rows: name + weight are copied at save time so blueprint edits
+/// never rewrite historical scores (§6 immutable audit snapshots).
+model EvaluationCompetencyScore {
+  id             Int    @id @default(autoincrement())
+  evaluationId   Int
+  competencyName String
+  weightSnapshot Int
+  score          Int
+  notes          String?
+
+  evaluation Evaluation @relation("EvaluationCompetencyScores", fields: [evaluationId], references: [id], onDelete: Restrict)
+
+  @@unique([evaluationId, competencyName])
 }
 
 /// T96 Phase 4: result of checking one PUBLISHED distribution against its

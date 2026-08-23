@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import InterviewerCandidateDetail from "@/components/interviewer/InterviewerCandidateDetail";
+import RubricPanel from "@/components/interviewer/RubricPanel";
+import { getActiveBlueprintForApplication, getRubricScoresForEvaluation } from "@/lib/interviews/blueprint-service";
 import { getOrMaterializeCandidateProfile } from "@/lib/candidates/candidate-profile-service";
 import { getInterviewerApplicationForJob } from "@/lib/repositories/interviewer-portal-repository";
 import { getApplicationAssessmentSummary } from "@/lib/assessments/assessment-service";
@@ -44,6 +46,13 @@ export default async function InterviewerCandidateDetailPage({
   }
 
   const evaluation = application.evaluations[0] ?? null;
+
+  // T98 structured interview kit: active rubric + this interviewer's scores.
+  const blueprint = await getActiveBlueprintForApplication(application.id);
+  const rubricScores =
+    evaluation && blueprint
+      ? await getRubricScoresForEvaluation(evaluation.id)
+      : [];
   const profile = await getOrMaterializeCandidateProfile(
     application.candidate.id,
   );
@@ -65,6 +74,25 @@ export default async function InterviewerCandidateDetailPage({
           ← Back to Requirements
         </Link>
       </div>
+
+      {blueprint && blueprint.active ? (
+        <div className="mb-8">
+          <RubricPanel
+            applicationId={application.id}
+            evaluationId={evaluation?.id ?? null}
+            competencies={blueprint.competencies.map((c) => ({
+              name: c.name,
+              weight: c.weight,
+              description: c.description,
+            }))}
+            existingScores={rubricScores.map((s) => ({
+              competencyName: s.competencyName,
+              score: s.score,
+              notes: s.notes,
+            }))}
+          />
+        </div>
+      ) : null}
 
       <InterviewerCandidateDetail
         applicationId={application.id}
