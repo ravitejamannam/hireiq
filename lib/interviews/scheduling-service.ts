@@ -164,7 +164,6 @@ export async function listOpenSlotsForBooking(rawToken: string): Promise<{
   const application = await prisma.application.findUnique({
     where: { id: invite.applicationId },
     select: {
-      id: true,
       job: {
         select: {
           id: true,
@@ -195,6 +194,7 @@ export async function listOpenSlotsForBooking(rawToken: string): Promise<{
 export async function bookSlotWithToken(input: {
   rawToken: string;
   slotId: unknown;
+  candidateContact?: { name?: string; email?: string };
 }): Promise<
   | { ok: true; interviewId: number; scheduledAt: Date }
   | { ok: false; errorCode: string }
@@ -213,7 +213,11 @@ export async function bookSlotWithToken(input: {
           id: true,
           companyId: true,
           title: true,
+          company: { select: { name: true } },
           assignedInterviewerId: true,
+          assignedInterviewer: {
+            select: { name: true, users: { select: { email: true }, take: 1 } },
+          },
           interviewSlots: {
             where: { id: slotId },
             select: {
@@ -286,6 +290,36 @@ export async function bookSlotWithToken(input: {
       });
     } catch (notificationError) {
       console.error("[scheduling] booking notification failed", notificationError);
+    }
+
+    // T111: candidate confirmation + interviewer alert via Resend.
+    try {
+      const { deliverBookingConfirmation } = await import(
+        "./scheduling-emails"
+      );
+      const submissionContact = await prisma.hostedApplySubmission.findUnique({
+        where: { id: invite.applicationId },
+        select: { name: true, emailNormalized: true },
+      });
+      const delivery = await deliverBookingConfirmation({
+        interviewerEmail:
+          application.job.assignedInterviewer?.users?.[0]?.email ?? null,
+        interviewerName:
+          application.job.assignedInterviewer?.name ?? "Interviewer",
+        candidateName: submissionContact?.name ?? "Candidate",
+        candidateEmail:
+          submissionContact?.emailNormalized ?? "",
+        jobTitle: application.job.title,
+        companyName: application.job.company.name,
+        scheduledAt: slot.startAt,
+        durationMinutes: slot.durationMinutes,
+      });
+      console.info("[scheduling] booking emails", {
+        attempted: delivery.attempted,
+        sent: delivery.sent,
+      });
+    } catch (emailError) {
+      console.error("[scheduling] booking emails failed", emailError);
     }
 
     return { ok: true, interviewId: result.id, scheduledAt: slot.startAt };
