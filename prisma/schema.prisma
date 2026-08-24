@@ -349,6 +349,7 @@ model Company {
   jobRankingRuns            JobRankingRun[]
   jobRankingResults         JobRankingResult[]
   resumeDocuments CandidateResumeDocument[]
+  apiTokens ApiToken[]
 }
 
 model Job {
@@ -1590,6 +1591,22 @@ model HostedApplyResumeUpload {
   distribution JobDistribution @relation(fields: [distributionId], references: [id], onDelete: Restrict)
 
   @@index([distributionId, createdAt])
+}
+
+/// T112 Phase 12: public API keys. Hash-only persistence (same pattern as
+/// ApplyToken); raw keys are shown exactly once at creation.
+model ApiToken {
+  id          Int       @id @default(autoincrement())
+  companyId   Int
+  name        String
+  tokenHash   String    @unique
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
 }
 
 /// T98 Phase 7: structured interview kit. A rubric attached to a published
