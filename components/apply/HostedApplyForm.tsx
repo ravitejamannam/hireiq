@@ -8,6 +8,22 @@ type HostedApplyFormProps = {
 
 type FieldErrors = Record<string, string>;
 
+const inputClasses =
+  "mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:bg-zinc-50 disabled:text-zinc-400";
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="mt-1 text-xs font-medium text-red-600">{message}</p>;
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
+      {children}
+    </p>
+  );
+}
+
 export default function HostedApplyForm({ token }: HostedApplyFormProps) {
   const idempotencyKey = useRef<string | null>(null);
   const [name, setName] = useState("");
@@ -24,7 +40,9 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
   const [pending, setPending] = useState(false);
   const [resumeClaim, setResumeClaim] = useState<string | null>(null);
   const [resumeName, setResumeName] = useState<string | null>(null);
-  const [resumeState, setResumeState] = useState<"idle" | "uploading" | "ready" | "error">("idle");
+  const [resumeState, setResumeState] = useState<
+    "idle" | "uploading" | "ready" | "error"
+  >("idle");
 
   async function onResumeSelected(file: File) {
     setResumeState("uploading");
@@ -32,24 +50,16 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
     try {
       const form = new FormData();
       form.append("file", file);
-      const response = await fetch(`/api/apply/${encodeURIComponent(token)}/resume`, {
-        method: "POST",
-        body: form,
-      });
+      const response = await fetch(
+        `/api/apply/${encodeURIComponent(token)}/resume`,
+        { method: "POST", body: form },
+      );
       const body = (await response.json().catch(() => null)) as
         | { ok?: boolean; resumeClaim?: string; fileName?: string; error?: string }
         | null;
       if (!response.ok || !body?.ok || !body.resumeClaim) {
         setResumeState("error");
-        setFormError(
-          body?.error === "UNSUPPORTED_FILE_TYPE"
-            ? "Only PDF and TXT resumes are supported."
-            : body?.error === "FILE_TOO_LARGE"
-              ? "Resume must be 10MB or smaller."
-              : body?.error === "APPLY_LINK_INVALID"
-                ? "This application link is no longer accepting resumes."
-                : "Resume upload failed — you can still apply without it.",
-        );
+        setFormError(integrityFreeResumeError(body?.error));
         return;
       }
       setResumeClaim(body.resumeClaim);
@@ -58,6 +68,21 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
     } catch {
       setResumeState("error");
       setFormError("Resume upload failed — you can still apply without it.");
+    }
+  }
+
+  function integrityFreeResumeError(code?: string): string {
+    switch (code) {
+      case "UNSUPPORTED_FILE_TYPE":
+        return "Only PDF and TXT resumes are supported right now.";
+      case "FILE_TOO_LARGE":
+        return "Resume must be 10MB or smaller.";
+      case "EMPTY_FILE":
+        return "That file appears to be empty.";
+      case "APPLY_LINK_INVALID":
+        return "This application link is no longer accepting resumes.";
+      default:
+        return "Resume upload failed — you can still apply without it.";
     }
   }
 
@@ -111,9 +136,7 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
       }
 
       if (!response.ok || !payload?.success) {
-        setFormError(
-          payload?.error ?? "This application link is unavailable.",
-        );
+        setFormError(payload?.error ?? "This application link is unavailable.");
         return;
       }
 
@@ -132,149 +155,156 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
 
   if (submitted) {
     return (
-      <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-        Your application was received.
-      </p>
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl">
+          ✓
+        </div>
+        <h3 className="mt-3 font-bold text-emerald-900">Application received</h3>
+        <p className="mt-1 text-sm text-emerald-700">
+          Watch your inbox — your role assessment link is on its way.
+        </p>
+      </div>
     );
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4" noValidate>
+    <form onSubmit={onSubmit} className="space-y-6" noValidate>
       {formError ? (
-        <p role="alert" className="text-sm text-red-600">
-          {formError}
-        </p>
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-medium text-red-700">{formError}</p>
+        </div>
       ) : null}
 
-      <label className="block text-sm font-medium text-black">
-        Full name
-        <input
-          className="mt-2 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          maxLength={200}
-          required
-          disabled={pending}
-          autoComplete="name"
-        />
-        {errors.name ? (
-          <span className="mt-1 block text-sm text-red-600">{errors.name}</span>
-        ) : null}
-      </label>
+      {/* About you */}
+      <fieldset className="space-y-4">
+        <legend className="mb-2 w-full">
+          <SectionLabel>About you</SectionLabel>
+        </legend>
 
-      <label className="block text-sm font-medium text-black">
-        Email
-        <input
-          type="email"
-          className="mt-2 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          maxLength={254}
-          required
-          disabled={pending}
-          autoComplete="email"
-        />
-        {errors.email ? (
-          <span className="mt-1 block text-sm text-red-600">{errors.email}</span>
-        ) : null}
-      </label>
+        <label className="block">
+          <span className="text-sm font-medium text-zinc-800">Full name</span>
+          <input
+            className={inputClasses}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            maxLength={200}
+            required
+            disabled={pending}
+            autoComplete="name"
+            placeholder="Priya Sharma"
+          />
+          <FieldError message={errors.name} />
+        </label>
 
-      <label className="block text-sm font-medium text-black">
-        Phone <span className="font-normal text-zinc-500">(optional)</span>
-        <input
-          className="mt-2 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          maxLength={32}
-          disabled={pending}
-          autoComplete="tel"
-        />
-        {errors.phone ? (
-          <span className="mt-1 block text-sm text-red-600">{errors.phone}</span>
-        ) : null}
-      </label>
+        <label className="block">
+          <span className="text-sm font-medium text-zinc-800">Email</span>
+          <input
+            type="email"
+            className={inputClasses}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            maxLength={254}
+            required
+            disabled={pending}
+            autoComplete="email"
+            placeholder="you@example.com"
+          />
+          <FieldError message={errors.email} />
+        </label>
 
-      <label className="block text-sm font-medium text-black">
-        Location <span className="font-normal text-zinc-500">(optional)</span>
-        <input
-          className="mt-2 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-          value={location}
-          onChange={(event) => setLocation(event.target.value)}
-          maxLength={200}
-          disabled={pending}
-          autoComplete="address-level2"
-        />
-        {errors.location ? (
-          <span className="mt-1 block text-sm text-red-600">{errors.location}</span>
-        ) : null}
-      </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-sm font-medium text-zinc-800">
+              Phone{" "}
+              <span className="font-normal text-zinc-400">(optional)</span>
+            </span>
+            <input
+              className={inputClasses}
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              maxLength={32}
+              disabled={pending}
+              autoComplete="tel"
+              placeholder="+91 98765 43210"
+            />
+            <FieldError message={errors.phone} />
+          </label>
 
-      <label className="block text-sm font-medium text-black">
-        Years of experience{" "}
-        <span className="font-normal text-zinc-500">(optional)</span>
-        <input
-          type="number"
-          min={0}
-          max={80}
-          className="mt-2 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-          value={experienceYears}
-          onChange={(event) => setExperienceYears(event.target.value)}
-          disabled={pending}
-        />
-        {errors.experienceYears ? (
-          <span className="mt-1 block text-sm text-red-600">
-            {errors.experienceYears}
-          </span>
-        ) : null}
-      </label>
+          <label className="block">
+            <span className="text-sm font-medium text-zinc-800">
+              Location{" "}
+              <span className="font-normal text-zinc-400">(optional)</span>
+            </span>
+            <input
+              className={inputClasses}
+              value={location}
+              onChange={(event) => setLocation(event.target.value)}
+              maxLength={120}
+              disabled={pending}
+              autoComplete="address-level2"
+              placeholder="Bengaluru"
+            />
+            <FieldError message={errors.location} />
+          </label>
+        </div>
 
-      <label className="block text-sm font-medium text-black">
-        LinkedIn URL{" "}
-        <span className="font-normal text-zinc-500">(optional)</span>
-        <input
-          type="url"
-          className="mt-2 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-          value={linkedInUrl}
-          onChange={(event) => setLinkedInUrl(event.target.value)}
-          maxLength={2048}
-          disabled={pending}
-          placeholder="https://www.linkedin.com/in/you"
-        />
-        {errors.linkedInUrl ? (
-          <span className="mt-1 block text-sm text-red-600">
-            {errors.linkedInUrl}
-          </span>
-        ) : null}
-      </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-sm font-medium text-zinc-800">
+              Experience{" "}
+              <span className="font-normal text-zinc-400">(years)</span>
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={60}
+              className={inputClasses}
+              value={experienceYears}
+              onChange={(event) => setExperienceYears(event.target.value)}
+              disabled={pending}
+              placeholder="5"
+            />
+            <FieldError message={errors.experienceYears} />
+          </label>
 
-      <label className="block text-sm font-medium text-black">
-        Cover letter{" "}
-        <span className="font-normal text-zinc-500">(optional)</span>
-        <textarea
-          className="mt-2 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-          value={coverLetter}
-          onChange={(event) => setCoverLetter(event.target.value)}
-          maxLength={8000}
-          rows={6}
-          disabled={pending}
-        />
-        {errors.coverLetter ? (
-          <span className="mt-1 block text-sm text-red-600">
-            {errors.coverLetter}
-          </span>
-        ) : null}
-      </label>
+          <label className="block">
+            <span className="text-sm font-medium text-zinc-800">
+              LinkedIn{" "}
+              <span className="font-normal text-zinc-400">(optional)</span>
+            </span>
+            <input
+              className={inputClasses}
+              value={linkedInUrl}
+              onChange={(event) => setLinkedInUrl(event.target.value)}
+              maxLength={300}
+              disabled={pending}
+              placeholder="linkedin.com/in/you"
+            />
+            <FieldError message={errors.linkedInUrl} />
+          </label>
+        </div>
+      </fieldset>
 
-      <div>
-        <p className="text-sm font-medium text-black">Resume (optional)</p>
-        <p className="mt-1 text-xs text-zinc-500">PDF or TXT, up to 10MB.</p>
+      {/* Resume */}
+      <fieldset className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50/70 p-4">
+        <legend className="px-1 text-xs font-semibold uppercase tracking-widest text-zinc-400">
+          Resume · optional
+        </legend>
         {resumeState === "ready" ? (
-          <p className="mt-2 text-sm font-medium text-emerald-600">
-            ✓ {resumeName} attached
+          <p className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+            ✓ {resumeName} attached — nice, this strengthens your application.
           </p>
         ) : resumeState === "uploading" ? (
-          <p className="mt-2 text-sm text-zinc-500">Uploading…</p>
-        ) : null}
+          <p className="flex items-center gap-2 text-sm text-zinc-500">
+            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-300 border-t-indigo-600" />
+            Uploading your resume…
+          </p>
+        ) : (
+          <p className="text-xs leading-relaxed text-zinc-500">
+            Attach a PDF or TXT resume and our matching engine reads it
+            automatically — it strengthens how your evidence is scored.
+          </p>
+        )}
         <input
           type="file"
           accept=".pdf,.txt,application/pdf,text/plain"
@@ -283,35 +313,63 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
             if (file) void onResumeSelected(file);
           }}
           disabled={pending || resumeState === "uploading"}
-          className="mt-2 block w-full cursor-pointer rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-white hover:file:bg-zinc-700"
+          className="block w-full cursor-pointer rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-zinc-700 disabled:opacity-50"
         />
-      </div>
+      </fieldset>
 
-      <label className="flex items-start gap-2 text-sm text-black">
-        <input
-          type="checkbox"
-          className="mt-1"
-          checked={consent}
-          onChange={(event) => setConsent(event.target.checked)}
+      {/* Cover letter */}
+      <fieldset className="space-y-2">
+        <label className="block">
+          <span className="text-sm font-medium text-zinc-800">
+            Why this role?{" "}
+            <span className="font-normal text-zinc-400">(optional)</span>
+          </span>
+          <textarea
+            value={coverLetter}
+            onChange={(event) => setCoverLetter(event.target.value)}
+            maxLength={8000}
+            rows={4}
+            disabled={pending}
+            placeholder="A few honest sentences beat a formal letter."
+            className={`${inputClasses} resize-y`}
+          />
+          <FieldError message={errors.coverLetter} />
+        </label>
+      </fieldset>
+
+      {/* Consent + submit */}
+      <div className="space-y-4 border-t border-zinc-200 pt-5">
+        <label className="flex items-start gap-2.5 text-sm text-zinc-700">
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={(event) => setConsent(event.target.checked)}
+            disabled={pending}
+            required
+            className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <span>
+            I consent to HireIQ and the hiring company processing this
+            application
+            <FieldError message={errors.consent} />
+          </span>
+        </label>
+
+        <button
+          type="submit"
           disabled={pending}
-          required
-        />
-        <span>
-          I consent to HireIQ and the hiring company processing this application
-          for this role.
-        </span>
-      </label>
-      {errors.consent ? (
-        <p className="text-sm text-red-600">{errors.consent}</p>
-      ) : null}
+          className="w-full rounded-xl bg-indigo-600 px-5 py-3.5 text-base font-semibold text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {pending
+            ? "Submitting…"
+            : `Submit application${resumeState === "ready" ? " + resume" : ""}`}
+        </button>
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:bg-zinc-400"
-      >
-        {pending ? "Submitting…" : "Submit application"}
-      </button>
+        <p className="text-center text-xs text-zinc-400">
+          🔒 Encrypted in transit · You&apos;ll take a short skills
+          assessment next
+        </p>
+      </div>
     </form>
   );
 }
