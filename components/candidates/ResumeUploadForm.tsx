@@ -42,11 +42,11 @@ export default function ResumeUploadForm({
       <input type="hidden" name="form" value="resume-upload" />
       <div className="flex flex-wrap items-center gap-3">
         <label className="cursor-pointer rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50">
-          Choose file (.pdf / .txt, ≤10MB)
+          Choose file (.pdf / .docx / .txt, ≤10MB)
           <input
             type="file"
             name="file"
-            accept=".pdf,.txt,application/pdf,text/plain"
+            accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             className="sr-only"
             required
           />

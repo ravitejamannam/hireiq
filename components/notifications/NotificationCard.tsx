@@ -31,6 +31,7 @@ const notificationTypeLabels: Record<NotificationType, string> = {
   INTERVIEWER_REQUIREMENT_READY: "Interviewer Requirement Ready",
   INTERVIEWER_DATABASE_READY: "Database Ready",
   CLIENT_SHORTLIST_READY: "Shortlist Ready",
+  INTERVIEWER_INTERVIEW_BOOKED: "Interview Booked",
 };
 
 const requirementLifecycleLabels: Record<RequirementLifecycle, string> = {

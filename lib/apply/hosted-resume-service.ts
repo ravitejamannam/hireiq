@@ -40,7 +40,7 @@ export class HostedResumeError extends Error {
 
 const MAX_RESUME_BYTES = 10 * 1024 * 1024;
 const CLAIM_TTL_HOURS = 2;
-const ALLOWED_EXTENSIONS = new Set(["pdf", "txt"]);
+const ALLOWED_EXTENSIONS = new Set(["pdf", "txt", "docx"]);
 
 function sanitizeFileName(raw: unknown): string {
   if (typeof raw !== "string" || !raw.trim()) {
@@ -114,7 +114,12 @@ export async function storePendingHostedResume(input: {
       claimTokenHash: claimHash,
       storageKey: stored.storageKey,
       fileName,
-      contentType: extension === "pdf" ? "application/pdf" : "text/plain",
+      contentType:
+        extension === "pdf"
+          ? "application/pdf"
+          : extension === "docx"
+            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            : "text/plain",
       sizeBytes: stored.sizeBytes,
       contentSha256: stored.contentSha256,
       parseStatus: extraction.ok

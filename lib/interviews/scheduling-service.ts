@@ -164,8 +164,11 @@ export async function listOpenSlotsForBooking(rawToken: string): Promise<{
   const application = await prisma.application.findUnique({
     where: { id: invite.applicationId },
     select: {
+      id: true,
       job: {
         select: {
+          id: true,
+          companyId: true,
           title: true,
           company: { select: { name: true } },
           assignedInterviewer: { select: { name: true } },
@@ -207,6 +210,9 @@ export async function bookSlotWithToken(input: {
       id: true,
       job: {
         select: {
+          id: true,
+          companyId: true,
+          title: true,
           assignedInterviewerId: true,
           interviewSlots: {
             where: { id: slotId },
@@ -264,6 +270,23 @@ export async function bookSlotWithToken(input: {
 
       return interview;
     });
+
+    // T110: notify the assigned interviewer in-app that a slot was booked.
+    // Best-effort after commit — a notification failure must not roll back
+    // a completed booking.
+    try {
+      await prisma.notification.create({
+        data: {
+          type: "INTERVIEWER_INTERVIEW_BOOKED",
+          message: `Interview booked for ${application.job.title} on ${slot.startAt.toISOString().slice(0, 16).replace("T", " ")} UTC.`,
+          jobId: application.job.id,
+          companyId: application.job.companyId,
+          interviewerId: slot.interviewerId,
+        },
+      });
+    } catch (notificationError) {
+      console.error("[scheduling] booking notification failed", notificationError);
+    }
 
     return { ok: true, interviewId: result.id, scheduledAt: slot.startAt };
   } catch (error) {

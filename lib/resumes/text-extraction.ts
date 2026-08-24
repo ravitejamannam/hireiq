@@ -9,7 +9,7 @@
  * the webhook quarantine philosophy.
  */
 
-export const RESUME_TEXT_EXTRACTOR_VERSION = "1";
+export const RESUME_TEXT_EXTRACTOR_VERSION = "2"; // v2 adds DOCX
 
 export const RESUME_TEXT_MAX = 8000; // aligns with EVIDENCE_INLINE_TEXT_MAX
 
@@ -54,6 +54,22 @@ async function extractFromPdf(bytes: Buffer): Promise<ExtractionOutcome> {
   }
 }
 
+
+async function extractFromDocx(bytes: Buffer): Promise<ExtractionOutcome> {
+  try {
+    // Dynamic import keeps mammoth out of every code path.
+    const mammoth = await import("mammoth");
+    const result = await mammoth.extractRawText({ buffer: bytes });
+    const text = typeof result.value === "string" ? result.value : "";
+    if (!text.trim()) {
+      return { ok: false, errorCode: "DOCX_NO_TEXT" };
+    }
+    return { ok: true, text: truncate(text) };
+  } catch {
+    return { ok: false, errorCode: "DOCX_PARSE_FAILED" };
+  }
+}
+
 function extractFromText(bytes: Buffer): ExtractionOutcome {
   const decoded = bytes.toString("utf8");
   // Heuristic binary sniff: replacement chars suggest non-text content.
@@ -71,17 +87,21 @@ function extractFromText(bytes: Buffer): ExtractionOutcome {
 /** Sniffs real content type from magic bytes. Never trusts the client MIME. */
 export function sniffResumeKind(
   bytes: Buffer,
-): "pdf" | "text" | null {
+): "pdf" | "docx" | "text" | null {
   if (bytes.length >= 5 && bytes.subarray(0, 5).toString("ascii") === "%PDF-") {
     return "pdf";
   }
-  // Treat everything else as candidate text; extraction validates further.
+  // DOCX is a ZIP: PK\x03\x04
+  if (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b) {
+    return "docx";
+  }
   return "text";
 }
 
 export async function extractResumeText(bytes: Buffer): Promise<ExtractionOutcome> {
   const kind = sniffResumeKind(bytes);
   if (kind === "pdf") return extractFromPdf(bytes);
+  if (kind === "docx") return extractFromDocx(bytes);
   if (kind === "text") return extractFromText(bytes);
   return { ok: false, errorCode: "UNSUPPORTED_FORMAT" };
 }

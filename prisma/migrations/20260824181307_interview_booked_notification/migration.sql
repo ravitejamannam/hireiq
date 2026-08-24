@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "NotificationType" ADD VALUE 'INTERVIEWER_INTERVIEW_BOOKED';

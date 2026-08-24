@@ -39,7 +39,7 @@ export class ResumeUploadError extends Error {
 
 const MAX_RESUME_BYTES = 10 * 1024 * 1024; // 10MB
 
-const ALLOWED_EXTENSIONS = new Set(["pdf", "txt"]);
+const ALLOWED_EXTENSIONS = new Set(["pdf", "txt", "docx"]);
 
 function sanitizeFileName(raw: unknown): string {
   if (typeof raw !== "string" || !raw.trim()) {
@@ -196,7 +196,12 @@ export async function uploadResumeForAdmin(input: {
         data: {
           storageKey: stored.storageKey,
           fileName,
-          contentType: extension === "pdf" ? "application/pdf" : "text/plain",
+          contentType:
+        extension === "pdf"
+          ? "application/pdf"
+          : extension === "docx"
+            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            : "text/plain",
           sizeBytes: stored.sizeBytes,
           parseStatus: extraction.ok ? "PARSED" : "FAILED",
           extractedText: extraction.ok ? extraction.text : null,
@@ -213,7 +218,12 @@ export async function uploadResumeForAdmin(input: {
           applicationId,
           storageKey: stored.storageKey,
           fileName,
-          contentType: extension === "pdf" ? "application/pdf" : "text/plain",
+          contentType:
+        extension === "pdf"
+          ? "application/pdf"
+          : extension === "docx"
+            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            : "text/plain",
           sizeBytes: stored.sizeBytes,
           contentSha256: stored.contentSha256,
           parseStatus: extraction.ok ? "PARSED" : "FAILED",
