@@ -20,6 +20,7 @@ import {
   ListChecks,
   Radio,
   Gauge,
+  BarChart3,
 } from "lucide-react";
 
 const portalRoleLabels: Record<PortalRole, string> = {
@@ -116,6 +117,11 @@ const sections: NavSection[] = [
         icon: Gauge,
         label: "Calibration",
         href: "/dashboard/calibration",
+      },
+      {
+        icon: BarChart3,
+        label: "Analytics",
+        href: "/dashboard/analytics",
       },
     ],
   },

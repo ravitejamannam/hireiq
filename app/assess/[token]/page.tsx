@@ -84,7 +84,8 @@ export default async function PublicAssessmentPage({ params }: AssessPageProps) 
   const alreadySubmitted = page.status === AssessmentAttemptStatus.COMPLETED;
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl px-6 py-16">
+    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
+    <div className="mx-auto max-w-2xl px-6 py-12">
       <article className="rounded-2xl border border-zinc-200 bg-white p-10">
         <p className="text-sm text-zinc-500">{page.companyDisplayName}</p>
         <h1 className="mt-2 text-3xl font-bold text-black">{page.title}</h1>
@@ -103,6 +104,7 @@ export default async function PublicAssessmentPage({ params }: AssessPageProps) 
           />
         </div>
       </article>
+    </div>
     </main>
   );
 }
