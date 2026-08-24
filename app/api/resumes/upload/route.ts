@@ -16,9 +16,18 @@ const MAX_BODY_BYTES = 10 * 1024 * 1024 + 64 * 1024; // file + multipart overhea
  * Multipart form: file (required), candidateId (required), applicationId (optional).
  */
 export async function POST(request: Request) {
+  let admin;
   try {
-    const admin = await requireAdmin();
+    admin = await requireAdmin();
+  } catch {
+    // Unauthenticated or wrong-role callers get a clean 401, not a 500.
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized." },
+      { status: 401, headers: NO_STORE },
+    );
+  }
 
+  try {
     const contentLength = Number(request.headers.get("content-length") ?? "0");
     if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
       return NextResponse.json(
