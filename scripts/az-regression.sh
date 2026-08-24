@@ -3,7 +3,7 @@ set -a
 source "$(dirname "$0")/../.env"
 set +a
 DB="$DATABASE_URL"
-BASE="${BASE:-http://localhost:3001}"
+BASE="${BASE:-http://localhost:4000}"
 PASS=0; FAIL=0
 check() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); echo "  ✓ $1"; else FAIL=$((FAIL+1)); echo "  ✗ $1 [got: $2 | want: $3]"; fi }
 q() { psql "$DB" -t -A -c "$1"; }

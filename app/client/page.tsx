@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import ClientRequirementCard from "@/components/client/ClientRequirementCard";
+import ClientOnboardingChecklist from "@/components/onboarding/ClientOnboardingChecklist";
 import StatCard from "@/components/dashboard/StatCard";
 import { requireClientPortal } from "@/lib/auth/authorization";
 import { getClientDashboardStats } from "@/lib/repositories/dashboard-repository";
@@ -24,6 +25,14 @@ export default async function ClientDashboardPage() {
           Recruitment overview for {client.company.name}.
         </p>
       </div>
+
+      {stats.activeRequirements === 0 &&
+      stats.profilesInPipeline === 0 &&
+      stats.hired === 0 ? (
+        <div className="mt-8">
+          <ClientOnboardingChecklist />
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-5">
         <StatCard title="Active Requirements" value={stats.activeRequirements} />
