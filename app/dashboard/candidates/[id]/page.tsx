@@ -116,13 +116,22 @@ export default async function CandidateProfilePage({
 
   return (
     <DashboardLayout>
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <Link
           href="/dashboard/candidates"
           className="text-sm font-medium text-zinc-600 underline underline-offset-2 hover:text-black"
         >
           ← Back to Candidates
         </Link>
+        {candidateId ? (
+          <a
+            href={`/api/candidates/${candidateId}/export`}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+            title="Download all data held about this candidate (GDPR Art. 15)"
+          >
+            ⬇ Export candidate data (GDPR)
+          </a>
+        ) : null}
       </div>
 
       <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
