@@ -45,3 +45,76 @@ jobs:
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
           AUTH_SECRET: ci-build-secret
+
+  e2e:
+    name: E2E · A-Z regression suite
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: hireiq
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/hireiq
+      AUTH_SECRET: ci-auth-secret-for-pipeline-only
+      APP_URL: http://localhost:4000
+      ADMIN_EMAIL: admin@hireiq.local
+      ADMIN_NAME: CI Admin
+      ADMIN_PASSWORD: CiAdmin!2024
+      BOOTSTRAP_PASSWORD: CiPass!2024
+      HIREIQ_CREDENTIAL_ENCRYPTION_KEY: ci-encryption-key-not-real
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        run: pnpm prisma migrate deploy
+
+      - name: Seed admin user
+        run: pnpm db:bootstrap-admin
+
+      - name: Seed assessment bank
+        run: pnpm db:seed-assessment-bank
+
+      - name: Seed demo world
+        run: pnpm db:bootstrap-dev
+
+      - name: Start dev server
+        run: |
+          nohup pnpm dev > /tmp/dev-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/ || true)
+            [ "$code" = "200" ] && break
+            sleep 2
+          done
+          curl -s -o /dev/null -w "server ready: %{http_code}\n" http://localhost:4000/
+
+      - name: Run A-Z regression suite
+        run: BASE=http://localhost:4000 bash scripts/az-regression.sh
+
+      - name: Upload dev server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-server-log
+          path: /tmp/dev-server.log
