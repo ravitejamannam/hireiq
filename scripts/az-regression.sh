@@ -74,7 +74,7 @@ check "public job soft-404 fixed" "$J404" "404"
 echo "════ SECTION 3: ROLES ════"
 JAR=/tmp/az-admin.txt; rm -f $JAR
 CSRF=$(curl -s -c $JAR "$BASE/api/auth/csrf" | python3 -c "import sys,json;print(json.load(sys.stdin)['csrfToken'])")
-curl -s -b $JAR -c $JAR -X POST "$BASE/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$CSRF" --data-urlencode "email=admin@hireiq.local" --data-urlencode "password=DevAdmin!2024" -o /dev/null
+curl -s -b $JAR -c $JAR -X POST "$BASE/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$CSRF" --data-urlencode "email=${ADMIN_EMAIL:-admin@hireiq.local}" --data-urlencode "password=${ADMIN_PASSWORD}" -o /dev/null
 SESS=$(curl -s -b $JAR "$BASE/api/auth/session" | python3 -c "import sys,json;print(json.load(sys.stdin).get('user',{}).get('role','NONE'))")
 check "ADMIN session role" "$SESS" "ADMIN"
 for u in "/dashboard/calibration" "/dashboard/assessment-bank" "/dashboard/integrations" "/dashboard/integrations/feeds" "/dashboard/requirements/1/blueprint"; do
@@ -85,9 +85,9 @@ done
 # client + interviewer isolation
 rm -f /tmp/az-c.txt /tmp/az-i.txt
 C2=$(curl -s -c /tmp/az-c.txt "$BASE/api/auth/csrf" | python3 -c "import sys,json;print(json.load(sys.stdin)['csrfToken'])")
-curl -s -b /tmp/az-c.txt -c /tmp/az-c.txt -X POST "$BASE/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$C2" --data-urlencode "email=owner.acme@hireiq.local" --data-urlencode "password=DevPass!2024" -o /dev/null
+curl -s -b /tmp/az-c.txt -c /tmp/az-c.txt -X POST "$BASE/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$C2" --data-urlencode "email=owner.nimbus@hireiq.local" --data-urlencode "password=${ADMIN_PASSWORD}" -o /dev/null
 I2=$(curl -s -c /tmp/az-i.txt "$BASE/api/auth/csrf" | python3 -c "import sys,json;print(json.load(sys.stdin)['csrfToken'])")
-curl -s -b /tmp/az-i.txt -c /tmp/az-i.txt -X POST "$BASE/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$I2" --data-urlencode "email=interviewer.priya@hireiq.local" --data-urlencode "password=DevPass!2024" -o /dev/null
+curl -s -b /tmp/az-i.txt -c /tmp/az-i.txt -X POST "$BASE/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$I2" --data-urlencode "email=interviewer.arjun@hireiq.local" --data-urlencode "password=${ADMIN_PASSWORD}" -o /dev/null
 CC=$(curl -s -b /tmp/az-c.txt -o /dev/null -w "%{http_code}" "$BASE/client/requirements")
 IC=$(curl -s -b /tmp/az-i.txt -o /dev/null -w "%{http_code}" "$BASE/interviewer/requirements")
 check "CLIENT portal" "$CC" "200"
@@ -96,7 +96,8 @@ XT=$(curl -s -b /tmp/az-c.txt -o /dev/null -w "%{http_code}" "$BASE/client/requi
 check "client sees own requirement 1" "$XT" "200"
 
 echo "════ SECTION 4: INTEGRITY + DECISION SUPPORT ════"
-SIGS=$(curl -s -b $JAR "$BASE/dashboard/candidates/223" | grep -c "ASSESSMENT")
+AZC=$(psql "$DB" -t -A -c 'SELECT id FROM "Candidate" WHERE name='\''AZ Test'\'' LIMIT 1;')
+SIGS=$(curl -s -b $JAR "$BASE/dashboard/candidates/$AZC" | grep -c "Hiring signals")
 check "decision-support signals render" "$([ "$SIGS" -ge 1 ] && echo yes || echo no)" "yes"
 CAL=$(curl -s -b $JAR -o /dev/null -w "%{http_code}" "$BASE/dashboard/calibration")
 check "calibration page" "$CAL" "200"
