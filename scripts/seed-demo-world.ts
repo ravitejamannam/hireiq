@@ -716,7 +716,9 @@ async function assignedInterviewer(jobId: number): Promise<number> {
 }
 
 main()
-  .then(() => {
+  .then(async () => {
+    console.log("\n✓ structural seed complete");
+    await runNarrative();
     console.log("\n✓ demo world seeded");
     process.exit(0);
   })
@@ -724,3 +726,179 @@ main()
     console.error("seed failed:", error.message);
     process.exit(1);
   });
+
+// ══════════════════════════════════════════════════════════════════
+// T106 NARRATIVE LAYER — turns fixture data into a believable hiring
+// story with staged timestamps, rich candidate profiles, and a full
+// lifecycle arc. Runs AFTER the structural seed and backdates rows.
+// ══════════════════════════════════════════════════════════════════
+
+// ────────────────────────── narrative data ──────────────────────────
+
+const daysAgo = (n: number, hour = 10) => {
+  const d = new Date(Date.now() - n * 86400000);
+  d.setUTCHours(hour, 20, 0, 0);
+  return d;
+};
+
+type StoryArc = {
+  fixtureEmail: string;
+  identity: {
+    name: string;
+    employer: string;
+    skills: string;
+    expectedCTC: string;
+    linkedIn: string;
+    location: string;
+  };
+  appliedDaysAgo: number;
+  assessedDaysAgo: number | null;
+  scoreFraction: number | null;
+  integrity?: { tabSwitches: number; pastes: number; copies: number };
+  decidedDaysAgo?: number; // evaluation / stage-decision moment
+};
+
+const STORY: StoryArc[] = [
+  {
+    fixtureEmail: "ananya.demo@example.com",
+    identity: {
+      name: "Priya Raghavan",
+      employer: "Razorpay",
+      skills: "Go, Kubernetes, gRPC, PostgreSQL, Redis",
+      expectedCTC: "₹58L",
+      linkedIn: "https://linkedin.com/in/priya-raghavan-eng",
+      location: "Bengaluru",
+    },
+    appliedDaysAgo: 12,
+    assessedDaysAgo: 9,
+    scoreFraction: 1.0,
+    decidedDaysAgo: 4,
+  },
+  {
+    fixtureEmail: "rohit.demo@example.com",
+    identity: {
+      name: "Arjun Nair",
+      employer: "Swiggy",
+      skills: "Java, Kafka, Microservices, MySQL",
+      expectedCTC: "₹42L",
+      linkedIn: "https://linkedin.com/in/arjun-nair-backend",
+      location: "Remote (Kochi)",
+    },
+    appliedDaysAgo: 5,
+    assessedDaysAgo: 3,
+    scoreFraction: 0.78,
+    integrity: { tabSwitches: 3, pastes: 0, copies: 1 },
+  },
+  {
+    fixtureEmail: "meera.demo@example.com",
+    identity: {
+      name: "Vikram Menon",
+      employer: "Flipkart",
+      skills: "Python, Django, REST APIs",
+      expectedCTC: "₹30L",
+      linkedIn: "https://linkedin.com/in/vikram-menon-dev",
+      location: "Bengaluru",
+    },
+    appliedDaysAgo: 10,
+    assessedDaysAgo: 8,
+    scoreFraction: 0.33,
+  },
+];
+
+/** Rewrite identities + backdate the story after the structural seed. */
+async function runNarrative() {
+  for (const arc of STORY) {
+    const applied = daysAgo(arc.appliedDaysAgo);
+    const submission = await prisma.hostedApplySubmission.findFirst({
+      where: { emailNormalized: arc.identity.linkedIn ? undefined : undefined, OR: [{ emailNormalized: { contains: arc.fixtureEmail.split("@")[0] } }] },
+      select: { id: true },
+      orderBy: { id: "desc" },
+    }).catch(() => null);
+    void submission;
+
+    const event = await prisma.applicationIngestionEvent.findFirst({
+      where: { hostedApplySubmission: { is: { emailNormalized: { contains: arc.fixtureEmail.split("@")[0] } } } },
+      select: { applicationId: true, candidateId: true, companyId: true },
+      orderBy: { id: "desc" },
+    });
+    if (!event?.applicationId || !event.candidateId) continue;
+
+    // Identity + richness
+    await prisma.candidate.update({
+      where: { id: event.candidateId },
+      data: {
+        name: arc.identity.name,
+        currentEmployer: arc.identity.employer,
+        skills: arc.identity.skills,
+        expectedCTC: arc.identity.expectedCTC,
+        location: arc.identity.location,
+      },
+    });
+    const profile = await prisma.candidateProfile.findFirst({
+      where: { candidateId: event.candidateId },
+      select: { id: true },
+    });
+    if (profile) {
+      await prisma.candidateProfile.update({
+        where: { id: profile.id },
+        data: {
+          headline: `${arc.identity.skills.split(",")[0]} engineer at ${arc.identity.employer}`,
+        },
+      });
+    }
+
+    // Backdate the paper trail
+    await prisma.hostedApplySubmission.updateMany({
+      where: { emailNormalized: { contains: arc.fixtureEmail.split("@")[0] } },
+      data: { createdAt: applied },
+    });
+    await prisma.applicationIngestionEvent.updateMany({
+      where: { candidateId: event.candidateId },
+      data: { createdAt: applied, processedAt: applied },
+    });
+    await prisma.candidate.update({
+      where: { id: event.candidateId },
+      data: { createdAt: applied, updatedAt: applied },
+    });
+    await prisma.application.updateMany({
+      where: { candidateId: event.candidateId },
+      data: { createdAt: applied, updatedAt: applied },
+    });
+
+    // Assessment timing
+    if (arc.assessedDaysAgo !== null) {
+      const attemptedAt = daysAgo(arc.assessedDaysAgo);
+      await prisma.assessmentAttempt.updateMany({
+        where: { invite: { applicationId: event.applicationId } },
+        data: {
+          startedAt: attemptedAt,
+          submittedAt: attemptedAt,
+          createdAt: daysAgo(arc.appliedDaysAgo),
+        },
+      });
+    }
+
+    // Evaluation / decision timing
+    if (arc.decidedDaysAgo) {
+      const decidedAt = daysAgo(arc.decidedDaysAgo);
+      await prisma.evaluation.updateMany({
+        where: { applicationId: event.applicationId },
+        data: { evaluatedAt: decidedAt },
+      });
+      await prisma.interview.updateMany({
+        where: { applicationId: event.applicationId },
+        data: { interviewAt: daysAgo(arc.decidedDaysAgo + 1, 14) },
+      });
+      await prisma.codingTest.updateMany({
+        where: { applicationId: event.applicationId },
+        data: { takenAt: daysAgo(arc.decidedDaysAgo + 2, 16) },
+      });
+      await prisma.report.updateMany({
+        where: { applicationId: event.applicationId },
+        data: { createdAt: decidedAt, updatedAt: decidedAt },
+      });
+      void decidedAt;
+    }
+  }
+  console.log("✓ narrative layer applied");
+}

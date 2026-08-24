@@ -125,10 +125,12 @@ export default async function CandidateProfilePage({
         </Link>
       </div>
 
-      <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-        Candidate Profile
+      <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
+        Candidate
       </p>
-      <h1 className="mt-2 text-3xl font-bold text-black">{profile.name}</h1>
+      <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
+        {profile.name}
+      </h1>
       <p className="mt-2 text-zinc-600">
         {profile.headline ?? "Headline not provided"}
       </p>
@@ -148,6 +150,7 @@ export default async function CandidateProfilePage({
           <CandidateSignalsPanel candidateId={candidateId} />
         </div>
       ) : null}
+
 
       {identity ? <CandidateIdentityPanel identity={identity} /> : null}
 

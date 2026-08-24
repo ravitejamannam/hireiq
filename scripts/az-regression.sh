@@ -97,7 +97,7 @@ check "client sees own requirement 1" "$XT" "200"
 
 echo "════ SECTION 4: INTEGRITY + DECISION SUPPORT ════"
 AZC=$(psql "$DB" -t -A -c 'SELECT id FROM "Candidate" WHERE name='\''AZ Test'\'' LIMIT 1;')
-SIGS=$(curl -s -b $JAR "$BASE/dashboard/candidates/$AZC" | grep -c "Hiring signals")
+SIGS=$(curl -s -b $JAR "$BASE/dashboard/candidates/$AZC" | grep -c "Decision support")
 check "decision-support signals render" "$([ "$SIGS" -ge 1 ] && echo yes || echo no)" "yes"
 CAL=$(curl -s -b $JAR -o /dev/null -w "%{http_code}" "$BASE/dashboard/calibration")
 check "calibration page" "$CAL" "200"
