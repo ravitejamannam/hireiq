@@ -85,9 +85,9 @@ done
 # client + interviewer isolation
 rm -f /tmp/az-c.txt /tmp/az-i.txt
 C2=$(curl -s -c /tmp/az-c.txt "$BASE/api/auth/csrf" | python3 -c "import sys,json;print(json.load(sys.stdin)['csrfToken'])")
-curl -s -b /tmp/az-c.txt -c /tmp/az-c.txt -X POST "$BASE/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$C2" --data-urlencode "email=owner.nimbus@hireiq.local" --data-urlencode "password=${ADMIN_PASSWORD}" -o /dev/null
+curl -s -b /tmp/az-c.txt -c /tmp/az-c.txt -X POST "$BASE/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$C2" --data-urlencode "email=owner.nimbus@hireiq.local" --data-urlencode "password=${BOOTSTRAP_PASSWORD:-$ADMIN_PASSWORD}" -o /dev/null
 I2=$(curl -s -c /tmp/az-i.txt "$BASE/api/auth/csrf" | python3 -c "import sys,json;print(json.load(sys.stdin)['csrfToken'])")
-curl -s -b /tmp/az-i.txt -c /tmp/az-i.txt -X POST "$BASE/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$I2" --data-urlencode "email=interviewer.arjun@hireiq.local" --data-urlencode "password=${ADMIN_PASSWORD}" -o /dev/null
+curl -s -b /tmp/az-i.txt -c /tmp/az-i.txt -X POST "$BASE/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$I2" --data-urlencode "email=interviewer.arjun@hireiq.local" --data-urlencode "password=${BOOTSTRAP_PASSWORD:-$ADMIN_PASSWORD}" -o /dev/null
 CC=$(curl -s -b /tmp/az-c.txt -o /dev/null -w "%{http_code}" "$BASE/client/requirements")
 IC=$(curl -s -b /tmp/az-i.txt -o /dev/null -w "%{http_code}" "$BASE/interviewer/requirements")
 check "CLIENT portal" "$CC" "200"
