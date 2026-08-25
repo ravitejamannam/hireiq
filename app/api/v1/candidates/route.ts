@@ -1,0 +1,100 @@
+import { NextResponse } from "next/server";
+
+import { resolveCompanyFromApiKey } from "@/lib/api/api-keys";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+const NO_STORE = { "Cache-Control": "no-store" };
+
+/**
+ * GET /api/v1/candidates — public API v0 (T112 expansion).
+ *
+ * Bearer API key required. Returns candidate records scoped to the
+ * API key's company: name, role, skills, experience, location,
+ * pipeline status, and assessment scores.
+ */
+export async function GET(request: Request) {
+  let companyId: number | null;
+  try {
+    companyId = await resolveCompanyFromApiKey(request.headers.get("authorization"));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("SECRET_UNCONFIGURED")) {
+      return NextResponse.json(
+        { ok: false, error: "API keys are not configured on this deployment." },
+        { status: 503, headers: NO_STORE },
+      );
+    }
+    throw error;
+  }
+  if (!companyId) {
+    return NextResponse.json(
+      { ok: false, error: "Invalid or revoked API key." },
+      { status: 401, headers: NO_STORE },
+    );
+  }
+
+  const url = new URL(request.url);
+  const search = url.searchParams.get("search")?.trim().toLowerCase() ?? "";
+
+  const where: Record<string, unknown> = { companyId };
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: "insensitive" } },
+      { skills: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  const candidates = await prisma.candidate.findMany({
+    where,
+    select: {
+      id: true,
+      name: true,
+      role: true,
+      experienceYears: true,
+      location: true,
+      skills: true,
+      currentEmployer: true,
+      expectedCTC: true,
+      status: true,
+      createdAt: true,
+      applications: {
+        select: {
+          id: true,
+          status: true,
+          job: { select: { title: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+
+  return NextResponse.json(
+    {
+      ok: true,
+      count: candidates.length,
+      candidates: candidates.map((c) => ({
+        id: c.id,
+        name: c.name,
+        role: c.role,
+        currentEmployer: c.currentEmployer,
+        skills: c.skills?.split(",").map((s) => s.trim()).filter(Boolean),
+        experienceYears: c.experienceYears,
+        location: c.location,
+        expectedCTC: c.expectedCTC,
+        status: c.status,
+        latestApplication: c.applications[0]
+          ? {
+              id: c.applications[0].id,
+              status: c.applications[0].status,
+              jobTitle: c.applications[0].job.title,
+            }
+          : null,
+        addedOn: c.createdAt.toISOString(),
+      })),
+    },
+    { headers: NO_STORE },
+  );
+}
