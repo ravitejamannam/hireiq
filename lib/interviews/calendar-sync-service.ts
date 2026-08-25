@@ -296,7 +296,7 @@ async function syncSlotsCore(input: {
   const taken = new Set(existing.map((e) => e.startAt.toISOString()));
   const fresh = proposals.filter((p) => !taken.has(p.startAt.toISOString()));
 
-  const created = await prisma.interviewSlot.createMany({
+  await prisma.interviewSlot.createMany({
     data: fresh.map((p) => ({
       jobId,
       interviewerId: assignedInterviewerId,
