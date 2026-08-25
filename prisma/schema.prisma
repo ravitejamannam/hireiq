@@ -907,6 +907,7 @@ model Application {
   /// Denormalized tenant key enforcing Candidate.companyId === Job.companyId
   /// via composite foreign keys (database defense-in-depth).
   companyId   Int
+  statusTokenHash String? @unique
 
   candidate Candidate @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
   job       Job       @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)

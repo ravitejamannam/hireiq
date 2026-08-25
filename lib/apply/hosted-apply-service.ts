@@ -116,6 +116,21 @@ export async function resolvePublicHostedApply(token: string) {
   return toPublicHostedApplyPage(payload);
 }
 
+
+async function statusTokenForApplication(applicationId: number | null): Promise<string | null> {
+  if (!applicationId) return null;
+  try {
+    const { ensureStatusToken, buildStatusUrl } = await import(
+      "@/lib/candidates/status-tracking"
+    );
+    const raw = await ensureStatusToken(applicationId);
+    return buildStatusUrl(raw);
+  } catch {
+    return null; // idempotent replay already has one
+  }
+}
+
+
 async function ingestReceivedSubmission(submissionId: number) {
   return ingestHostedApplySubmission(submissionId);
 }
@@ -149,6 +164,7 @@ export async function submitHostedApply(input: {
     return {
       success: true as const,
       assessmentUrl: await assessmentUrlForApplication(ingested.applicationId),
+      statusToken: await statusTokenForApplication(ingested.applicationId),
     };
   }
 
@@ -196,6 +212,18 @@ export async function submitHostedApply(input: {
       });
     }
 
+    // T116: generate candidate-facing status tracking token
+    let statusToken: string | null = null;
+    try {
+      const { ensureStatusToken, buildStatusUrl } = await import(
+        "@/lib/candidates/status-tracking"
+      );
+      statusToken = await ensureStatusToken(created.id);
+      void buildStatusUrl; // available for future email inclusion
+    } catch {
+      // TOKEN_ALREADY_EXISTS on idempotent replay — fine, keep existing.
+    }
+
     console.info("[hosted-apply] received", {
       ok: true,
       distributionId: row.distribution.id,
@@ -206,6 +234,7 @@ export async function submitHostedApply(input: {
     return {
       success: true as const,
       assessmentUrl: await assessmentUrlForApplication(ingested.applicationId),
+      statusToken: await statusTokenForApplication(ingested.applicationId),
     };
   } catch (error) {
     if (
