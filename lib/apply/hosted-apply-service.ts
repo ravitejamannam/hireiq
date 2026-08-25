@@ -212,17 +212,6 @@ export async function submitHostedApply(input: {
       });
     }
 
-    // T116: generate candidate-facing status tracking token
-    try {
-      const { ensureStatusToken, buildStatusUrl } = await import(
-        "@/lib/candidates/status-tracking"
-      );
-      statusToken = await ensureStatusToken(created.id);
-      void buildStatusUrl; // available for future email inclusion
-    } catch {
-      // TOKEN_ALREADY_EXISTS on idempotent replay — fine, keep existing.
-    }
-
     console.info("[hosted-apply] received", {
       ok: true,
       distributionId: row.distribution.id,
