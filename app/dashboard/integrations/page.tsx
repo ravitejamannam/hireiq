@@ -3,7 +3,9 @@ import Link from "next/link";
 import StatCard from "@/components/dashboard/StatCard";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { getWebhookDeliveryHealth, listWebhookDeliveries } from "@/lib/jobs/distribution/webhook-delivery-admin";
+import ApiTokenManager from "@/components/integrations/ApiTokenManager";
 import RunReconciliationButton from "@/components/integrations/RunReconciliationButton";
+import { prisma } from "@/lib/prisma";
 import { getLatestReconciliationHealth } from "@/lib/jobs/distribution/reconciliation";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +36,12 @@ type PageProps = {
 export default async function IntegrationsPage({ searchParams }: PageProps) {
   await requireAdmin();
   const { status } = await searchParams;
+
+  const apiTokens = await prisma.apiToken.findMany({
+    where: { companyId: 1 },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, name: true, createdAt: true, revokedAt: true },
+  });
 
   const [health, deliveries, recon] = await Promise.all([
     getWebhookDeliveryHealth(),
@@ -96,6 +104,16 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
         />
         <StatCard title="Rejected" value={health.rejected} />
       </div>
+
+      <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
+        <h2 className="font-semibold text-zinc-900">API keys</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Bearer keys for programmatic access to /api/v1 endpoints.
+        </p>
+        <div className="mt-4">
+          <ApiTokenManager initialTokens={[]} />
+        </div>
+      </section>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
