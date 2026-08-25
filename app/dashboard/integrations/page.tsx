@@ -67,6 +67,28 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
       </header>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <section className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-6">
+        <h2 className="font-semibold text-zinc-900">Google Calendar</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Connect a Google account to auto-generate interview slots from
+          free/busy availability.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <a
+            href="/api/integrations/google/connect"
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700"
+          >
+            Connect Google Calendar
+          </a>
+          <Link
+            href="/dashboard/integrations/feeds"
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+          >
+            Manage public feeds →
+          </Link>
+        </div>
+      </section>
+
         <StatCard title="Accepted" value={health.accepted} />
         <StatCard
           title="Quarantined"

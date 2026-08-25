@@ -1094,6 +1094,7 @@ model User {
   @@index([companyId])
   @@index([role])
   resumesUploaded CandidateResumeDocument[] @relation("ResumeUploadedBy")
+  calendarIntegration InterviewerCalendarIntegration? @relation("UserCalendarIntegration")
 }
 
 model OrganizationMember {
@@ -1667,6 +1668,23 @@ model EvaluationCompetencyScore {
   evaluation Evaluation @relation("EvaluationCompetencyScores", fields: [evaluationId], references: [id], onDelete: Restrict)
 
   @@unique([evaluationId, competencyName])
+}
+
+/// T115: Google Calendar OAuth link for an interviewer's User account.
+/// Tokens are AES-256-GCM encrypted at rest (HIREIQ_CREDENTIAL_ENCRYPTION_KEY).
+model InterviewerCalendarIntegration {
+  id                  Int      @id @default(autoincrement())
+  userId              Int      @unique
+  provider            String   @default("GOOGLE")
+  calendarId          String   @default("primary")
+  accessTokenEnc      String
+  refreshTokenEnc     String
+  expiresAt           DateTime
+  lastSyncedAt        DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation("UserCalendarIntegration", fields: [userId], references: [id], onDelete: Restrict)
 }
 
 /// T96 Phase 4: result of checking one PUBLISHED distribution against its
