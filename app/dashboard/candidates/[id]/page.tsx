@@ -8,6 +8,7 @@ import CandidateMatchingPanel from "@/components/candidates/CandidateMatchingPan
 import CandidateProfileForm from "@/components/candidates/CandidateProfileForm";
 import CandidateResumePanel from "@/components/candidates/CandidateResumePanel";
 import CandidateSignalsPanel from "@/components/candidates/CandidateSignalsPanel";
+import CandidateEraseButton from "@/components/candidates/CandidateEraseButton";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import {
   formatClientDate,
@@ -124,13 +125,19 @@ export default async function CandidateProfilePage({
           ← Back to Candidates
         </Link>
         {candidateId ? (
-          <a
-            href={`/api/candidates/${candidateId}/export`}
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
-            title="Download all data held about this candidate (GDPR Art. 15)"
-          >
-            ⬇ Export candidate data (GDPR)
-          </a>
+          <div className="flex items-center gap-4">
+            <a
+              href={`/api/candidates/${candidateId}/export`}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+              title="Download all data held about this candidate (GDPR Art. 15)"
+            >
+              ⬇ Export candidate data (GDPR)
+            </a>
+            <CandidateEraseButton
+              candidateId={candidateId}
+              candidateName={profile.name}
+            />
+          </div>
         ) : null}
       </div>
 
