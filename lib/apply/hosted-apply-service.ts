@@ -213,7 +213,6 @@ export async function submitHostedApply(input: {
     }
 
     // T116: generate candidate-facing status tracking token
-    let statusToken: string | null = null;
     try {
       const { ensureStatusToken, buildStatusUrl } = await import(
         "@/lib/candidates/status-tracking"
