@@ -1,5 +1,6 @@
 "use server";
 
+import { notifyCandidateOfStageChange } from "@/lib/candidates/stage-change-emails";
 import { dispatchWebhookEvent } from "@/lib/interviews/webhook-dispatch";
 
 import {
@@ -450,6 +451,11 @@ export async function transitionApplicationStatus(
   } catch {
     // revalidatePath requires a Next.js request context
   }
+
+  // T117: notify candidate of stage change (best-effort, never blocks)
+  void notifyCandidateOfStageChange(applicationId, nextStatus).catch(
+    (error) => console.error("[stage-email] failed", error),
+  );
 
   return updatedApplication;
 
