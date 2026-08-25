@@ -1,5 +1,7 @@
 "use server";
 
+import { dispatchWebhookEvent } from "@/lib/interviews/webhook-dispatch";
+
 import {
   AuthorizationError,
   requireAdmin,
@@ -401,12 +403,15 @@ export async function transitionApplicationStatus(
       id: true,
       status: true,
       jobId: true,
+      companyId: true,
     },
   });
 
   if (!application) {
     throw new Error("Application not found.");
   }
+
+  const companyId = application.companyId;
 
   assertAdminPipelineTransition(application.status, nextStatus);
   // Admin pipeline ownership: [ApplicationPipelineStatus.SELECTED]: [],
@@ -447,6 +452,18 @@ export async function transitionApplicationStatus(
   }
 
   return updatedApplication;
+
+    // T112: fire outbound webhook for subscribed partners (best-effort).
+    void dispatchWebhookEvent({
+      event: "application.status_changed",
+      companyId,
+      data: {
+        applicationId,
+        previousStatus: application!.status as string,
+        newStatus: nextStatus as string,
+        changedAt: new Date().toISOString(),
+      },
+    }).catch(() => undefined);
 }
 
 /**

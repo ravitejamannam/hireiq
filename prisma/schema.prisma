@@ -350,6 +350,7 @@ model Company {
   jobRankingResults         JobRankingResult[]
   resumeDocuments CandidateResumeDocument[]
   apiTokens ApiToken[]
+  webhookSubscriptions PartnerWebhookSubscription[]
 }
 
 model Job {
@@ -1670,6 +1671,25 @@ model EvaluationCompetencyScore {
 
   @@unique([evaluationId, competencyName])
 }
+
+
+/// T112: outbound webhook subscription. Partners register a URL and
+/// receive signed JSON payloads when subscribed events fire.
+model PartnerWebhookSubscription {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  url       String
+  secretEnc String
+  events    String[] @default([])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, active])
+}
+
 
 /// T115: Google Calendar OAuth link for an interviewer's User account.
 /// Tokens are AES-256-GCM encrypted at rest (HIREIQ_CREDENTIAL_ENCRYPTION_KEY).
