@@ -3,6 +3,7 @@ import BankHealthClient from "@/components/assessments/BankHealthClient";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { listBankQuestions } from "@/lib/assessments/bank-admin-service";
 import { getAssessmentBankHealthForAdmin } from "@/lib/assessments/bank-health-service";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,9 @@ export default async function AssessmentBankPage() {
   ]);
 
   return (
-    <div className="space-y-8">
+
+    <DashboardLayout>
+          <div className="space-y-8">
       <header>
         <h1 className="text-2xl font-semibold text-zinc-900">Assessment bank</h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-500">
@@ -36,5 +39,6 @@ export default async function AssessmentBankPage() {
         <p className="text-sm text-red-600">{bank.error}</p>
       )}
     </div>
+      </DashboardLayout>
   );
 }

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { PortalRole } from "@prisma/client";
 import { useSession } from "next-auth/react";
 
@@ -19,8 +21,8 @@ import {
   Code,
   ListChecks,
   Radio,
-  Gauge,
   BarChart3,
+  Gauge,
 } from "lucide-react";
 
 const portalRoleLabels: Record<PortalRole, string> = {
@@ -123,11 +125,6 @@ const sections: NavSection[] = [
         label: "Analytics",
         href: "/dashboard/analytics",
       },
-  {
-    icon: Gauge,
-    label: "Equity",
-    href: "/dashboard/equity",
-  },
     ],
   },
 ];
@@ -155,6 +152,41 @@ export default function Sidebar() {
   const roleLabel = session?.user?.role
     ? portalRoleLabels[session.user.role]
     : null;
+
+  // T141: collapsible sidebar. Persisted per browser; defaults to open.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    // Reading a browser-only preference post-mount is the correct
+    // SSR-safe pattern here; the cascading-render heuristic doesn't apply.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCollapsed(window.localStorage.getItem("hireiq-sidebar-collapsed") === "1");
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem("hireiq-sidebar-collapsed", next ? "1" : "0");
+      } catch {
+        // storage unavailable — state still toggles for this session
+      }
+      return next;
+    });
+  }
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        title="Open sidebar"
+        aria-label="Open sidebar"
+        className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-xl border border-stone-200/80 bg-white text-stone-600 shadow-md transition hover:border-stone-300 hover:text-stone-900"
+      >
+        <PanelLeftOpen size={18} />
+      </button>
+    );
+  }
 
   return (
     <>
@@ -189,6 +221,7 @@ export default function Sidebar() {
 
       <aside className="hidden h-screen w-64 flex-col border-r border-stone-200/80 bg-[#FBF9F4] lg:flex">
       <div className="border-b border-stone-200/80 px-5 py-5">
+        <div className="flex items-start justify-between">
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-stone-900 text-sm font-black text-[#FBF9F4]">
             Hi
@@ -204,6 +237,16 @@ export default function Sidebar() {
             ) : null}
           </div>
         </Link>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            className="rounded-lg p-1.5 text-stone-400 transition hover:bg-white hover:text-stone-700"
+          >
+            <PanelLeftClose size={16} />
+          </button>
+        </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Admin navigation">

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { requireAdmin } from "@/lib/auth/authorization";
 import { getCalibrationReport } from "@/lib/interviews/calibration-service";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,9 @@ export default async function CalibrationPage() {
   const report = await getCalibrationReport();
 
   return (
-    <div className="space-y-8">
+
+    <DashboardLayout>
+          <div className="space-y-8">
       <header>
         <Link
           href="/dashboard/interviewers"
@@ -133,5 +136,6 @@ export default async function CalibrationPage() {
         </section>
       ) : null}
     </div>
+      </DashboardLayout>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import CopyField from "@/components/integrations/CopyField";
 import { requireAdmin } from "@/lib/auth/authorization";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import {
   getCompanyFeedDetail,
   listCompanyFeedSummaries,
@@ -41,7 +42,9 @@ export default async function FeedsPage({ searchParams }: PageProps) {
   }
 
   return (
-    <div className="space-y-8">
+
+    <DashboardLayout>
+          <div className="space-y-8">
       <header>
         <Link
           href="/dashboard/integrations"
@@ -141,5 +144,6 @@ export default async function FeedsPage({ searchParams }: PageProps) {
         <p className="text-sm text-zinc-500">No companies exist yet.</p>
       ) : null}
     </div>
+      </DashboardLayout>
   );
 }

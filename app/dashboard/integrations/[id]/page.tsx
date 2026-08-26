@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import ReplayButton from "@/components/integrations/ReplayButton";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { getWebhookDeliveryForAdmin } from "@/lib/jobs/distribution/webhook-delivery-admin";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export default async function WebhookDeliveryDetailPage({ params }: PageProps) {
   if (!delivery) notFound();
 
   return (
+    <DashboardLayout>
     <div className="mx-auto max-w-3xl space-y-6">
       <header className="flex items-center justify-between">
         <div>
@@ -96,5 +98,6 @@ export default async function WebhookDeliveryDetailPage({ params }: PageProps) {
         </section>
       ) : null}
     </div>
+    </DashboardLayout>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { requireAdmin } from "@/lib/auth/authorization";
 import { getAnalyticsReport } from "@/lib/analytics/analytics-service";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,9 @@ export default async function AnalyticsPage() {
   const maxFunnel = Math.max(...report.funnel.map((f) => f.count), 1);
 
   return (
-    <div className="space-y-8">
+
+    <DashboardLayout>
+          <div className="space-y-8">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
           Hiring analytics
@@ -162,5 +165,6 @@ export default async function AnalyticsPage() {
         </section>
       </div>
     </div>
+      </DashboardLayout>
   );
 }

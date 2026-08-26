@@ -8,6 +8,7 @@ import WebhookSubscriptionsPanel from "@/components/integrations/WebhookSubscrip
 import RunReconciliationButton from "@/components/integrations/RunReconciliationButton";
 import { prisma } from "@/lib/prisma";
 import { getLatestReconciliationHealth } from "@/lib/jobs/distribution/reconciliation";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,7 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
   ];
 
   return (
+    <DashboardLayout>
     <div className="space-y-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -275,5 +277,6 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
         )}
       </section>
     </div>
+    </DashboardLayout>
   );
 }
