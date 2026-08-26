@@ -196,6 +196,8 @@ export async function submitHostedApply(input: {
         linkedInUrl: fields.linkedInUrl,
         coverLetter: fields.coverLetter,
         consentAcceptedAt: new Date(),
+        selfIdGender: fields.selfIdGender,
+        selfIdConsentedAt: fields.selfIdGender ? new Date() : null,
         status: HostedApplySubmissionStatus.RECEIVED,
       },
       select: { id: true },

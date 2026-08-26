@@ -1354,6 +1354,11 @@ model HostedApplySubmission {
   consentAcceptedAt         DateTime
   status                    HostedApplySubmissionStatus  @default(RECEIVED)
 
+  /// T138 voluntary equality information. Optional, consented at apply,
+  /// excluded from evaluator surfaces, reported aggregate-only.
+  selfIdGender      String?
+  selfIdConsentedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -34,6 +34,8 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
   const [linkedInUrl, setLinkedInUrl] = useState("");
   const [coverLetter, setCoverLetter] = useState("");
   const [consent, setConsent] = useState(false);
+  const [showSelfId, setShowSelfId] = useState(false);
+  const [selfIdGender, setSelfIdGender] = useState<string>("");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -112,6 +114,7 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
           coverLetter: coverLetter || null,
           consent,
           resumeClaim,
+          selfIdGender: showSelfId && selfIdGender ? selfIdGender : undefined,
         }),
       });
 
@@ -336,6 +339,48 @@ export default function HostedApplyForm({ token }: HostedApplyFormProps) {
           <FieldError message={errors.coverLetter} />
         </label>
       </fieldset>
+
+      {/* T138: voluntary equality information (optional) */}
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+        <button
+          type="button"
+          onClick={() => setShowSelfId((v) => !v)}
+          className="text-sm font-medium text-zinc-700 underline underline-offset-2 hover:text-zinc-900"
+        >
+          {showSelfId ? "− Hide voluntary equality information" : "+ Voluntary equality information (optional)"}
+        </button>
+        {showSelfId && (
+          <div className="mt-3">
+            <p className="text-xs leading-relaxed text-zinc-500">
+              You are not required to answer. This helps the hiring company
+              report on the fairness of their process in aggregate only.
+              It is never shown to interviewers and never affects your
+              evaluation.
+            </p>
+            <div className="mt-3 space-y-2">
+              {[
+                ["WOMAN", "Woman"],
+                ["MAN", "Man"],
+                ["NON_BINARY", "Non-binary"],
+                ["SELF_DESCRIBE", "Prefer to self-describe"],
+                ["PREFER_NOT_TO_SAY", "Prefer not to say"],
+              ].map(([value, label]) => (
+                <label key={value} className="flex items-center gap-2 text-sm text-zinc-700">
+                  <input
+                    type="radio"
+                    name="selfIdGender"
+                    checked={selfIdGender === value}
+                    onChange={() => setSelfIdGender(value)}
+                    disabled={pending}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Consent + submit */}
       <div className="space-y-4 border-t border-zinc-200 pt-5">

@@ -116,6 +116,83 @@ function shuffle<T>(items: T[]): T[] {
   return copy;
 }
 
+/** T137 target difficulty mix of ASSESSMENT_QUESTIONS_PER_INVITE. */
+const ADAPTIVE_MIX: Array<{ difficulty: "EASY" | "MEDIUM" | "HARD"; share: number }> = [
+  { difficulty: "EASY", share: 0.4 },
+  { difficulty: "MEDIUM", share: 0.4 },
+  { difficulty: "HARD", share: 0.2 },
+];
+
+type AdaptiveQuestion = {
+  id: number;
+  prompt: string;
+  choices: unknown;
+  correctIndex: number;
+  weight: number;
+  difficulty: "EASY" | "MEDIUM" | "HARD";
+};
+
+/**
+ * Draw a difficulty-balanced, randomised subset. Targets per tier come
+ * from ADAPTIVE_MIX shares; tiers that are short donate their deficit to
+ * other tiers (largest first). Selection within a tier is randomised
+ * over the least-used pool (2x tier target) for leakage protection.
+ */
+export function selectAdaptiveMix<T extends AdaptiveQuestion>(
+  questions: T[],
+): T[] {
+  if (questions.length <= ASSESSMENT_QUESTIONS_PER_INVITE) {
+    return shuffle(questions);
+  }
+
+  const byTier = new Map<string, T[]>();
+  for (const q of questions) {
+    const list = byTier.get(q.difficulty) ?? [];
+    list.push(q);
+    byTier.set(q.difficulty, list);
+  }
+
+  // Target counts per tier.
+  const targets = ADAPTIVE_MIX.map(({ difficulty, share }) => ({
+    difficulty,
+    count: Math.min(
+      Math.floor(ASSESSMENT_QUESTIONS_PER_INVITE * share),
+      byTier.get(difficulty)?.length ?? 0,
+    ),
+  }));
+
+  // Redistribute unmet target to tiers with surplus availability.
+  let remaining = ASSESSMENT_QUESTIONS_PER_INVITE - targets.reduce((s, t) => s + t.count, 0);
+  while (remaining > 0) {
+    const donor = targets
+      .map((t) => ({
+        ...t,
+        available: byTier.get(t.difficulty)?.length ?? 0,
+      }))
+      .filter((t) => t.available > t.count)
+      .sort((a, b) => b.available - b.count - (a.available - a.count))[0];
+    if (!donor) break;
+    donor.count += 1;
+    remaining -= 1;
+  }
+
+  const picked: T[] = [];
+  for (const { difficulty, count } of targets) {
+    const pool = byTier.get(difficulty) ?? [];
+    const poolSize = Math.min(pool.length, Math.max(count * RANDOMISATION_POOL_FACTOR, count));
+    picked.push(...shuffle(pool.slice(0, poolSize)).slice(0, count));
+  }
+
+  // Safety net: top up from anything unused if still short (shouldn't happen).
+  if (picked.length < ASSESSMENT_QUESTIONS_PER_INVITE) {
+    const chosenIds = new Set(picked.map((q) => q.id));
+    const leftovers = shuffle(questions.filter((q) => !chosenIds.has(q.id)));
+    picked.push(...leftovers.slice(0, ASSESSMENT_QUESTIONS_PER_INVITE - picked.length));
+  }
+
+  return picked;
+}
+
 async function loadQuestionsForCategory(
   roleCategory: RoleCategory,
   db: Db,
@@ -132,6 +209,7 @@ async function loadQuestionsForCategory(
       choices: true,
       correctIndex: true,
       weight: true,
+      difficulty: true,
     },
   });
 
@@ -139,19 +217,11 @@ async function loadQuestionsForCategory(
     throw new AssessmentError(ASSESSMENT_BANK_EMPTY, "UNAVAILABLE");
   }
 
-  // T126: randomise within the least-used pool so consecutive invites see
-  // different items even when usage counters tie, further limiting leakage.
-  const poolSize = Math.min(
-    questions.length,
-    ASSESSMENT_QUESTIONS_PER_INVITE * RANDOMISATION_POOL_FACTOR,
-  );
-  const selected =
-    questions.length > ASSESSMENT_QUESTIONS_PER_INVITE
-      ? shuffle(questions.slice(0, poolSize)).slice(
-          0,
-          ASSESSMENT_QUESTIONS_PER_INVITE,
-        )
-      : questions;
+  // T137: adaptive selection — draw a difficulty-balanced mix from the
+  // least-used questions in each tier (TestGorilla-style), falling back
+  // across tiers when one runs short. Randomisation inside each tier
+  // preserves T126's leakage protection.
+  const selected = selectAdaptiveMix(questions);
 
   if (options.incrementUsage && selected.length > 0) {
     await db.assessmentBankQuestion.updateMany({

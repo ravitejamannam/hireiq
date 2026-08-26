@@ -28,7 +28,11 @@ export type HostedApplySubmitInput = {
   linkedInUrl: string | null;
   coverLetter: string | null;
   consentAccepted: true;
+  /// T138 voluntary equality information (optional, aggregate-only use).
+  selfIdGender: string | null;
 };
+
+const SELF_ID_ALLOWED = new Set(["WOMAN", "MAN", "NON_BINARY", "SELF_DESCRIBE", "PREFER_NOT_TO_SAY"]);
 
 function rejectControls(value: string, field: string, fields: Record<string, string>) {
   if (CONTROL_CHARS.test(value)) {
@@ -129,6 +133,13 @@ export function validateHostedApplySubmitBody(body: unknown): HostedApplySubmitI
     fields.consent = "Consent is required.";
   }
 
+  // T138: optional self-ID. Absent = not provided; invalid values are
+  // silently dropped rather than blocking the application.
+  const selfIdGenderRaw =
+    typeof record.selfIdGender === "string" ? record.selfIdGender.trim() : "";
+  const selfIdGender =
+    selfIdGenderRaw && SELF_ID_ALLOWED.has(selfIdGenderRaw) ? selfIdGenderRaw : null;
+
   const phoneRaw = optionalTrimmed(record.phone);
   if (phoneRaw === undefined) {
     fields.phone = "Phone is invalid.";
@@ -206,5 +217,6 @@ export function validateHostedApplySubmitBody(body: unknown): HostedApplySubmitI
     linkedInUrl: typeof linkedInRaw === "string" ? linkedInRaw : null,
     coverLetter: typeof coverRaw === "string" ? coverRaw : null,
     consentAccepted: true,
+    selfIdGender,
   };
 }

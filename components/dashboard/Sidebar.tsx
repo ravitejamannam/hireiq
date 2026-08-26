@@ -123,6 +123,11 @@ const sections: NavSection[] = [
         label: "Analytics",
         href: "/dashboard/analytics",
       },
+  {
+    icon: Gauge,
+    label: "Equity",
+    href: "/dashboard/equity",
+  },
     ],
   },
 ];
