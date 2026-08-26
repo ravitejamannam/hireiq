@@ -73,6 +73,19 @@ function PipelineClientInner({
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [minExperience, setMinExperience] = useState("");
+  const [maxExperience, setMaxExperience] = useState("");
+  const [skillsFilter, setSkillsFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const activeAdvancedFilters =
+    (minExperience ? 1 : 0) +
+    (maxExperience ? 1 : 0) +
+    (skillsFilter ? 1 : 0) +
+    (locationFilter ? 1 : 0) +
+    (sourceFilter ? 1 : 0);
   const [actionError, setActionError] = useState("");
   const [movingApplicationId, setMovingApplicationId] = useState<number | null>(
     null,
@@ -138,6 +151,43 @@ function PipelineClientInner({
     }
 
     if (statusFilter !== "ALL" && application.status !== statusFilter) {
+      return false;
+    }
+
+    const minExp = Number.parseInt(minExperience, 10);
+    if (!Number.isNaN(minExp)) {
+      const years = application.candidate.experienceYears ?? 0;
+      if (years < minExp) return false;
+    }
+
+    const maxExp = Number.parseInt(maxExperience, 10);
+    if (!Number.isNaN(maxExp)) {
+      const years = application.candidate.experienceYears ?? 0;
+      if (years > maxExp) return false;
+    }
+
+    const skillsQuery = skillsFilter.trim().toLowerCase();
+    if (skillsQuery) {
+      const candidateSkills = (application.candidate.skills ?? "").toLowerCase();
+      const allMatch = skillsQuery
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .every((s) => candidateSkills.includes(s));
+      if (!allMatch) return false;
+    }
+
+    const locationQuery = locationFilter.trim().toLowerCase();
+    if (
+      locationQuery &&
+      !(application.candidate.location ?? "")
+        .toLowerCase()
+        .includes(locationQuery)
+    ) {
+      return false;
+    }
+
+    if (sourceFilter && application.source !== sourceFilter) {
       return false;
     }
 
@@ -247,6 +297,80 @@ function PipelineClientInner({
             {option.label}
           </button>
         ))}
+      </div>
+
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={() => setShowFilters((v) => !v)}
+          className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+        >
+          {showFilters ? "Hide filters" : "Advanced filters"}
+          {activeAdvancedFilters > 0 && !showFilters
+            ? ` (${activeAdvancedFilters})`
+            : ""}
+        </button>
+
+        {showFilters && (
+          <div className="mt-3 grid grid-cols-1 gap-4 rounded-xl border border-zinc-200 bg-white p-5 sm:grid-cols-2 lg:grid-cols-5">
+            <label className="text-xs font-medium text-zinc-500">
+              Min experience (yrs)
+              <input
+                type="number"
+                min={0}
+                value={minExperience}
+                onChange={(e) => setMinExperience(e.target.value)}
+                placeholder="e.g. 2"
+                className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-black focus:border-black focus:outline-none"
+              />
+            </label>
+            <label className="text-xs font-medium text-zinc-500">
+              Max experience (yrs)
+              <input
+                type="number"
+                min={0}
+                value={maxExperience}
+                onChange={(e) => setMaxExperience(e.target.value)}
+                placeholder="e.g. 8"
+                className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-black focus:border-black focus:outline-none"
+              />
+            </label>
+            <label className="text-xs font-medium text-zinc-500">
+              Skills (comma-separated, all must match)
+              <input
+                value={skillsFilter}
+                onChange={(e) => setSkillsFilter(e.target.value)}
+                placeholder="react, node"
+                className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-black focus:border-black focus:outline-none"
+              />
+            </label>
+            <label className="text-xs font-medium text-zinc-500">
+              Location contains
+              <input
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+                placeholder="e.g. Bengaluru"
+                className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-black focus:border-black focus:outline-none"
+              />
+            </label>
+            <div className="flex items-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMinExperience("");
+                  setMaxExperience("");
+                  setSkillsFilter("");
+                  setLocationFilter("");
+                  setSourceFilter("");
+                }}
+                disabled={activeAdvancedFilters === 0}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-40"
+              >
+                Clear filters
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {actionError && (

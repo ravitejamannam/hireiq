@@ -17,7 +17,8 @@ export default function ApiTokenManager({
   const [tokens] = useState(initialTokens);
 
   return (
-    <table className="min-w-full divide-y divide-zinc-200 text-sm">
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-zinc-200 text-sm">
       <thead className="bg-zinc-50">
         <tr>
           {["Name", "Created", "Status"].map((h) => (
@@ -55,7 +56,8 @@ export default function ApiTokenManager({
             </tr>
           ))
         )}
-      </tbody>
-    </table>
+        </tbody>
+      </table>
+    </div>
   );
 }

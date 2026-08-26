@@ -152,7 +152,37 @@ export default function Sidebar() {
     : null;
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-zinc-200 bg-white">
+    <>
+      {/* Mobile top nav: horizontal scrolling chips */}
+      <nav
+        aria-label="Mobile navigation"
+        className="fixed inset-x-0 top-0 z-40 flex items-center gap-2 overflow-x-auto border-b border-zinc-200 bg-white px-3 py-2 lg:hidden"
+      >
+        <Link href="/dashboard" className="mr-2 shrink-0 text-lg font-bold text-black">
+          HireIQ
+        </Link>
+        {primaryLinks.concat(sections.flatMap((s) => s.links))
+          .filter((l) => !l.disabled)
+          .map((link) => {
+            const Icon = link.icon;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                  pathname === link.href
+                    ? "bg-black text-white"
+                    : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                }`}
+              >
+                <Icon size={14} aria-hidden="true" />
+                {link.label}
+              </Link>
+            );
+          })}
+      </nav>
+
+      <aside className="hidden h-screen w-64 flex-col border-r border-zinc-200 bg-white lg:flex">
       <div className="border-b border-zinc-200 p-6">
         <h2 className="text-2xl font-bold text-black">HireIQ</h2>
         {roleLabel ? (
@@ -239,15 +269,16 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="mt-auto border-t border-zinc-200 p-4">
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left font-medium text-zinc-700 transition hover:bg-zinc-100 hover:text-black"
-        >
-          <Settings size={18} className="text-zinc-600" />
-          <span>Settings</span>
-        </button>
-      </div>
-    </aside>
+        <div className="mt-auto border-t border-zinc-200 p-4">
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left font-medium text-zinc-700 transition hover:bg-zinc-100 hover:text-black"
+          >
+            <Settings size={18} className="text-zinc-600" />
+            <span>Settings</span>
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }

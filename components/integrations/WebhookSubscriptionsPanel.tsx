@@ -145,7 +145,7 @@ export default function WebhookSubscriptionsPanel({
       ) : null}
 
       {/* List */}
-      <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+      <section className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
         <table className="min-w-full divide-y divide-zinc-200 text-sm">
           <thead className="bg-zinc-50">
             <tr>
