@@ -2,10 +2,10 @@ import Link from "next/link";
 
 export default function Footer() {
   return (
-    <footer className="border-t border-zinc-200 bg-white">
+    <footer className="border-t border-stone-200 bg-[#FBF9F4]">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
         <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 text-xs font-black text-white">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-stone-900 text-xs font-black text-white">
             Hi
           </span>
           <span className="text-sm font-bold text-zinc-900">HireIQ</span>

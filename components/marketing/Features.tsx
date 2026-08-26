@@ -42,33 +42,33 @@ const PILLARS = [
 
 export default function Features() {
   return (
-    <section id="ideology" className="bg-white py-24">
+    <section id="ideology" className="border-t border-stone-200/70 bg-[#FBF9F4] py-24">
       <div className="mx-auto max-w-6xl px-6">
-        <p className="text-center text-sm font-bold uppercase tracking-widest text-indigo-600">
+        <p className="text-center text-sm font-bold uppercase tracking-widest text-[#E05B3F]">
           The ideology
         </p>
-        <h2 className="mx-auto mt-3 max-w-3xl text-center text-4xl font-black tracking-tight text-zinc-950 md:text-5xl">
+        <h2 className="mx-auto mt-3 max-w-3xl text-center text-4xl font-black tracking-tight text-stone-950 md:text-5xl">
           Built on principles competitors won&apos;t copy
         </h2>
-        <p className="mx-auto mt-4 max-w-2xl text-center text-lg text-zinc-600">
+        <p className="mx-auto mt-4 max-w-2xl text-center text-lg text-stone-600">
           Most hiring tools optimize for clicks. HireIQ is architected so
-          that trust is unavoidable — these aren&apos;t settings, they&apos;re
+          trust is unavoidable — these aren&apos;t settings, they&apos;re
           the foundation.
         </p>
 
-        <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-16 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {PILLARS.map((pillar) => (
             <article
               key={pillar.title}
-              className="group rounded-2xl border border-zinc-200 bg-white p-7 transition hover:-translate-y-1 hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-50"
+              className="rounded-3xl border border-stone-200 bg-white p-7 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-stone-200/70"
             >
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 text-indigo-600 ring-1 ring-inset ring-indigo-100">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#E05B3F]/10 text-[#E05B3F]">
                 <pillar.icon size={20} />
               </span>
-              <h3 className="mt-5 text-lg font-bold text-zinc-900">
+              <h3 className="mt-5 text-lg font-bold text-stone-900">
                 {pillar.title}
               </h3>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+              <p className="mt-2 text-sm leading-relaxed text-stone-600">
                 {pillar.body}
               </p>
             </article>

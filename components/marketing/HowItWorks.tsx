@@ -50,15 +50,15 @@ const STEPS = [
 
 export default function HowItWorks() {
   return (
-    <section id="workflow" className="bg-zinc-950 py-24">
+    <section id="workflow" className="border-t border-stone-200/70 bg-white py-24">
       <div className="mx-auto max-w-6xl px-6">
-        <p className="text-center text-sm font-bold uppercase tracking-widest text-indigo-400">
+        <p className="text-center text-sm font-bold uppercase tracking-widest text-[#E05B3F]">
           The workflow
         </p>
-        <h2 className="mx-auto mt-3 max-w-3xl text-center text-4xl font-black tracking-tight text-white md:text-5xl">
+        <h2 className="mx-auto mt-3 max-w-3xl text-center text-4xl font-black tracking-tight text-stone-950 md:text-5xl">
           From role to hire, end to end
         </h2>
-        <p className="mx-auto mt-4 max-w-2xl text-center text-lg text-zinc-400">
+        <p className="mx-auto mt-4 max-w-2xl text-center text-lg text-stone-600">
           One platform for the entire journey — no duct-taped tools, no
           lost context, no untraceable decisions.
         </p>
@@ -67,18 +67,18 @@ export default function HowItWorks() {
           {STEPS.map((s) => (
             <li
               key={s.step}
-              className="group relative rounded-2xl border border-zinc-800 bg-zinc-900/60 p-7 transition hover:border-indigo-500/40 hover:bg-zinc-900"
+              className="group relative rounded-3xl border border-stone-200 bg-[#FBF9F4] p-7 transition hover:border-stone-300 hover:bg-white hover:shadow-lg hover:shadow-stone-200/60"
             >
               <div className="flex items-center justify-between">
-                <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-600/10 text-indigo-400 ring-1 ring-inset ring-indigo-500/30">
-                  <s.icon size={20} />
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-stone-900 text-[#FBF9F4]">
+                  <s.icon size={19} />
                 </span>
-                <span className="text-4xl font-black text-zinc-800 transition group-hover:text-indigo-500/30">
+                <span className="text-5xl font-black text-stone-200 transition group-hover:text-[#E05B3F]/40">
                   {s.step}
                 </span>
               </div>
-              <h3 className="mt-5 text-lg font-bold text-white">{s.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+              <h3 className="mt-5 text-lg font-bold text-stone-900">{s.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-stone-600">
                 {s.body}
               </p>
             </li>
@@ -88,7 +88,7 @@ export default function HowItWorks() {
         <div className="mt-14 text-center">
           <Link
             href="/signup"
-            className="group inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-4 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 transition hover:bg-indigo-500"
+            className="group inline-flex items-center gap-2 rounded-full bg-[#E05B3F] px-8 py-4 text-sm font-bold text-white shadow-lg shadow-[#E05B3F]/25 transition hover:bg-[#c94d33]"
           >
             Run your first role today
             <ArrowRight

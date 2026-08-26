@@ -9,13 +9,13 @@ const links = [
 
 export default function Navbar() {
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-200/70 bg-white/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-stone-200/70 bg-[#FBF9F4]/90 backdrop-blur-xl">
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 text-sm font-black text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-stone-900 text-sm font-black text-[#FBF9F4]">
             Hi
           </span>
-          <span className="text-xl font-bold tracking-tight text-zinc-900">
+          <span className="text-xl font-bold tracking-tight text-stone-900">
             HireIQ
           </span>
         </Link>
@@ -25,7 +25,7 @@ export default function Navbar() {
             <a
               key={link.label}
               href={link.href}
-              className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-900"
+              className="text-sm font-medium text-stone-600 transition-colors hover:text-stone-900"
             >
               {link.label}
             </a>
@@ -35,13 +35,13 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           <Link
             href="/login"
-            className="rounded-lg px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100"
+            className="rounded-full px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-200/60"
           >
             Log in
           </Link>
           <Link
             href="/signup"
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-700"
+            className="rounded-full bg-stone-900 px-5 py-2 text-sm font-semibold text-[#FBF9F4] transition hover:bg-stone-700"
           >
             Start hiring
           </Link>
