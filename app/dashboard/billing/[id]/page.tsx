@@ -3,6 +3,8 @@ import Link from "next/link";
 
 import BillingAdminStatusControls from "@/components/billing/BillingAdminStatusControls";
 import BillingRecordDetail from "@/components/billing/BillingRecordDetail";
+import { AgencyMarkupSetter } from "@/components/billing/MarkupBillingControls";
+import { prisma } from "@/lib/prisma";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { getBillingRecordById } from "@/lib/repositories/billing-repository";
@@ -36,6 +38,11 @@ export default async function AdminBillingDetailPage({
     notFound();
   }
 
+  const company = await prisma.company.findUnique({
+    where: { id: record.companyId },
+    select: { agencyMarkupBps: true },
+  });
+
   return (
     <DashboardLayout>
       <div className="mb-6">
@@ -45,6 +52,10 @@ export default async function AdminBillingDetailPage({
         >
           ← Back to Billing
         </Link>
+      </div>
+
+      <div className="mb-6">
+        <AgencyMarkupSetter currentBps={company?.agencyMarkupBps ?? null} />
       </div>
 
       <div>
@@ -57,7 +68,10 @@ export default async function AdminBillingDetailPage({
         <p className="mt-2 text-zinc-600">{record.company.name}</p>
       </div>
 
+      <AgencyMarkupSetter currentBps={company?.agencyMarkupBps ?? null} />
+
       <BillingRecordDetail
+        showAdminControls={true}
         record={record}
         requirementHref={`/dashboard/requirements/${record.job.id}`}
         manageSlot={

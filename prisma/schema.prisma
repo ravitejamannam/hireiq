@@ -327,6 +327,9 @@ model Company {
   updatedAt DateTime @updatedAt
 
   candidates            Candidate[]
+  /// T132 workspace-default agency markup in basis points (1000 = 10%). Null = billing math disabled.
+  agencyMarkupBps Int?
+
   jobs                  Job[]
   users                 User[]
   billingRecords        BillingRecord[]
@@ -485,6 +488,12 @@ model BillingLineItem {
 
   billingRecordId Int
   applicationId   Int
+
+  /// T132 transparent markup snapshot. Null until compensation recorded.
+  placedCtcCents         Int?
+  markupBps              Int?
+  feeCents               Int?
+  compensationRecordedAt DateTime?
 
   billingRecord BillingRecord @relation(fields: [billingRecordId], references: [id], onDelete: Restrict)
   application   Application   @relation(fields: [applicationId], references: [id], onDelete: Restrict)
@@ -899,6 +908,10 @@ model Application {
   source SourcingDatabaseSource?
   expertScore Int?
   rejectionReason String?
+
+  /// T133 offer acceptance token (SHA-256 at rest) + acceptance timestamp.
+  offerAcceptanceTokenHash String? @unique
+  offerAcceptedAt          DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

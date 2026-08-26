@@ -8,6 +8,10 @@ import type {
 export type BillingLineItemView = {
   id: number;
   applicationId: number;
+  placedCtcCents?: number | null;
+  markupBps?: number | null;
+  feeCents?: number | null;
+  compensationRecordedAt?: Date | string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
   application: {

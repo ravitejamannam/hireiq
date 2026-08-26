@@ -15,6 +15,7 @@ type BillingRecordDetailProps = {
   requirementHref: string;
   candidateHref?: (applicationId: number) => string | null;
   manageSlot?: ReactNode;
+  showAdminControls?: boolean;
 };
 
 function getBillingLifecycleLabel(lifecycle: RequirementLifecycle) {
@@ -26,6 +27,7 @@ export default function BillingRecordDetail({
   requirementHref,
   candidateHref,
   manageSlot,
+  showAdminControls = false,
 }: BillingRecordDetailProps) {
   return (
     <>
@@ -73,6 +75,7 @@ export default function BillingRecordDetail({
       <BillingLineItems
         lineItems={record.lineItems}
         candidateHref={candidateHref}
+        showAdminControls={showAdminControls}
       />
     </>
   );

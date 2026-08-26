@@ -17,6 +17,7 @@ const applicationSelect = {
   source: true,
   expertScore: true,
   rejectionReason: true,
+  offerAcceptedAt: true,
   candidate: {
     select: {
       id: true,

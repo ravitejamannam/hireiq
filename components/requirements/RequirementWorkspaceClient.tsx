@@ -32,6 +32,7 @@ import BillingRecordsPanel, {
 import PipelineCard from "@/components/pipeline/PipelineCard";
 import DistributionKit from "@/components/requirements/DistributionKit";
 import SourcedCandidateForm from "@/components/requirements/SourcedCandidateForm";
+import MintOfferLinkButton from "@/components/offers/MintOfferLinkButton";
 import JobEvidenceCapturePanel from "@/components/requirements/JobEvidenceCapturePanel";
 import JobRankingPanel from "@/components/requirements/JobRankingPanel";
 import AssessmentLeaderboardPanel from "@/components/assess/AssessmentLeaderboardPanel";
@@ -558,6 +559,41 @@ export default function RequirementWorkspaceClient({
           </section>
         </div>
       )}
+
+      {activeTab === "candidates" &&
+        applications.some(
+          (a) =>
+            a.status === ApplicationPipelineStatus.SELECTED ||
+            a.status === ApplicationPipelineStatus.HIRED,
+        ) && (
+          <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/50 p-5">
+            <h3 className="text-sm font-bold text-zinc-900">Offers</h3>
+            <p className="mt-1 text-xs text-zinc-500">
+              Mint a single-use acceptance link for a selected or hired
+              candidate. Acceptance is hash-verified and timestamped.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {applications
+                .filter(
+                  (a) =>
+                    a.status === ApplicationPipelineStatus.SELECTED ||
+                    a.status === ApplicationPipelineStatus.HIRED,
+                )
+                .map((a) => (
+                  <div
+                    key={a.id}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-2"
+                  >
+                    <p className="text-xs font-semibold text-zinc-800">
+                      {a.candidate.name}
+                      {a.offerAcceptedAt ? " · ✓ accepted" : ""}
+                    </p>
+                    <MintOfferLinkButton applicationId={a.id} />
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
       {(activeTab === "candidates" || activeTab === "pipeline") && (
         <div className="mt-8">

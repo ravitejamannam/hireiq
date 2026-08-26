@@ -34,6 +34,10 @@ const billingRecordSelect = {
     select: {
       id: true,
       applicationId: true,
+      placedCtcCents: true,
+      markupBps: true,
+      feeCents: true,
+      compensationRecordedAt: true,
       createdAt: true,
       updatedAt: true,
       application: {
