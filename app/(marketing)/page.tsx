@@ -7,6 +7,7 @@ import HowItWorks from "@/components/marketing/HowItWorks";
 import Trust from "@/components/trust/Trust";
 import Faq from "@/components/faq/Faq";
 import CallToAction from "@/components/cta/CallToAction";
+import Footer from "@/components/marketing/Footer";
 
 export default function HomePage() {
   return (
@@ -18,6 +19,7 @@ export default function HomePage() {
       <Trust />
       <Faq />
       <CallToAction />
+      <Footer />
     </>
   );
 }

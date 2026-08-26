@@ -3,18 +3,29 @@ import FaqItem from "./FaqItem";
 
 const faqs = [
   {
-    question: "Why not use AI interviews?",
+    question: "How is HireIQ different from an ATS like Greenhouse or Workable?",
     answer:
-      "AI is great at checking syntax, but engineering judgment still requires experienced developers.",
+      "Traditional ATS tools track applicants. HireIQ proves things — every candidate fact links to a source artifact, rankings are explainable evidence coverage, and the whole decision trail is immutable. It's the difference between a filing cabinet and a lab notebook.",
   },
   {
-    question: "How are experts selected?",
+    question: "Do you use AI to score or reject candidates?",
     answer:
-      "Every expert is vetted through technical interviews and real engineering experience.",
+      "No — and that's architectural, not a policy setting. AI drafts job descriptions and extracts claims from resumes, always labeled and traceable. Scoring assessments is deterministic against answer keys. Shortlist decisions are always human.",
   },
   {
-    question: "How long does an interview take?",
-    answer: "Most interviews take between 60 and 90 minutes.",
+    question: "How do candidates benefit?",
+    answer:
+      "They see their assessment score, their live pipeline status, and where they stand on a public leaderboard for the role. No application disappears into a void — and rejections come with real communication.",
+  },
+  {
+    question: "Can agencies use this with their clients?",
+    answer:
+      "Yes. Clients get their own portal with transparent shortlists and billing math shown openly (compensation × markup = fee). No hidden numbers between you and your client.",
+  },
+  {
+    question: "Does it integrate with job boards?",
+    answer:
+      "Publishing generates hosted apply pages, Google Jobs structured data, an XML feed for aggregators, an embeddable widget for your careers site, and a REST API with webhooks — all from one click.",
   },
 ];
 

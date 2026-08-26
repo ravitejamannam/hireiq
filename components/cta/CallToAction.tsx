@@ -1,39 +1,42 @@
-import Button from "@/components/ui/Button";
+import Link from "next/link";
+import { ArrowRight, ShieldCheck } from "lucide-react";
 
 export default function CallToAction() {
   return (
-    <section className="bg-black">
-      <div className="mx-auto max-w-6xl px-6 py-24">
-        <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-12 md:p-16">
-          <div className="max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-500">
-              Get Started
-            </p>
-
-            <h2 className="mt-4 text-4xl font-bold tracking-tight text-white md:text-5xl">
-              Ready to hire better engineers?
-            </h2>
-
-            <p className="mt-6 text-lg leading-8 text-zinc-400">
-              Stop relying on resumes alone. Evaluate engineering ability
-              through expert-led technical interviews, structured feedback,
-              and evidence-based hiring decisions.
-            </p>
-
-            <div className="mt-10 flex flex-col gap-4 sm:flex-row">
-              <Button
-                label="Get Started"
-                variant="primary"
-                onClick={() => alert("Coming Soon")}
-              />
-
-              <Button
-                label="Contact Sales"
-                variant="secondary"
-                onClick={() => alert("Coming Soon")}
-              />
-            </div>
-          </div>
+    <section className="relative overflow-hidden bg-gradient-to-b from-white to-indigo-50 py-24">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-0 left-1/2 h-[400px] w-[800px] -translate-x-1/2 rounded-full bg-indigo-200/40 blur-3xl"
+      />
+      <div className="relative mx-auto max-w-3xl px-6 text-center">
+        <span className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-4 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm">
+          <ShieldCheck size={14} />
+          Evidence-first. Human-decided. Fully explainable.
+        </span>
+        <h2 className="mt-6 text-4xl font-black tracking-tight text-zinc-950 md:text-6xl">
+          Your next hire should come with proof.
+        </h2>
+        <p className="mx-auto mt-5 max-w-xl text-lg text-zinc-600">
+          Post your first role in under two minutes. Every application,
+          assessment and decision after that — traceable forever.
+        </p>
+        <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+          <Link
+            href="/signup"
+            className="group inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-8 py-4 text-sm font-bold text-white shadow-lg shadow-zinc-900/10 transition hover:bg-zinc-700"
+          >
+            Start hiring free
+            <ArrowRight
+              size={16}
+              className="transition-transform group-hover:translate-x-0.5"
+            />
+          </Link>
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-8 py-4 text-sm font-bold text-zinc-800 transition hover:bg-zinc-50"
+          >
+            Log in
+          </Link>
         </div>
       </div>
     </section>
