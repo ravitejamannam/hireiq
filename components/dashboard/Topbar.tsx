@@ -2,6 +2,7 @@
 
 import { PortalRole } from "@prisma/client";
 import { signOut, useSession } from "next-auth/react";
+import { LogOut } from "lucide-react";
 
 const portalRoleLabels: Record<PortalRole, string> = {
   ADMIN: "Admin",
@@ -12,18 +13,27 @@ const portalRoleLabels: Record<PortalRole, string> = {
 export default function Topbar() {
   const { data: session } = useSession();
   const user = session?.user;
+  const initial = user?.name?.trim()?.[0]?.toUpperCase() ?? "?";
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-zinc-200 bg-white px-8">
-      <h1 className="text-2xl font-bold text-black">Dashboard</h1>
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-end gap-4 border-b border-stone-200/80 bg-[#FBF9F4]/85 px-4 backdrop-blur-xl sm:px-8 lg:justify-between">
+      {/* Brand echo for mobile where the sidebar is hidden */}
+      <p className="hidden text-sm font-semibold tracking-tight text-stone-400 lg:block">
+        HireIQ
+      </p>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {user ? (
-          <div className="text-right">
-            <p className="text-sm font-semibold text-black">{user.name}</p>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-              {portalRoleLabels[user.role]}
-            </p>
+          <div className="flex items-center gap-3 rounded-full border border-stone-200/80 bg-white py-1.5 pl-1.5 pr-2 shadow-sm">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-black uppercase text-white">
+              {initial}
+            </span>
+            <div className="pr-1 text-left leading-tight">
+              <p className="text-xs font-bold text-stone-900">{user.name}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400">
+                {portalRoleLabels[user.role]}
+              </p>
+            </div>
           </div>
         ) : null}
 
@@ -32,9 +42,10 @@ export default function Topbar() {
           onClick={() => {
             void signOut({ callbackUrl: "/login" });
           }}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-black transition hover:bg-zinc-100"
+          title="Sign out"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200/80 bg-white text-stone-500 shadow-sm transition hover:border-stone-300 hover:text-stone-900"
         >
-          Sign out
+          <LogOut size={15} />
         </button>
       </div>
     </header>

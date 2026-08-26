@@ -41,18 +41,22 @@ export default async function DashboardPage() {
           <AdminOnboardingChecklist context={checklistContext} />
         </div>
       )}
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-          {portalRoleLabels[user.role]}
-        </p>
-        <h1 className="mt-2 text-3xl font-bold text-black">Command Center</h1>
-        <p className="mt-2 text-zinc-600">
-          Operational overview across requirements, candidates, and sourcing
-          SLA.
-        </p>
-      </div>
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">
+            {portalRoleLabels[user.role]}
+          </p>
+          <h1 className="mt-1.5 text-3xl font-black tracking-tight text-stone-900 sm:text-4xl">
+            Command Center
+          </h1>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-stone-600">
+            Operational overview across requirements, candidates, and
+            sourcing SLA.
+          </p>
+        </div>
+      </header>
 
-      <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard title="Active Requirements" value={stats.activeRequirements} />
         <StatCard
           title="Candidates in Pipeline"

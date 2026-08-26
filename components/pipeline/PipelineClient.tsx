@@ -232,16 +232,19 @@ function PipelineClientInner({
   return (
     <DashboardLayout>
       <WorkflowRequirementNav requirements={requirementOptions} />
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-black">Pipeline</h1>
-          <p className="mt-2 text-zinc-600">
-            Move applications through CV Pool, Expert Review, Tech Evaluation,
-            and Shortlisted. Clients select and confirm hire; billing is
-            generated after hire.
-          </p>
-        </div>
-      </div>
+      <header className="mb-8">
+        <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">
+          Workflow
+        </p>
+        <h1 className="mt-1.5 text-3xl font-black tracking-tight text-stone-900 sm:text-4xl">
+          Pipeline
+        </h1>
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-stone-600">
+          Move applications through CV Pool, Expert Review, Tech Evaluation,
+          and Shortlisted. Every ranking is explainable; clients confirm the
+          final call.
+        </p>
+      </header>
 
       <div className="mt-8">
         <label htmlFor="pipeline-search" className="sr-only">
@@ -401,10 +404,10 @@ function PipelineClientInner({
               <section
                 key={status}
                 aria-label={`${getApplicationPipelineStatusLabel(status)} column`}
-                className="w-80 shrink-0 rounded-2xl border border-zinc-200 bg-zinc-50 p-4"
+                className="w-80 shrink-0 rounded-3xl border border-stone-200/70 bg-white/60 p-4"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+                  <h2 className="text-[11px] font-bold uppercase tracking-widest text-stone-500">
                     {getApplicationPipelineStatusLabel(status)}
                   </h2>
                   <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-zinc-600">

@@ -8,12 +8,11 @@ export default function StatCard({
   value,
 }: StatCardProps) {
   return (
-    <article className="rounded-xl border border-zinc-200 bg-white p-6">
-      <p className="text-sm font-medium text-zinc-500">
+    <article className="rounded-2xl border border-stone-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md hover:shadow-stone-200/50">
+      <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">
         {title}
       </p>
-
-      <h2 className="mt-3 text-4xl font-bold text-black">
+      <h2 className="mt-2 text-3xl font-black tracking-tight text-stone-900 tabular-nums">
         {value}
       </h2>
     </article>

@@ -12,17 +12,14 @@ export default function Button({
   onClick,
 }: ButtonProps) {
   const buttonStyles = {
-    primary:
-      "bg-black text-white hover:bg-zinc-800",
-
-    secondary:
-      "border border-zinc-300 bg-white text-black hover:bg-zinc-100",
+    primary: "bg-stone-900 text-[#FBF9F4] shadow-sm hover:bg-stone-700",
+    secondary: "border border-stone-300 bg-white text-stone-800 hover:bg-stone-50",
   };
 
   return (
     <button
       onClick={onClick}
-      className={`rounded-lg px-5 py-2.5 font-medium transition-colors ${buttonStyles[variant]}`}
+      className={`rounded-full px-6 py-3 font-semibold transition-colors disabled:opacity-50 ${buttonStyles[variant]}`}
     >
       {label}
     </button>

@@ -161,7 +161,7 @@ export default function Sidebar() {
       {/* Mobile top nav: horizontal scrolling chips */}
       <nav
         aria-label="Mobile navigation"
-        className="fixed inset-x-0 top-0 z-40 flex items-center gap-2 overflow-x-auto border-b border-zinc-200 bg-white px-3 py-2 lg:hidden"
+        className="fixed inset-x-0 top-0 z-40 flex items-center gap-2 overflow-x-auto border-b border-stone-200/80 bg-[#FBF9F4]/95 px-3 py-2 backdrop-blur lg:hidden"
       >
         <Link href="/dashboard" className="mr-2 shrink-0 text-lg font-bold text-black">
           HireIQ
@@ -187,18 +187,27 @@ export default function Sidebar() {
           })}
       </nav>
 
-      <aside className="hidden h-screen w-64 flex-col border-r border-zinc-200 bg-white lg:flex">
-      <div className="border-b border-zinc-200 p-6">
-        <h2 className="text-2xl font-bold text-black">HireIQ</h2>
-        {roleLabel ? (
-          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
-            {roleLabel}
-          </p>
-        ) : null}
+      <aside className="hidden h-screen w-64 flex-col border-r border-stone-200/80 bg-[#FBF9F4] lg:flex">
+      <div className="border-b border-stone-200/80 px-5 py-5">
+        <Link href="/dashboard" className="flex items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-stone-900 text-sm font-black text-[#FBF9F4]">
+            Hi
+          </span>
+          <div>
+            <p className="text-base font-bold leading-tight tracking-tight text-stone-900">
+              HireIQ
+            </p>
+            {roleLabel ? (
+              <p className="text-[11px] font-medium uppercase tracking-widest text-indigo-600">
+                {roleLabel} portal
+              </p>
+            ) : null}
+          </div>
+        </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-4" aria-label="Admin navigation">
-        <ul className="space-y-2">
+      <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Admin navigation">
+        <ul className="space-y-1">
           {primaryLinks.map((link) => {
             const isActive = isActivePath(pathname, link.href);
 
@@ -206,15 +215,15 @@ export default function Sidebar() {
               <li key={link.href}>
                 <Link
                   href={link.href}
-                  className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 font-medium transition-colors ${
+                  className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-colors ${
                     isActive
-                      ? "bg-black text-white"
-                      : "text-zinc-700 hover:bg-zinc-100 hover:text-black"
+                      ? "bg-stone-900 text-[#FBF9F4] shadow-sm"
+                      : "text-stone-600 hover:bg-white hover:text-stone-900"
                   }`}
                 >
                   <link.icon
-                    size={18}
-                    className={isActive ? "text-white" : "text-zinc-600"}
+                    size={17}
+                    className={isActive ? "text-[#FBF9F4]" : "text-stone-400"}
                   />
                   <span>{link.label}</span>
                 </Link>
@@ -225,7 +234,7 @@ export default function Sidebar() {
 
         {sections.map((section) => (
           <div key={section.title} className="mt-8">
-            <p className="px-4 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            <p className="px-3.5 text-[11px] font-bold uppercase tracking-widest text-stone-400">
               {section.title}
             </p>
             <ul className="mt-2 space-y-2">
@@ -238,7 +247,7 @@ export default function Sidebar() {
                         disabled
                         aria-disabled="true"
                         title="Billing will be available in a later release"
-                        className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-4 py-3 text-left font-medium text-zinc-400"
+                        className="flex w-full cursor-not-allowed items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-stone-300"
                       >
                         <link.icon size={18} className="text-zinc-400" />
                         <span>{link.label}</span>
@@ -274,10 +283,10 @@ export default function Sidebar() {
         ))}
       </nav>
 
-        <div className="mt-auto border-t border-zinc-200 p-4">
+        <div className="mt-auto border-t border-stone-200/80 p-3">
           <button
             type="button"
-            className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left font-medium text-zinc-700 transition hover:bg-zinc-100 hover:text-black"
+            className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-semibold text-stone-600 transition hover:bg-white hover:text-stone-900"
           >
             <Settings size={18} className="text-zinc-600" />
             <span>Settings</span>

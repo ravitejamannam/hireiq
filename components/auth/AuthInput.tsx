@@ -53,7 +53,7 @@ export default function AuthInput({
           placeholder:text-zinc-400
           outline-none
           transition
-          focus:border-black
+          focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100
           disabled:cursor-not-allowed
           disabled:bg-zinc-50
           disabled:text-zinc-500

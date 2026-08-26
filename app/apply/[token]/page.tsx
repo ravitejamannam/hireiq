@@ -40,7 +40,7 @@ type ApplyPageProps = {
 
 function ApplyMessage({ title, body }: { title: string; body: string }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 px-6">
+    <main className="flex min-h-screen items-center justify-center bg-white px-6">
       <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-10 text-center shadow-sm">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 text-xl">
           🗓️
@@ -113,9 +113,9 @@ export default async function HostedApplyPage({ params }: ApplyPageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
+    <main className="min-h-screen bg-[#F7F4EE]">
       {/* Role hero */}
-      <header className="border-b border-zinc-200/70 bg-white">
+      <header className="border-b border-stone-200/70 bg-white">
         <div className="mx-auto max-w-3xl px-6 py-12">
           <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">
             {page.companyDisplayName ?? "Company"}

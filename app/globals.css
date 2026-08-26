@@ -1,18 +1,16 @@
 @import "tailwindcss";
 
 /*
- * HireIQ brand system — warm editorial (cream / stone / coral).
+ * HireIQ brand system — warm editorial (cream / stone / clay-coral).
  *
- * The codebase was built on Tailwind's indigo/zinc scales. Rather than
- * rewriting thousands of class occurrences, we remap those scales at the
- * theme layer: every bg-indigo-600, text-zinc-600 etc. now renders in
- * the brand palette. New UI should use stone/coral directly; legacy
- * class names keep working.
+ * Theme-layer remap: legacy Tailwind class names (zinc/indigo/violet/sky)
+ * render in the brand palette without touching thousands of class
+ * occurrences. New UI should use stone/coral directly.
  */
 
 :root {
-  --background: #fbf9f4;
-  --foreground: #1c1917;
+  --background: #f7f4ee;
+  --foreground: #211d19;
 }
 
 @theme inline {
@@ -21,56 +19,58 @@
   --font-sans: var(--font-geist-sans);
 
   /* ---- zinc → warm stone grays ---- */
-  --color-zinc-50: #faf9f5;
-  --color-zinc-100: #f5f4f0;
-  --color-zinc-200: #e7e5e0;
-  --color-zinc-300: #d6d3cb;
-  --color-zinc-400: #a8a29b;
-  --color-zinc-500: #7a746c;
-  --color-zinc-600: #57534c;
-  --color-zinc-700: #44403a;
-  --color-zinc-800: #292524;
-  --color-zinc-900: #1c1917;
-  --color-zinc-950: #0f0d0b;
+  --color-zinc-50: #faf9f6;
+  --color-zinc-100: #f4f2ed;
+  --color-zinc-200: #e8e5df;
+  --color-zinc-300: #d8d4cc;
+  --color-zinc-400: #a9a39a;
+  --color-zinc-500: #7c756b;
+  --color-zinc-600: #5d574e;
+  --color-zinc-700: #45403a;
+  --color-zinc-800: #2b2723;
+  --color-zinc-900: #211d19;
+  --color-zinc-950: #14110e;
 
-  /* ---- indigo → coral brand accent (#E05B3F) ---- */
-  --color-indigo-50: #fdf2ef;
-  --color-indigo-100: #f8ddd5;
-  --color-indigo-200: #f0bcad;
-  --color-indigo-300: #e59a80;
-  --color-indigo-400: #ea7a5c;
-  --color-indigo-500: #e05b3f;
-  --color-indigo-600: #c94d33;
-  --color-indigo-700: #a83f2a;
-  --color-indigo-800: #853222;
-  --color-indigo-900: #68281c;
-  --color-indigo-950: #38130c;
+  /* ---- indigo → clay / terracotta ramp ----
+   * Mid tones are muted so informational UI stays calm; the vivid
+   * coral energy lives in 500–600 for primary actions only. */
+  --color-indigo-50: #faf3ef;
+  --color-indigo-100: #f3e2da;
+  --color-indigo-200: #e6c5b7;
+  --color-indigo-300: #d5a28e;
+  --color-indigo-400: #c98267;
+  --color-indigo-500: #bd6644;
+  --color-indigo-600: #a95236;
+  --color-indigo-700: #8d442e;
+  --color-indigo-800: #713727;
+  --color-indigo-900: #5c2f22;
+  --color-indigo-950: #331711;
 
-  /* ---- violet → deep coral (hover/active companions) ---- */
-  --color-violet-50: #fdf2ef;
-  --color-violet-100: #f8ddd5;
-  --color-violet-200: #f0bcad;
-  --color-violet-300: #e59a80;
-  --color-violet-400: #ea7a5c;
-  --color-violet-500: #d14e33;
-  --color-violet-600: #b84228;
-  --color-violet-700: #96361f;
-  --color-violet-800: #772c1a;
-  --color-violet-900: #5e2415;
-  --color-violet-950: #33110a;
+  /* ---- violet → deep clay companions ---- */
+  --color-violet-50: #faf3ef;
+  --color-violet-100: #f3e2da;
+  --color-violet-200: #e6c5b7;
+  --color-violet-300: #d5a28e;
+  --color-violet-400: #c47a58;
+  --color-violet-500: #b05a38;
+  --color-violet-600: #99492c;
+  --color-violet-700: #7d3c25;
+  --color-violet-800: #643120;
+  --color-violet-900: #51291c;
+  --color-violet-950: #2d150d;
 
-  /* ---- sky → warm amber (info accents) ---- */
-  --color-sky-50: #fdf8ed;
-  --color-sky-100: #f8ecd0;
-  --color-sky-200: #f0d69e;
-  --color-sky-300: #e5ba66;
-  --color-sky-400: #dd9f3d;
-  --color-sky-500: #d18a20;
-  --color-sky-600: #b26f17;
-  --color-sky-700: #8d5714;
-  --color-sky-800: #724615;
-  --color-sky-900: #5e3b15;
-  --color-sky-950: #371f09;
+  /* ---- sky → warm sand (info accents) ---- */
+  --color-sky-50: #faf6ec;
+  --color-sky-100: #f2ead3;
+  --color-sky-200: #e4d3a9;
+  --color-sky-300: #d3ba7c;
+  --color-sky-400: #c4a254;
+  --color-sky-500: #b18a3a;
+  --color-sky-600: #96702e;
+  --color-sky-700: #785827;
+  --color-sky-800: #604723;
+  --color-sky-900: #503c20;
+  --color-sky-950: #2d200f;
 }
 
 body {
@@ -85,4 +85,46 @@ body {
     "Helvetica Neue",
     Arial,
     sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---- global polish ---- */
+
+::selection {
+  background: #e0b9a8;
+  color: #211d19;
+}
+
+:focus-visible {
+  outline: 2px solid #a95236;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Slim, unobtrusive scrollbars that match the warm neutrals */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d8d4cc transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #d8d4cc;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #c4bfb4;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Headings default to tight tracking for editorial feel */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.02em;
 }
