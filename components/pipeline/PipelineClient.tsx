@@ -18,6 +18,7 @@ import WorkflowRequirementNav, {
   useRequirementIdFilter,
 } from "@/components/dashboard/WorkflowRequirementNav";
 import PipelineCard from "@/components/pipeline/PipelineCard";
+import BulkActionsBar from "@/components/requirements/BulkActionsBar";
 import type { getApplications } from "@/lib/repositories/application-repository";
 import { ADMIN_PIPELINE_TRANSITIONS } from "@/lib/validation/application-pipeline";
 
@@ -76,6 +77,14 @@ function PipelineClientInner({
   const [movingApplicationId, setMovingApplicationId] = useState<number | null>(
     null,
   );
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+  function toggleSelected(id: number) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id],
+    );
+  }
+
 
   const requirementOptions = Array.from(
     new Map(
@@ -95,11 +104,23 @@ function PipelineClientInner({
   ) {
     if (movingApplicationId !== null) return;
 
+    // T121: rejection requires a reason
+    let rejectionReason: string | undefined;
+    if (nextStatus === ApplicationPipelineStatus.REJECTED) {
+      const reason = window.prompt(
+        "Rejection reason (required — shared with compliance reporting):",
+      );
+      if (!reason || !reason.trim()) {
+        return;
+      }
+      rejectionReason = reason.trim();
+    }
+
     setActionError("");
     setMovingApplicationId(id);
 
     try {
-      await transitionApplicationStatus(id, nextStatus);
+      await transitionApplicationStatus(id, nextStatus, rejectionReason);
       router.refresh();
     } catch (error) {
       setActionError(getErrorMessage(error));
@@ -297,6 +318,8 @@ function PipelineClientInner({
                         }))}
                         monitorNote={getMonitorNote(application.status)}
                         isMoving={movingApplicationId === application.id}
+                        isSelected={selectedIds.includes(application.id)}
+                        onToggleSelect={toggleSelected}
                         requirementHref={`/dashboard/requirements/${application.jobId}`}
                         onMove={handleMove}
                       />
@@ -307,6 +330,22 @@ function PipelineClientInner({
             );
           })}
         </div>
+      )}
+
+      {selectedIds.length > 0 && (
+        <BulkActionsBar
+          selected={selectedIds
+            .map((id) => initialApplications.find((a) => a.id === id))
+            .filter(
+              (a): a is Application => Boolean(a),
+            )
+            .map((a) => ({
+              id: a.id,
+              status: a.status,
+              name: a.candidate.name,
+              expertScore: a.expertScore,
+            }))}
+        />
       )}
     </DashboardLayout>
   );

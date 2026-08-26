@@ -4,6 +4,7 @@ import StatCard from "@/components/dashboard/StatCard";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { getWebhookDeliveryHealth, listWebhookDeliveries } from "@/lib/jobs/distribution/webhook-delivery-admin";
 import ApiTokenManager from "@/components/integrations/ApiTokenManager";
+import WebhookSubscriptionsPanel from "@/components/integrations/WebhookSubscriptionsPanel";
 import RunReconciliationButton from "@/components/integrations/RunReconciliationButton";
 import { prisma } from "@/lib/prisma";
 import { getLatestReconciliationHealth } from "@/lib/jobs/distribution/reconciliation";
@@ -36,6 +37,12 @@ type PageProps = {
 export default async function IntegrationsPage({ searchParams }: PageProps) {
   await requireAdmin();
   const { status } = await searchParams;
+
+  const webhookSubscriptions = await prisma.partnerWebhookSubscription.findMany({
+    where: { companyId: 1 },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, url: true, events: true, active: true, createdAt: true },
+  });
 
   const apiTokens = await prisma.apiToken.findMany({
     where: { companyId: 1 },
@@ -111,7 +118,34 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
           Bearer keys for programmatic access to /api/v1 endpoints.
         </p>
         <div className="mt-4">
-          <ApiTokenManager initialTokens={[]} />
+          <ApiTokenManager
+            initialTokens={apiTokens.map((t) => ({
+              id: t.id,
+              name: t.name,
+              createdAt: t.createdAt.toISOString(),
+              revoked: t.revokedAt !== null,
+            }))}
+          />
+        </div>
+      </section>
+
+      <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
+        <h2 className="font-semibold text-zinc-900">Webhook subscriptions</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Receive signed payloads when pipeline events occur. HMAC-SHA256
+          signatures via x-hireiq-signature.
+        </p>
+        <div className="mt-4">
+          <WebhookSubscriptionsPanel
+            companyId={1}
+            initialSubscriptions={webhookSubscriptions.map((s) => ({
+              id: s.id,
+              url: s.url,
+              events: s.events,
+              active: s.active,
+              createdAt: s.createdAt.toISOString(),
+            }))}
+          />
         </div>
       </section>
 

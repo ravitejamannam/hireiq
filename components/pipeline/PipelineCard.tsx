@@ -32,6 +32,8 @@ type PipelineCardProps = {
   moveOptions: PipelineMoveOption[];
   monitorNote?: string | null;
   isMoving?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: number) => void;
   requirementHref?: string | null;
   onMove: (id: number, nextStatus: ApplicationPipelineStatus) => void;
 };
@@ -63,9 +65,26 @@ export default function PipelineCard({
   isMoving = false,
   requirementHref = null,
   onMove,
+  isSelected,
+  onToggleSelect,
 }: PipelineCardProps) {
   return (
-    <article className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+    <article
+      className={`rounded-xl border bg-white p-4 shadow-sm transition ${
+        isSelected ? "border-indigo-400 ring-2 ring-indigo-100" : "border-zinc-200"
+      }`}
+    >
+      {onToggleSelect ? (
+        <label className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-600">
+          <input
+            type="checkbox"
+            checked={Boolean(isSelected)}
+            onChange={() => onToggleSelect(id)}
+            className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          Select
+        </label>
+      ) : null}
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-bold text-black">{candidateName}</h3>

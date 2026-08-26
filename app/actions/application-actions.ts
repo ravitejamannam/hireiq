@@ -388,6 +388,7 @@ export async function saveExpertReview(
 export async function transitionApplicationStatus(
   id: number,
   nextStatus: ApplicationPipelineStatus,
+  rejectionReason?: string,
 ) {
   await requireAdmin();
   const applicationId = validateApplicationId(id);
@@ -426,6 +427,7 @@ export async function transitionApplicationStatus(
       },
       data: {
         status: nextStatus,
+        ...(rejectionReason && { rejectionReason }),
       },
     });
   } catch (error) {
@@ -833,4 +835,44 @@ function translateApplicationDeleteError(error: unknown) {
   }
 
   return new Error("Unable to delete application.");
+}
+
+/**
+ * Bulk pipeline transitions (T118): apply a stage change to many
+ * applications at once. ADMIN only. Each application is validated
+ * individually — invalid transitions are skipped, not fatal.
+ */
+export async function bulkTransitionApplications({
+  ids,
+  nextStatus,
+  rejectionReason,
+}: {
+  ids: number[];
+  nextStatus: "SHORTLISTED" | "REJECTED";
+  rejectionReason?: string;
+}): Promise<{ updated: number; skipped: number }> {
+  await requireAdmin();
+
+  if (nextStatus === "REJECTED" && !rejectionReason?.trim()) {
+    throw new Error("A rejection reason is required.");
+  }
+
+  let updated = 0;
+  let skipped = 0;
+
+  for (const id of ids) {
+    if (!Number.isInteger(id) || id <= 0) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      await transitionApplicationStatus(id, nextStatus, rejectionReason);
+      updated += 1;
+    } catch {
+      skipped += 1;
+    }
+  }
+
+  revalidatePath("/dashboard/pipeline");
+  return { updated, skipped };
 }

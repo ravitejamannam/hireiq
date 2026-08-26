@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PortalRole } from "@prisma/client";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import AdminOnboardingChecklist from "@/components/onboarding/AdminOnboardingChecklist";
 import StatCard from "@/components/dashboard/StatCard";
 import {
   formatJobDateTime,
@@ -23,8 +24,23 @@ export default async function DashboardPage() {
     getDashboardStats(),
   ]);
 
+  // T120: admin onboarding checklist context
+  const companyId = user.role === "ADMIN" ? 1 : null;
+  const checklistContext = companyId
+    ? {
+        hasCompany: stats.companies > 0 || true,
+        hasJob: stats.activeRequirements > 0 || stats.pipelineCandidates > 0,
+        hasShortlisted: stats.shortlisted > 0,
+      }
+    : null;
+
   return (
     <DashboardLayout>
+      {user.role === "ADMIN" && checklistContext && (
+        <div className="mb-8">
+          <AdminOnboardingChecklist context={checklistContext} />
+        </div>
+      )}
       <div>
         <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
           {portalRoleLabels[user.role]}
