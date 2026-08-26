@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 
 import { saveInterviewRubricScores } from "@/app/actions/blueprint-actions";
+import { suggestCompetencies } from "@/lib/interviews/competency-mapping";
 
 type Competency = {
   name: string;
@@ -48,6 +49,25 @@ export default function RubricPanel({
   const [values, setValues] = useState(initial);
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [overallNotes, setOverallNotes] = useState("");
+
+  // T130: deterministic notes→competency suggestions (no AI)
+  const suggestions = useMemo(
+    () => suggestCompetencies(overallNotes, competencies.map((c) => c.name)),
+    [overallNotes, competencies],
+  );
+
+  function appendSuggestion(name: string) {
+    setValues((prev) => ({
+      ...prev,
+      [name]: {
+        ...prev[name],
+        notes: `${prev[name]?.notes ? prev[name].notes + " " : ""}[from overall notes] ${overallNotes.trim()}`,
+      },
+    }));
+    setOverallNotes("");
+    setMessage({ ok: true, text: `Routed to "${name}" — review and save.` });
+  }
 
   const scoredCount = competencies.filter((c) => values[c.name]?.score >= 1).length;
   const complete = scoredCount === competencies.length;
@@ -100,6 +120,35 @@ export default function RubricPanel({
         >
           {scoredCount}/{competencies.length} scored
         </span>
+      </div>
+
+      <div className="mt-4 rounded-lg border border-dashed border-indigo-200 bg-indigo-50/40 p-4">
+        <label className="text-xs font-semibold text-indigo-900">
+          Overall interview notes
+          <textarea
+            value={overallNotes}
+            onChange={(e) => setOverallNotes(e.target.value)}
+            placeholder="Paste or type raw notes — HireIQ suggests which competencies they map to."
+            rows={3}
+            className="mt-1 w-full resize-y rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </label>
+        {suggestions.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-zinc-500">Route to:</span>
+            {suggestions.map((s) => (
+              <button
+                key={s.name}
+                type="button"
+                onClick={() => appendSuggestion(s.name)}
+                title={`Matched on: ${s.matchedOn.join(", ")}`}
+                className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-indigo-500"
+              >
+                {s.name} →
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <ul className="mt-4 space-y-4">

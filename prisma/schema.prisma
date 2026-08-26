@@ -1238,6 +1238,10 @@ model JobDistribution {
   applyUrlSnapshot           String?
   includeCompensation        Boolean               @default(false)
 
+  /// T131 programmatic bidding seam (Appcast-style). Null = organic only.
+  dailyBudgetCents           Int?
+  cpcBidCents                Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
