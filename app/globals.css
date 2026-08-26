@@ -1,26 +1,88 @@
 @import "tailwindcss";
 
+/*
+ * HireIQ brand system — warm editorial (cream / stone / coral).
+ *
+ * The codebase was built on Tailwind's indigo/zinc scales. Rather than
+ * rewriting thousands of class occurrences, we remap those scales at the
+ * theme layer: every bg-indigo-600, text-zinc-600 etc. now renders in
+ * the brand palette. New UI should use stone/coral directly; legacy
+ * class names keep working.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fbf9f4;
+  --foreground: #1c1917;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* ---- zinc → warm stone grays ---- */
+  --color-zinc-50: #faf9f5;
+  --color-zinc-100: #f5f4f0;
+  --color-zinc-200: #e7e5e0;
+  --color-zinc-300: #d6d3cb;
+  --color-zinc-400: #a8a29b;
+  --color-zinc-500: #7a746c;
+  --color-zinc-600: #57534c;
+  --color-zinc-700: #44403a;
+  --color-zinc-800: #292524;
+  --color-zinc-900: #1c1917;
+  --color-zinc-950: #0f0d0b;
+
+  /* ---- indigo → coral brand accent (#E05B3F) ---- */
+  --color-indigo-50: #fdf2ef;
+  --color-indigo-100: #f8ddd5;
+  --color-indigo-200: #f0bcad;
+  --color-indigo-300: #e59a80;
+  --color-indigo-400: #ea7a5c;
+  --color-indigo-500: #e05b3f;
+  --color-indigo-600: #c94d33;
+  --color-indigo-700: #a83f2a;
+  --color-indigo-800: #853222;
+  --color-indigo-900: #68281c;
+  --color-indigo-950: #38130c;
+
+  /* ---- violet → deep coral (hover/active companions) ---- */
+  --color-violet-50: #fdf2ef;
+  --color-violet-100: #f8ddd5;
+  --color-violet-200: #f0bcad;
+  --color-violet-300: #e59a80;
+  --color-violet-400: #ea7a5c;
+  --color-violet-500: #d14e33;
+  --color-violet-600: #b84228;
+  --color-violet-700: #96361f;
+  --color-violet-800: #772c1a;
+  --color-violet-900: #5e2415;
+  --color-violet-950: #33110a;
+
+  /* ---- sky → warm amber (info accents) ---- */
+  --color-sky-50: #fdf8ed;
+  --color-sky-100: #f8ecd0;
+  --color-sky-200: #f0d69e;
+  --color-sky-300: #e5ba66;
+  --color-sky-400: #dd9f3d;
+  --color-sky-500: #d18a20;
+  --color-sky-600: #b26f17;
+  --color-sky-700: #8d5714;
+  --color-sky-800: #724615;
+  --color-sky-900: #5e3b15;
+  --color-sky-950: #371f09;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
 }
