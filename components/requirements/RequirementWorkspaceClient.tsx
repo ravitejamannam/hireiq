@@ -387,7 +387,7 @@ export default function RequirementWorkspaceClient({
             jobTitle={requirement.title}
             applyTokenHint={applyTokenHint ?? null}
             distributionId={distributionId ?? null}
-            companyId={companyId ?? 1}
+            companyId={companyId ?? null}
           />
           <SourcedCandidateForm jobId={requirement.id} />
           <section className="rounded-xl border border-zinc-200 bg-white p-6">

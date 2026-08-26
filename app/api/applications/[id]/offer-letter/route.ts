@@ -18,10 +18,15 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  let adminCompanyId: number | null;
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
+    adminCompanyId = admin.companyId;
   } catch {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401, headers: NO_STORE });
+  }
+  if (!adminCompanyId) {
+    return NextResponse.json({ ok: false, error: "No workspace." }, { status: 403, headers: NO_STORE });
   }
 
   const { id } = await context.params;
@@ -29,8 +34,9 @@ export async function GET(
     return NextResponse.json({ ok: false, error: "Invalid id." }, { status: 400, headers: NO_STORE });
   }
 
-  const application = await prisma.application.findUnique({
-    where: { id: Number.parseInt(id, 10) },
+  // Tenant guard (audit fix): cross-tenant ids return 404.
+  const application = await prisma.application.findFirst({
+    where: { id: Number.parseInt(id, 10), companyId: adminCompanyId },
     select: {
       id: true,
       status: true,

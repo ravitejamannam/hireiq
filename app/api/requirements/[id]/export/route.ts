@@ -11,10 +11,15 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  let adminCompanyId: number | null;
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
+    adminCompanyId = admin.companyId;
   } catch {
     return NextResponse.json({ ok: false }, { status: 401, headers: NO_STORE });
+  }
+  if (!adminCompanyId) {
+    return NextResponse.json({ ok: false }, { status: 403, headers: NO_STORE });
   }
 
   const { id } = await context.params;
@@ -23,8 +28,17 @@ export async function GET(
   }
   const jobId = Number.parseInt(id, 10);
 
+  // Tenant guard (audit fix): the job must belong to the caller's company.
+  const job = await prisma.job.findFirst({
+    where: { id: jobId, companyId: adminCompanyId },
+    select: { id: true },
+  });
+  if (!job) {
+    return NextResponse.json({ ok: false }, { status: 404, headers: NO_STORE });
+  }
+
   const applications = await prisma.application.findMany({
-    where: { jobId },
+    where: { jobId, companyId: adminCompanyId },
     select: {
       id: true, status: true, source: true, expertScore: true, createdAt: true,
       candidate: {

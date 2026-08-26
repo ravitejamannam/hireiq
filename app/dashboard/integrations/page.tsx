@@ -35,19 +35,21 @@ type PageProps = {
 };
 
 export default async function IntegrationsPage({ searchParams }: PageProps) {
+  const admin = await requireAdmin();
+  const adminCompanyId = admin.companyId ?? 0;
   await requireAdmin();
   const { status } = await searchParams;
 
   const webhookSubscriptions = await prisma.partnerWebhookSubscription.findMany({
-    where: { companyId: 1 },
+    where: { companyId: adminCompanyId },
     orderBy: { createdAt: "desc" },
     select: { id: true, url: true, events: true, active: true, createdAt: true },
   });
 
   const apiTokens = await prisma.apiToken.findMany({
-    where: { companyId: 1 },
+    where: { companyId: adminCompanyId },
     orderBy: { createdAt: "desc" },
-    select: { id: true, name: true, createdAt: true, revokedAt: true },
+    select: { id: true, name: true, createdAt: true, revokedAt: true, lastUsedAt: true },
   });
 
   const [health, deliveries, recon] = await Promise.all([
@@ -123,6 +125,7 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
               id: t.id,
               name: t.name,
               createdAt: t.createdAt.toISOString(),
+              lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
               revoked: t.revokedAt !== null,
             }))}
           />
@@ -137,7 +140,7 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
         </p>
         <div className="mt-4">
           <WebhookSubscriptionsPanel
-            companyId={1}
+            companyId={adminCompanyId}
             initialSubscriptions={webhookSubscriptions.map((s) => ({
               id: s.id,
               url: s.url,

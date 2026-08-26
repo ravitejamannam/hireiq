@@ -7,6 +7,7 @@ import { addSourcedCandidate } from "@/lib/candidates/sourced-intake";
 export async function addSourcedCandidateAction(input: {
   jobId: number;
   name: string;
+  email?: string;
   skills?: string;
   experienceYears?: number;
   location?: string;

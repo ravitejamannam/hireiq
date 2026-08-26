@@ -20,9 +20,11 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   let actorUserId: number;
+  let adminCompanyId: number | null;
   try {
     const admin = await requireAdmin();
     actorUserId = admin.id;
+    adminCompanyId = admin.companyId;
   } catch {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401, headers: NO_STORE });
   }
@@ -36,6 +38,7 @@ export async function POST(
     const result = await anonymizeCandidateForAdmin({
       actorUserId,
       candidateIdInput: Number.parseInt(id, 10),
+      expectedCompanyId: adminCompanyId ?? undefined,
     });
     return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
   } catch (error) {

@@ -13,6 +13,7 @@ export default function SourcedCandidateForm({ jobId }: { jobId: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [skills, setSkills] = useState("");
   const [experienceYears, setExperienceYears] = useState("");
   const [location, setLocation] = useState("");
@@ -29,6 +30,7 @@ export default function SourcedCandidateForm({ jobId }: { jobId: number }) {
       const res = await addSourcedCandidate({
         jobId,
         name,
+        email: email || undefined,
         skills: skills || undefined,
         experienceYears: experienceYears ? Number(experienceYears) : undefined,
         location: location || undefined,
@@ -45,6 +47,7 @@ export default function SourcedCandidateForm({ jobId }: { jobId: number }) {
           : `✓ ${name} added to the pipeline.`,
       );
       setName("");
+      setEmail("");
       setSkills("");
       setExperienceYears("");
       setLocation("");
@@ -85,6 +88,16 @@ export default function SourcedCandidateForm({ jobId }: { jobId: number }) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Priya Sharma"
+            className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </label>
+        <label className="text-xs font-medium text-zinc-500">
+          Email (optional — enables stage notifications)
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="priya@example.com"
             className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
         </label>

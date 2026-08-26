@@ -41,6 +41,8 @@ const ERASED_NAME_PREFIX = "Erased Candidate";
 export async function anonymizeCandidateForAdmin(input: {
   actorUserId: number;
   candidateIdInput: unknown;
+  /** Audit fix: when provided, cross-tenant candidates resolve to NOT_FOUND. */
+  expectedCompanyId?: number;
 }): Promise<{ candidateId: number; erasedItems: string[] }> {
   await requireAdmin();
 
@@ -50,6 +52,9 @@ export async function anonymizeCandidateForAdmin(input: {
     select: { id: true, companyId: true, name: true },
   });
   if (!candidate) throw new DataErasureError("CANDIDATE_NOT_FOUND");
+  if (input.expectedCompanyId !== undefined && candidate.companyId !== input.expectedCompanyId) {
+    throw new DataErasureError("CANDIDATE_NOT_FOUND");
+  }
 
   const erasedItems: string[] = [];
 

@@ -15,6 +15,8 @@ import { prisma } from "@/lib/prisma";
 export type SourcedCandidateInput = {
   jobId: number;
   name: string;
+  /** Optional — enables candidate stage-change emails for this person. */
+  email?: string;
   skills?: string;
   experienceYears?: number;
   location?: string;
@@ -30,19 +32,32 @@ export type SourcedCandidateResult =
 export async function addSourcedCandidate(
   input: SourcedCandidateInput,
 ): Promise<SourcedCandidateResult> {
-  let adminCompanyId: number;
+  let companyId: number;
   try {
     const admin = await requireAdmin();
     if (!admin.companyId) {
       return { ok: false, error: "No workspace found for this admin." };
     }
-    adminCompanyId = admin.companyId;
+    companyId = admin.companyId;
   } catch (error) {
     if (error instanceof AuthorizationError) {
       return { ok: false, error: "Admin access required." };
     }
     throw error;
   }
+  return addSourcedCandidateForCompany({ companyId, ...input });
+}
+
+/**
+ * Core intake used by both the admin UI path (session auth above) and
+ * the public API path (API-key auth in the route). Single source of
+ * truth for candidate matching, application upsert, and MANUAL
+ * provenance events.
+ */
+export async function addSourcedCandidateForCompany(input: {
+  companyId: number;
+} & SourcedCandidateInput): Promise<SourcedCandidateResult> {
+  const adminCompanyId = input.companyId;
 
   const name = input.name?.trim();
   if (!name || name.length < 2 || name.length > 120) {
@@ -61,6 +76,25 @@ export async function addSourcedCandidate(
     Number.isFinite(input.experienceYears) && (input.experienceYears ?? 0) >= 0
       ? Math.floor(input.experienceYears as number)
       : 0;
+
+  // Audit fix: optional email is normalised and recorded via a MANUAL
+  // ingestion event so stage-change notifications reach these candidates.
+  const emailNormalized = input.email?.trim().toLowerCase() || null;
+  if (emailNormalized !== null && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalized)) {
+    return { ok: false, error: "Email address is invalid." };
+  }
+
+  // Prefer the published specification version for provenance; fall back
+  // to the latest version so MANUAL events always satisfy the FK.
+  const specVersion = await prisma.jobSpecificationVersion.findFirst({
+    where: { jobId: job.id },
+    orderBy: [{ status: "desc" }, { versionNumber: "desc" }],
+    select: { id: true },
+  });
+  if (!specVersion) {
+    return { ok: false, error: "Requirement has no specification version." };
+  }
+  const publishedVersionId = specVersion.id;
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -103,6 +137,23 @@ export async function addSourcedCandidate(
           source: input.source,
         },
         select: { id: true },
+      });
+
+      // Audit fix: record a MANUAL ingestion event so sourced candidates
+      // participate in the same provenance chain (and receive stage
+      // emails) as hosted-apply candidates.
+      await tx.applicationIngestionEvent.create({
+        data: {
+          companyId: job.companyId,
+          jobId: job.id,
+          applicationId: application.id,
+          candidateId: candidate.id,
+          sourceChannel: "MANUAL",
+          jobSpecificationVersionId: publishedVersionId,
+          status: "PROCESSED",
+          applicantName: name,
+          applicantEmailNormalized: emailNormalized,
+        },
       });
 
       return {

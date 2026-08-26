@@ -165,6 +165,12 @@ export class WebhookReplayError extends Error {
  * error metadata. Never throws for provider-side rejections — those are
  * outcomes, not bugs.
  */
+/**
+ * Replay a quarantined INBOUND provider delivery.
+ * NOTE: ProviderWebhookDelivery rows are global infrastructure events
+ * (job-board -> HireIQ); they carry no company dimension, so this
+ * intentionally scopes by ADMIN ROLE ONLY, not by tenant.
+ */
 export async function replayQuarantinedDeliveryForAdmin(id: unknown) {
   const admin = await requireAdmin();
   void admin;

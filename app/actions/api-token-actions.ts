@@ -2,52 +2,55 @@
 
 import { revalidatePath } from "next/cache";
 
+import { requireAdmin, AuthorizationError } from "@/lib/auth/authorization";
+import { createApiTokenForCompany } from "@/lib/api/api-keys";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth/authorization";
 
 /**
- * Server actions for API token management (ADMIN only).
+ * T140 (audit fix): API token create/revoke UI actions.
+ * Restores functionality lost when ApiTokenManager became display-only.
  */
 
-export async function listApiTokens(companyId: number) {
-  await requireAdmin();
-  const rows = await prisma.apiToken.findMany({
-    where: { companyId },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      createdAt: true,
-      lastUsedAt: true,
-      revokedAt: true,
-    },
-  });
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    createdAt: r.createdAt.toISOString(),
-    lastUsedAt: r.lastUsedAt?.toISOString() ?? null,
-    revoked: r.revokedAt !== null,
-  }));
+export type CreateTokenResult =
+  | { ok: true; apiKey: string; name: string }
+  | { ok: false; error: string };
+
+export async function createApiTokenAction(
+  rawName: string,
+): Promise<CreateTokenResult> {
+  let companyId: number | null;
+  try {
+    const admin = await requireAdmin();
+    companyId = admin.companyId;
+  } catch (error) {
+    if (error instanceof AuthorizationError) return { ok: false, error: "Admin access required." };
+    throw error;
+  }
+  if (!companyId) return { ok: false, error: "No workspace found for this admin." };
+
+  const result = await createApiTokenForCompany({ companyId, name: rawName });
+  revalidatePath("/dashboard/integrations");
+  return { ok: true, apiKey: result.apiKey, name: result.name };
 }
 
-export async function revokeApiToken(tokenId: number, companyId: number) {
-  await requireAdmin();
+export async function revokeApiTokenAction(
+  tokenId: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  let companyId: number | null;
+  try {
+    const admin = await requireAdmin();
+    companyId = admin.companyId;
+  } catch (error) {
+    if (error instanceof AuthorizationError) return { ok: false, error: "Admin access required." };
+    throw error;
+  }
+  if (!companyId) return { ok: false, error: "No workspace found." };
+
+  // Tenant guard: only revoke tokens belonging to the caller's company.
   await prisma.apiToken.updateMany({
     where: { id: tokenId, companyId, revokedAt: null },
     data: { revokedAt: new Date() },
   });
   revalidatePath("/dashboard/integrations");
-}
-
-export async function createApiToken(companyId: number, name: string): Promise<{ apiKey: string } | { error: string }> {
-  const res = await fetch(`${process.env.APP_URL ?? "http://localhost:4000"}/api/v1/tokens`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      cookie: "",
-    },
-    body: JSON.stringify({ companyId, name }),
-  });
-  return res.json();
+  return { ok: true };
 }

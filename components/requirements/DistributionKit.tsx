@@ -25,7 +25,7 @@ export default function DistributionKit({
   /** First 8 chars of the stored hash — identification hint only. */
   applyTokenHint: string | null;
   distributionId: number | null;
-  companyId: number;
+  companyId: number | null;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
   const [applyToken, setApplyToken] = useState("");
@@ -60,7 +60,7 @@ export default function DistributionKit({
     {
       label: "API endpoint",
       description: "Programmatic access via your API key.",
-      value: `curl ${origin}/api/v1/jobs \\\n  -H "Authorization: Bearer hireiq_${companyId}_YOUR_KEY"`,
+      value: `curl ${origin}/api/v1/jobs \\\n  -H "Authorization: Bearer hireiq_${companyId ?? "YOUR_ID"}_YOUR_KEY"`,
       kind: "snippet",
     },
     {
