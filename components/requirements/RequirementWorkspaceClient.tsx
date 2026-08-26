@@ -30,6 +30,8 @@ import BillingRecordsPanel, {
   type BillingRecordView,
 } from "@/components/billing/BillingRecordsPanel";
 import PipelineCard from "@/components/pipeline/PipelineCard";
+import DistributionKit from "@/components/requirements/DistributionKit";
+import SourcedCandidateForm from "@/components/requirements/SourcedCandidateForm";
 import JobEvidenceCapturePanel from "@/components/requirements/JobEvidenceCapturePanel";
 import JobRankingPanel from "@/components/requirements/JobRankingPanel";
 import AssessmentLeaderboardPanel from "@/components/assess/AssessmentLeaderboardPanel";
@@ -71,6 +73,9 @@ type RequirementWorkspaceClientProps = {
   ranking?: JobRankingPageData | null;
   evidenceCapture?: JobEvidenceCapturePageData | null;
   assessmentLeaderboard?: AssessmentLeaderboardPage | null;
+  applyTokenHint?: string | null;
+  distributionId?: number | null;
+  companyId?: number;
 };
 
 const PIPELINE_STAGES: ApplicationPipelineStatus[] = [
@@ -131,6 +136,9 @@ export default function RequirementWorkspaceClient({
   ranking,
   evidenceCapture,
   assessmentLeaderboard,
+  applyTokenHint,
+  distributionId,
+  companyId,
 }: RequirementWorkspaceClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("overview");
@@ -374,6 +382,13 @@ export default function RequirementWorkspaceClient({
 
       {activeTab === "overview" && (
         <div className="mt-8 space-y-8">
+          <DistributionKit
+            jobTitle={requirement.title}
+            applyTokenHint={applyTokenHint ?? null}
+            distributionId={distributionId ?? null}
+            companyId={companyId ?? 1}
+          />
+          <SourcedCandidateForm jobId={requirement.id} />
           <section className="rounded-xl border border-zinc-200 bg-white p-6">
             <h2 className="text-xl font-bold text-black">Requirement information</h2>
             <dl className="mt-4 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2 lg:grid-cols-3">

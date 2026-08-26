@@ -98,8 +98,22 @@ function parseScoringKey(value: unknown): ScoringKey {
   return key;
 }
 
+/** T126: per-invite randomisation cap (TestGorilla-style). */
+export const ASSESSMENT_QUESTIONS_PER_INVITE = 10;
+/** Pool size considered for randomisation: least-used 2x cap, shuffled. */
+const RANDOMISATION_POOL_FACTOR = 2;
+
 function windowMs() {
   return ASSESSMENT_WINDOW_HOURS * 60 * 60 * 1000;
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
 }
 
 async function loadQuestionsForCategory(
@@ -125,14 +139,28 @@ async function loadQuestionsForCategory(
     throw new AssessmentError(ASSESSMENT_BANK_EMPTY, "UNAVAILABLE");
   }
 
-  if (options.incrementUsage && questions.length > 0) {
+  // T126: randomise within the least-used pool so consecutive invites see
+  // different items even when usage counters tie, further limiting leakage.
+  const poolSize = Math.min(
+    questions.length,
+    ASSESSMENT_QUESTIONS_PER_INVITE * RANDOMISATION_POOL_FACTOR,
+  );
+  const selected =
+    questions.length > ASSESSMENT_QUESTIONS_PER_INVITE
+      ? shuffle(questions.slice(0, poolSize)).slice(
+          0,
+          ASSESSMENT_QUESTIONS_PER_INVITE,
+        )
+      : questions;
+
+  if (options.incrementUsage && selected.length > 0) {
     await db.assessmentBankQuestion.updateMany({
-      where: { id: { in: questions.map((question) => question.id) } },
+      where: { id: { in: selected.map((question) => question.id) } },
       data: { timesUsed: { increment: 1 } },
     });
   }
 
-  return questions;
+  return selected;
 }
 
 export async function upsertAssessmentBank(db: Db = prisma) {

@@ -14,6 +14,7 @@ import { getEvaluationsByJobId } from "@/lib/repositories/evaluation-repository"
 import { getInterviewsByJobId } from "@/lib/repositories/interview-repository";
 import { getInterviewers } from "@/lib/repositories/interviewer-repository";
 import { getJobById } from "@/lib/repositories/job-repository";
+import { prisma } from "@/lib/prisma";
 
 type RequirementWorkspacePageProps = {
   params: Promise<{
@@ -87,6 +88,23 @@ export default async function RequirementWorkspacePage({
     assessmentLeaderboard = null;
   }
 
+  // T127: distribution kit context (apply token + first board distribution)
+  const distributionRow = await prisma.jobDistribution.findFirst({
+    where: { jobId: requirementId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      applyTokens: {
+        where: { revokedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { tokenHash: true },
+      },
+    },
+  });
+  const applyTokenHint =
+    distributionRow?.applyTokens[0]?.tokenHash.slice(0, 8) ?? null;
+
   return (
     <RequirementWorkspaceClient
       requirement={requirement}
@@ -98,6 +116,9 @@ export default async function RequirementWorkspacePage({
       ranking={ranking}
       evidenceCapture={evidenceCapture}
       assessmentLeaderboard={assessmentLeaderboard}
+      applyTokenHint={applyTokenHint}
+      distributionId={distributionRow?.id ?? null}
+      companyId={requirement.companyId}
     />
   );
 }
