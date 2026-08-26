@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 
+import {
+  RateLimitError,
+  consumeAuthRateLimit,
+  rateLimitKeyForIp,
+} from "@/lib/auth/rate-limit";
+import { readRequestIp } from "@/lib/auth/request-ip";
+
 import { isAllowedApplyOrigin } from "@/lib/apply/same-origin";
 import {
   bookSlotWithToken,
@@ -20,6 +27,19 @@ export async function POST(
   try {
     if (!isAllowedApplyOrigin(request)) {
       return NextResponse.json({ ok: false, error: "Unavailable." }, { status: 403, headers: NO_STORE });
+    }
+
+    // Audit fix: abuse guard on a public booking endpoint.
+    try {
+      await consumeAuthRateLimit({
+        name: "scheduleBookIp",
+        key: rateLimitKeyForIp(await readRequestIp()),
+      });
+    } catch (error) {
+      if (error instanceof RateLimitError) {
+        return NextResponse.json({ ok: false, error: "Too many attempts." }, { status: 429, headers: NO_STORE });
+      }
+      throw error;
     }
 
     const { token } = await context.params;

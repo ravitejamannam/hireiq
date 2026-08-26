@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "node:crypto";
+
 import { NextResponse } from "next/server";
 
 import { sendRecruiterDigest } from "@/lib/digests/recruiter-digest";
@@ -14,9 +16,15 @@ const NO_STORE = { "Cache-Control": "no-store" };
  */
 export async function POST(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get("authorization") ?? "";
+  const provided = request.headers.get("authorization") ?? "";
 
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  // Audit fix: constant-time comparison for the shared secret.
+  const expected = `Bearer ${cronSecret ?? ""}`;
+  const a = Buffer.from(provided.slice(0, 128));
+  const b = Buffer.from(expected.slice(0, 128));
+  const secretOk =
+    Boolean(cronSecret) && a.length === b.length && timingSafeEqual(a, b);
+  if (!secretOk) {
     return NextResponse.json(
       { ok: false, error: "Unauthorized. Configure CRON_SECRET and call with Bearer token." },
       { status: 401, headers: NO_STORE },

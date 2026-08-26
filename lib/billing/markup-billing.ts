@@ -24,7 +24,9 @@ export type MarkupResult =
     }
   | { ok: false; error: string };
 
-const MAX_CTC_CENTS = 10_000_000_00; // ₹10 crore sanity cap
+// Audit fix: was 10x too small (₹1 crore) despite the comment —
+// legitimate senior placements would have been rejected.
+const MAX_CTC_CENTS = 10_000_000_000; // ₹10 crore sanity cap
 const MAX_MARKUP_BPS = 50_000; // 500% sanity cap
 
 export async function setAgencyMarkup(

@@ -9,8 +9,10 @@ import {
 } from "@/lib/assessments/assessment-errors";
 
 function requireInviteSecret() {
-  const secret =
-    process.env.AUTH_SECRET?.trim() || process.env.APP_URL?.trim();
+  // Audit fix (critical): the previous APP_URL fallback signed invites
+  // with a PUBLIC value when AUTH_SECRET was unset — anyone could forge
+  // invite URLs for any applicationId. Fail closed instead.
+  const secret = process.env.AUTH_SECRET?.trim();
   if (!secret) {
     throw new AssessmentError(ASSESSMENT_INVITE_SECRET_REQUIRED, "UNAVAILABLE");
   }

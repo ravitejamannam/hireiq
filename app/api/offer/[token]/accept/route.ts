@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { RateLimitError } from "@/lib/auth/rate-limit";
+
+import { consumeAuthRateLimit, rateLimitKeyForIp } from "@/lib/auth/rate-limit";
+import { readRequestIp } from "@/lib/auth/request-ip";
 import { acceptOffer } from "@/lib/offers/offer-acceptance";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +17,19 @@ export async function POST(
   context: { params: Promise<{ token: string }> },
 ) {
   const { token } = await context.params;
+
+  // Audit fix: abuse guard on a public write endpoint.
+  try {
+    await consumeAuthRateLimit({
+      name: "offerAcceptIp",
+      key: rateLimitKeyForIp(await readRequestIp()),
+    });
+  } catch (error) {
+    if (error instanceof RateLimitError) {
+      return NextResponse.json({ ok: false, error: "Too many attempts." }, { status: 429, headers: NO_STORE });
+    }
+    throw error;
+  }
 
   try {
     const result = await acceptOffer(token);
