@@ -1424,6 +1424,12 @@ model ApplicationIngestionEvent {
 }
 
 /// HireIQ-owned MCQ bank. Not tenant data. Not interviewer-authored.
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
 model AssessmentBankQuestion {
   id           Int          @id @default(autoincrement())
   roleCategory RoleCategory
@@ -1433,6 +1439,8 @@ model AssessmentBankQuestion {
   correctIndex Int
   weight       Int          @default(1)
   skillTag     String?
+  /// T134: adaptive selection tier. Default MEDIUM for seeded questions.
+  difficulty   QuestionDifficulty @default(MEDIUM)
   /// T102: retired questions are excluded from future invites but kept
   /// for historical scoring reproducibility.
   active       Boolean      @default(true)
