@@ -337,6 +337,7 @@ export async function acceptInterviewerInvitationAndCreateLogin(input: {
           companyId: null,
           interviewerId: invitation.interviewerId,
           emailVerifiedAt: now,
+          passwordChangedAt: now,
         },
         select: { id: true, email: true },
       });

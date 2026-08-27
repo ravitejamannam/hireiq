@@ -35,10 +35,12 @@ const authUserSelect = {
   companyId: true,
   interviewerId: true,
   emailVerifiedAt: true,
+  disabledAt: true,
 } satisfies Prisma.UserSelect;
 
 type UserAuthorizationRow = AuthUser & {
   emailVerifiedAt: Date | null;
+  disabledAt: Date | null;
 };
 
 function denyResource(): never {
@@ -132,6 +134,10 @@ async function loadSessionUser(): Promise<UserAuthorizationRow> {
   });
 
   if (!user) {
+    throw new AuthenticationError();
+  }
+
+  if (user.disabledAt) {
     throw new AuthenticationError();
   }
 

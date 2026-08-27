@@ -160,6 +160,18 @@ export async function anonymizeCandidateForAdmin(input: {
 
   // 8. Public hosted-resume uploads bound to this candidate's submissions
   if (submissionIds.length > 0) {
+    const hostedUploads = await prisma.hostedApplyResumeUpload.findMany({
+      where: { hostedApplySubmissionId: { in: submissionIds } },
+      select: { storageKey: true },
+    });
+    for (const upload of hostedUploads) {
+      try {
+        const { deleteResume } = await import("@/lib/resumes/storage");
+        await deleteResume(upload.storageKey);
+      } catch {
+        // best-effort object delete
+      }
+    }
     await prisma.hostedApplyResumeUpload.updateMany({
       where: { hostedApplySubmissionId: { in: submissionIds } },
       data: {

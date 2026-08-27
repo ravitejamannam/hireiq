@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { timingSafeEqual } from "node:crypto";
-
 import { requireAdmin } from "@/lib/auth/authorization";
+import { bearerCronSecretMatches, headerSecretMatches } from "@/lib/auth/cron-auth";
 import { runReconciliationSweep } from "@/lib/jobs/distribution/reconciliation";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +17,12 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * Without a configured secret, cron-style invocation fails closed.
  */
 function cronSecretMatches(request: Request): boolean {
-  const configured = process.env.RECONCILIATION_SECRET?.trim();
-  const provided = request.headers.get("x-cron-secret")?.trim();
-  if (!configured || !provided) return false;
-  return timingSafeEqual(Buffer.from(configured), Buffer.from(provided));
+  return (
+    headerSecretMatches(
+      request.headers.get("x-cron-secret"),
+      process.env.RECONCILIATION_SECRET,
+    ) || bearerCronSecretMatches(request.headers.get("authorization"))
+  );
 }
 
 export async function POST(request: Request) {

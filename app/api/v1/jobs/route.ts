@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { resolveCompanyFromApiKey } from "@/lib/api/api-keys";
+import { requireCompanyFromApiRequest } from "@/lib/api/require-company-from-request";
 import { listPublicFeedJobs } from "@/lib/jobs/public-feed/public-feed-service";
 
 export const dynamic = "force-dynamic";
@@ -13,24 +13,9 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * roles in a clean JSON shape — the seed of the developer ecosystem.
  */
 export async function GET(request: Request) {
-  let companyId: number | null;
-  try {
-    companyId = await resolveCompanyFromApiKey(request.headers.get("authorization"));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("SECRET_UNCONFIGURED")) {
-      return NextResponse.json(
-        { ok: false, error: "API keys are not configured on this deployment." },
-        { status: 503, headers: NO_STORE },
-      );
-    }
-    throw error;
-  }
-  if (!companyId) {
-    return NextResponse.json(
-      { ok: false, error: "Invalid or revoked API key." },
-      { status: 401, headers: NO_STORE },
-    );
-  }
+  const auth = await requireCompanyFromApiRequest(request);
+  if (!auth.ok) return auth.response;
+  const { companyId } = auth;
 
   const jobs = await listPublicFeedJobs(companyId);
 

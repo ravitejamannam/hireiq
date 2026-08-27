@@ -8,6 +8,7 @@ import {
   deleteInterviewer,
   resendInterviewerInvite,
   revokeInterviewerInvite,
+  setInterviewerLoginDisabled,
   updateInterviewer,
 } from "@/app/actions/interviewer-actions";
 import type { getInterviewers } from "@/lib/repositories/interviewer-repository";
@@ -117,6 +118,16 @@ export default function InterviewersClient({
     }
   }
 
+  async function handleSetLoginDisabled(id: number, disabled: boolean) {
+    setActionError("");
+    try {
+      await setInterviewerLoginDisabled(id, disabled);
+      router.refresh();
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    }
+  }
+
   return (
     <>
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -165,6 +176,7 @@ export default function InterviewersClient({
             const pendingInvite = interviewer.invitations[0] ?? null;
             const loginStatus = resolveInterviewerLoginStatus({
               hasActiveUser: Boolean(activeUser),
+              userDisabled: Boolean(activeUser?.disabledAt),
               pendingInviteEmail: pendingInvite?.email ?? null,
             });
 
@@ -183,6 +195,7 @@ export default function InterviewersClient({
                 onDelete={handleDeleteInterviewer}
                 onResendInvite={handleResendInvite}
                 onRevokeInvite={handleRevokeInvite}
+                onSetLoginDisabled={handleSetLoginDisabled}
               />
             );
           })}

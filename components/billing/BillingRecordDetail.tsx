@@ -13,6 +13,7 @@ import { requirementLifecycleLabels } from "@/components/jobs/JobCard";
 type BillingRecordDetailProps = {
   record: BillingRecordView;
   requirementHref: string;
+  invoiceHref?: string;
   candidateHref?: (applicationId: number) => string | null;
   manageSlot?: ReactNode;
   showAdminControls?: boolean;
@@ -25,6 +26,7 @@ function getBillingLifecycleLabel(lifecycle: RequirementLifecycle) {
 export default function BillingRecordDetail({
   record,
   requirementHref,
+  invoiceHref,
   candidateHref,
   manageSlot,
   showAdminControls = false,
@@ -70,6 +72,16 @@ export default function BillingRecordDetail({
           </div>
         </dl>
         {manageSlot ? <div className="mt-6">{manageSlot}</div> : null}
+        {invoiceHref ? (
+          <p className="mt-6 text-sm">
+            <Link
+              href={invoiceHref}
+              className="font-medium text-black underline underline-offset-2"
+            >
+              Open printable invoice
+            </Link>
+          </p>
+        ) : null}
       </section>
 
       <BillingLineItems

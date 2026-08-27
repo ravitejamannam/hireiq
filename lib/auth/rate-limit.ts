@@ -47,6 +47,8 @@ export const AUTH_RATE_LIMITS = {
   assessmentPostTokenIp: { windowMs: 60 * 60 * 1000, max: 8 },
   offerAcceptIp: { windowMs: 15 * 60 * 1000, max: 20 },
   scheduleBookIp: { windowMs: 15 * 60 * 1000, max: 20 },
+  apiKeyIp: { windowMs: 15 * 60 * 1000, max: 120 },
+  apiKeyToken: { windowMs: 15 * 60 * 1000, max: 60 },
   linkedinWebhookIp: { windowMs: 15 * 60 * 1000, max: 60 },
   indeedWebhookIp: { windowMs: 15 * 60 * 1000, max: 60 },
   aiCandidateIntelligenceUser: { windowMs: 60 * 60 * 1000, max: 10 },

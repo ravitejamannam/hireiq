@@ -59,9 +59,8 @@ check "leaderboard renders" "$LEAD" "200"
 check "leaderboard PII-free" "$PII" "0"
 
 echo "════ SECTION 2: FEEDS + GOOGLE JOBS ════"
-cd ~/hireiq-app
-FTOKEN=$(npx tsx -e "import 'dotenv/config'; import('./lib/jobs/public-feed/feed-token').then(m=>{console.log(m.generateFeedToken(1));process.exit(0)})" 2>/dev/null | tail -1)
-cd - > /dev/null
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+FTOKEN=$(cd "$REPO_ROOT" && npx tsx -e "import 'dotenv/config'; import('./lib/jobs/public-feed/feed-token').then(m=>{console.log(m.generateFeedToken(1));process.exit(0)})" 2>/dev/null | tail -1)
 FC=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/feeds/jobs.xml?company=1&token=$FTOKEN")
 check "XML feed valid token" "$FC" "200"
 FBAD=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/feeds/jobs.xml?company=1&token=tampered")

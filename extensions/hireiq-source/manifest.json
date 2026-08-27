@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "HireIQ Source",
+  "version": "0.1.0",
+  "description": "Submit a sourced candidate into a HireIQ requirement. Does not scrape pages.",
+  "action": {
+    "default_title": "HireIQ Source",
+    "default_popup": "popup.html"
+  },
+  "permissions": ["storage"]
+}

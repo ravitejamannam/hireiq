@@ -1084,6 +1084,10 @@ model User {
   passwordHash String
   /// Null until the mailbox is proven. Existing V1 users are backfilled.
   emailVerifiedAt DateTime?
+  /// Set on password reset / invite completion. JWTs issued earlier are rejected.
+  passwordChangedAt DateTime?
+  /// Set when an admin deactivates a login. Null means the account may authenticate.
+  disabledAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1715,9 +1719,63 @@ model PartnerWebhookSubscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  company    Company                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  deliveries OutboundWebhookDelivery[]
 
   @@index([companyId, active])
+}
+
+enum OutboundEmailStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+/// Durable outbound email queue. Resend is attempted immediately; failures
+/// retry on cron until SENT or attempts are exhausted.
+model OutboundEmailAttempt {
+  id          Int                 @id @default(autoincrement())
+  to          String
+  subject     String
+  text        String
+  html        String
+  status      OutboundEmailStatus @default(PENDING)
+  attempts    Int                 @default(0)
+  lastError   String?
+  nextRetryAt DateTime            @default(now())
+  sentAt      DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([status, nextRetryAt])
+}
+
+enum OutboundWebhookDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+}
+
+/// Outbound partner webhook deliveries with retry. Distinct from inbound
+/// ProviderWebhookDelivery (LinkedIn/Indeed).
+model OutboundWebhookDelivery {
+  id             Int                           @id @default(autoincrement())
+  subscriptionId Int
+  event          String
+  payload        String
+  status         OutboundWebhookDeliveryStatus @default(PENDING)
+  attempts       Int                           @default(0)
+  lastStatusCode Int?
+  lastError      String?
+  nextRetryAt    DateTime                      @default(now())
+  deliveredAt    DateTime?
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+
+  subscription PartnerWebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([status, nextRetryAt])
+  @@index([subscriptionId])
 }
 
 

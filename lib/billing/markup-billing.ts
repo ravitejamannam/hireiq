@@ -1,7 +1,10 @@
 import { revalidatePath } from "next/cache";
 
 import { requireAdmin, AuthorizationError } from "@/lib/auth/authorization";
+import { computeMarkupFeeCents } from "@/lib/billing/markup-math";
 import { prisma } from "@/lib/prisma";
+
+export { computeMarkupFeeCents, formatCents } from "@/lib/billing/markup-math";
 
 /**
  * T132 Transparent markup billing (Bullhorn model, honesty twist).
@@ -27,7 +30,7 @@ export type MarkupResult =
 // Audit fix: was 10x too small (₹1 crore) despite the comment —
 // legitimate senior placements would have been rejected.
 const MAX_CTC_CENTS = 10_000_000_000; // ₹10 crore sanity cap
-const MAX_MARKUP_BPS = 50_000; // 500% sanity cap
+export const MAX_MARKUP_BPS = 50_000; // 500% sanity cap
 
 export async function setAgencyMarkup(
   markupBps: number,
@@ -97,8 +100,7 @@ export async function recordPlacementCompensation(
   }
 
   const markupBps = company.agencyMarkupBps;
-  // Exact integer math: no floats touch money.
-  const feeCents = Math.round((placedCtcCents * markupBps) / 10_000);
+  const feeCents = computeMarkupFeeCents(placedCtcCents, markupBps);
 
   await prisma.billingLineItem.update({
     where: { id: lineItem.id },
@@ -114,9 +116,4 @@ export async function recordPlacementCompensation(
   revalidatePath(`/dashboard/billing`);
   revalidatePath("/client/billing");
   return { ok: true, placedCtcCents, markupBps, feeCents };
-}
-
-/** Format paise/cents → rupee string for transparent displays. */
-export function formatCents(cents: number): string {
-  return `₹${(cents / 100).toLocaleString("en-IN")}`;
 }

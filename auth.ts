@@ -10,7 +10,7 @@ import {
   rateLimitKeyForEmail,
   rateLimitKeyForIp,
 } from "@/lib/auth/rate-limit";
-import { getUserCredentialsByEmail } from "@/lib/repositories/user-repository";
+import { getUserCredentialsByEmail, getUserSessionGuard } from "@/lib/repositories/user-repository";
 import {
   UserValidationError,
   validateLoginCredentials,
@@ -52,7 +52,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           const user = await getUserCredentialsByEmail(email);
 
-          if (!user) {
+          if (!user || user.disabledAt) {
             return null;
           }
 
@@ -88,16 +88,51 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     ...authConfig.callbacks,
     async jwt({ token, user }) {
+      if (token.error === "revoked" && !user) {
+        return token;
+      }
+
       if (user) {
         token.id = user.id!;
         token.role = user.role;
         token.email = user.email;
         token.name = user.name;
+        token.pwdAt = Date.now();
+        delete token.error;
+      }
+
+      // Middleware/proxy runs on the Edge runtime — no Prisma.
+      if (process.env.NEXT_RUNTIME === "edge") {
+        return token;
+      }
+
+      const userId = Number(token.id);
+      if (!Number.isInteger(userId) || userId <= 0) {
+        return { ...token, error: "revoked" as const };
+      }
+
+      const guard = await getUserSessionGuard(userId);
+      if (!guard || guard.disabledAt) {
+        return { ...token, error: "revoked" as const };
+      }
+      if (user) {
+        token.pwdAt = guard.passwordChangedAt?.getTime() ?? Date.now();
+        return token;
+      }
+      if (
+        guard.passwordChangedAt &&
+        typeof token.pwdAt === "number" &&
+        guard.passwordChangedAt.getTime() > token.pwdAt
+      ) {
+        return { ...token, error: "revoked" as const };
       }
 
       return token;
     },
     async session({ session, token }) {
+      if (token.error === "revoked" || !token.id) {
+        return { ...session, user: undefined as never };
+      }
       if (session.user) {
         session.user.id = String(token.id);
         session.user.email = typeof token.email === "string" ? token.email : "";

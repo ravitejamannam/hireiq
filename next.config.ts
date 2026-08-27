@@ -7,6 +7,29 @@ const nextConfig: NextConfig = {
    * loads from node_modules at runtime (T97 resume text extraction).
    */
   serverExternalPackages: ["pdf-parse"],
+  async headers() {
+    return [
+      {
+        source: "/embed/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors *",
+          },
+        ],
+      },
+      {
+        source: "/((?!embed/).*)",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'self'",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

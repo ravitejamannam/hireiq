@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/ops/cron",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/digest/send",
+      "schedule": "0 8 * * 1-5"
+    },
+    {
+      "path": "/api/integrations/reconcile",
+      "schedule": "15 * * * *"
+    }
+  ]
+}

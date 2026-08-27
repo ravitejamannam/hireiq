@@ -13,9 +13,8 @@ import { validateBootstrapPassword } from "@/lib/validation/user-validation";
 import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 /**
- * Password reset updates passwordHash and consumes reset tokens.
- * Existing Auth.js JWTs remain valid until they expire. T80 does not
- * introduce passwordChangedAt or session revocation.
+ * Password reset updates passwordHash, stamps passwordChangedAt, and
+ * consumes reset tokens. Existing JWTs issued before the stamp are rejected.
  */
 export class PasswordResetError extends Error {
   constructor(message: string) {
@@ -176,7 +175,7 @@ export async function resetPasswordWithToken(input: {
 
       await tx.user.update({
         where: { id: record.userId },
-        data: { passwordHash },
+        data: { passwordHash, passwordChangedAt: now },
       });
 
       await tx.passwordResetToken.update({

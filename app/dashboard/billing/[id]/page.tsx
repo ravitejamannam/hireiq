@@ -74,6 +74,7 @@ export default async function AdminBillingDetailPage({
         showAdminControls={true}
         record={record}
         requirementHref={`/dashboard/requirements/${record.job.id}`}
+        invoiceHref={`/dashboard/billing/${record.id}/invoice`}
         manageSlot={
           <div>
             <p className="text-sm font-medium text-black">Manage status</p>

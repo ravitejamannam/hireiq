@@ -69,6 +69,19 @@ export async function getUserCredentialsByEmail(email: string) {
       name: true,
       role: true,
       passwordHash: true,
+      passwordChangedAt: true,
+      disabledAt: true,
+    },
+  });
+}
+
+export async function getUserSessionGuard(userId: number) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      disabledAt: true,
+      passwordChangedAt: true,
     },
   });
 }

@@ -12,7 +12,7 @@ type AssignedJob = {
   requirementLifecycle: RequirementLifecycle;
 };
 
-type LoginStatus = "ACTIVE" | "PENDING_INVITE" | "NO_LOGIN";
+type LoginStatus = "ACTIVE" | "DISABLED" | "PENDING_INVITE" | "NO_LOGIN";
 
 type InterviewerCardProps = {
   id: number;
@@ -27,6 +27,7 @@ type InterviewerCardProps = {
   onDelete: (id: number) => void;
   onResendInvite: (id: number) => void;
   onRevokeInvite: (invitationId: number) => void;
+  onSetLoginDisabled: (id: number, disabled: boolean) => void;
 };
 
 const categoryLabels: Record<InterviewerCategory, string> = {
@@ -48,12 +49,14 @@ const availabilityClasses: Record<InterviewerAvailability, string> = {
 
 const loginStatusLabels: Record<LoginStatus, string> = {
   ACTIVE: "Active login",
+  DISABLED: "Login disabled",
   PENDING_INVITE: "Pending invite",
   NO_LOGIN: "No login",
 };
 
 const loginStatusClasses: Record<LoginStatus, string> = {
   ACTIVE: "bg-emerald-50 text-emerald-800",
+  DISABLED: "bg-red-50 text-red-800",
   PENDING_INVITE: "bg-amber-50 text-amber-800",
   NO_LOGIN: "bg-zinc-100 text-zinc-700",
 };
@@ -71,6 +74,7 @@ export default function InterviewerCard({
   onDelete,
   onResendInvite,
   onRevokeInvite,
+  onSetLoginDisabled,
 }: InterviewerCardProps) {
   return (
     <article className="rounded-xl border border-zinc-200 bg-white p-6 transition hover:border-black">
@@ -132,6 +136,24 @@ export default function InterviewerCard({
                 </button>
               ) : null}
             </>
+          ) : null}
+          {loginStatus === "ACTIVE" ? (
+            <button
+              type="button"
+              onClick={() => onSetLoginDisabled(id, true)}
+              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+            >
+              Disable login
+            </button>
+          ) : null}
+          {loginStatus === "DISABLED" ? (
+            <button
+              type="button"
+              onClick={() => onSetLoginDisabled(id, false)}
+              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+            >
+              Enable login
+            </button>
           ) : null}
           <button
             type="button"

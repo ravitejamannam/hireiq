@@ -217,3 +217,41 @@ export async function acceptInterviewerInvite(token: unknown) {
     token,
   });
 }
+
+export async function setInterviewerLoginDisabled(
+  interviewerId: number,
+  disabled: boolean,
+) {
+  await requireAdmin();
+  const id = validateInterviewerId(interviewerId);
+  await ensureInterviewerExists(id);
+
+  const user = await prisma.user.findFirst({
+    where: { interviewerId: id, role: "INTERVIEWER" },
+    select: { id: true },
+  });
+  if (!user) {
+    throw new InterviewerInvitationError("This interviewer has no login yet.");
+  }
+
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: {
+        disabledAt: disabled ? now : null,
+        passwordChangedAt: disabled ? now : undefined,
+      },
+    }),
+    prisma.interviewer.update({
+      where: { id },
+      data: {
+        availability: disabled ? "NOT_AVAILABLE" : "AVAILABLE",
+      },
+    }),
+  ]);
+
+  revalidatePath("/dashboard/interviewers");
+  revalidatePath("/dashboard/jobs");
+  return { ok: true as const, disabled };
+}

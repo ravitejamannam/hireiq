@@ -58,6 +58,7 @@ export default async function ClientBillingDetailPage({
       <BillingRecordDetail
         record={record}
         requirementHref={`/client/requirements/${record.job.id}`}
+        invoiceHref={`/client/billing/${record.id}/invoice`}
         candidateHref={(applicationId) =>
           `/client/requirements/${record.job.id}/candidates/${applicationId}`
         }

@@ -2,6 +2,7 @@
 
 import { notifyCandidateOfStageChange } from "@/lib/candidates/stage-change-emails";
 import { dispatchWebhookEvent } from "@/lib/interviews/webhook-dispatch";
+import { scheduleBackgroundWork } from "@/lib/communication/schedule-background";
 
 import {
   AuthorizationError,
@@ -454,24 +455,14 @@ export async function transitionApplicationStatus(
     // revalidatePath requires a Next.js request context
   }
 
-  // T117: notify candidate of stage change (best-effort, never blocks)
-  void notifyCandidateOfStageChange(applicationId, nextStatus).catch(
-    (error) => console.error("[stage-email] failed", error),
-  );
+  emitPipelineSideEffects({
+    applicationId,
+    companyId,
+    previousStatus: application.status,
+    nextStatus,
+  });
 
   return updatedApplication;
-
-    // T112: fire outbound webhook for subscribed partners (best-effort).
-    void dispatchWebhookEvent({
-      event: "application.status_changed",
-      companyId,
-      data: {
-        applicationId,
-        previousStatus: application!.status as string,
-        newStatus: nextStatus as string,
-        changedAt: new Date().toISOString(),
-      },
-    }).catch(() => undefined);
 }
 
 /**
@@ -512,6 +503,7 @@ export async function transitionInterviewerApplicationStatus(
       id: true,
       status: true,
       jobId: true,
+      companyId: true,
       job: {
         select: {
           assignedInterviewerId: true,
@@ -586,6 +578,13 @@ export async function transitionInterviewerApplicationStatus(
   } catch {
     // revalidatePath requires a Next.js request context
   }
+
+  emitPipelineSideEffects({
+    applicationId: application.id,
+    companyId: application.companyId,
+    previousStatus: application.status,
+    nextStatus,
+  });
 
   return updatedApplication;
 }
@@ -688,6 +687,13 @@ export async function selectClientCandidate(applicationId: number) {
   } catch {
     // revalidatePath requires a Next.js request context
   }
+
+  emitPipelineSideEffects({
+    applicationId: application.id,
+    companyId: application.companyId,
+    previousStatus: application.status,
+    nextStatus: ApplicationPipelineStatus.SELECTED,
+  });
 
   return updatedApplication;
 }
@@ -799,6 +805,13 @@ export async function confirmClientCandidateHire(applicationId: number) {
     // revalidatePath requires a Next.js request context
   }
 
+  emitPipelineSideEffects({
+    applicationId: application.id,
+    companyId: application.companyId,
+    previousStatus: application.status,
+    nextStatus: ApplicationPipelineStatus.HIRED,
+  });
+
   return updatedApplication;
 }
 
@@ -835,6 +848,27 @@ function translateApplicationDeleteError(error: unknown) {
   }
 
   return new Error("Unable to delete application.");
+}
+
+function emitPipelineSideEffects(input: {
+  applicationId: number;
+  companyId: number;
+  previousStatus: string;
+  nextStatus: ApplicationPipelineStatus;
+}) {
+  scheduleBackgroundWork(async () => {
+    await notifyCandidateOfStageChange(input.applicationId, input.nextStatus);
+    await dispatchWebhookEvent({
+      event: "application.status_changed",
+      companyId: input.companyId,
+      data: {
+        applicationId: input.applicationId,
+        previousStatus: input.previousStatus,
+        newStatus: input.nextStatus,
+        changedAt: new Date().toISOString(),
+      },
+    });
+  });
 }
 
 /**

@@ -2,47 +2,33 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 
+import { S3ResumeStorage } from "@/lib/resumes/s3-driver";
+import {
+  ResumeStorageError,
+  type ResumeStorageDriver,
+  type StoredResume,
+} from "@/lib/resumes/storage-types";
+
+export type { ResumeStorageDriver, StoredResume };
+export { ResumeStorageError };
+
 /**
  * Resume binary storage (T97 / constitution §29).
  *
- * Binaries live outside PostgreSQL. The LOCAL driver persists under
- * `.data/resumes/` (gitignored) with non-guessable keys; the interface is
- * the seam for an S3-compatible driver when a ticket asks for it.
+ * LOCAL writes under `.data/resumes/` (gitignored).
+ * S3 uses AWS SigV4 against S3/R2/MinIO when RESUME_STORAGE_DRIVER=S3.
  *
  * Keys are opaque UUIDs — user-supplied file names never touch the path.
  */
 
-export class ResumeStorageError extends Error {
-  readonly code: string;
-  constructor(code: string) {
-    super(code);
-    this.code = code;
-  }
-}
-
-export type StoredResume = {
-  storageKey: string;
-  sizeBytes: number;
-  contentSha256: string;
-};
-
-export interface ResumeStorageDriver {
-  put(key: string, bytes: Buffer): Promise<void>;
-  get(key: string): Promise<Buffer | null>;
-  delete(key: string): Promise<void>;
-}
+const STORAGE_KEY_RE =
+  /^[a-f0-9-]{36}\/[a-f0-9-]{36}\/[a-f0-9-]{36}\.[a-z0-9]{2,10}$/;
 
 class LocalResumeStorage implements ResumeStorageDriver {
-  private readonly root: string;
-
-  constructor(root: string) {
-    this.root = root;
-  }
+  constructor(private readonly root: string) {}
 
   private resolve(key: string): string {
-    // Defense in depth: key shape is system-generated, but reject anything
-    // that could escape the root even if a future caller misuses the API.
-    if (!/^[a-f0-9-]{36}\/[a-f0-9-]{36}\/[a-f0-9-]{36}\.[a-z0-9]{2,10}$/.test(key)) {
+    if (!STORAGE_KEY_RE.test(key)) {
       throw new ResumeStorageError("INVALID_STORAGE_KEY");
     }
     return path.join(this.root, key);
@@ -72,23 +58,29 @@ class LocalResumeStorage implements ResumeStorageDriver {
 }
 
 const localRoot = process.env.RESUME_STORAGE_DIR?.trim() || ".data/resumes";
-
-const drivers = {
-  LOCAL: new LocalResumeStorage(localRoot),
-} as const;
-
-type StorageDriverName = keyof typeof drivers;
+const localDriver = new LocalResumeStorage(localRoot);
+const s3Driver = new S3ResumeStorage();
 
 function activeDriver(): ResumeStorageDriver {
-  const configured = (process.env.RESUME_STORAGE_DRIVER ?? "LOCAL") as StorageDriverName;
-  const driver = drivers[configured];
-  if (!driver) {
-    throw new ResumeStorageError("STORAGE_DRIVER_UNAVAILABLE");
+  const configured = (process.env.RESUME_STORAGE_DRIVER ?? "LOCAL")
+    .trim()
+    .toUpperCase();
+  if (configured === "LOCAL") {
+    return localDriver;
   }
-  return driver;
+  if (configured === "S3") {
+    return s3Driver;
+  }
+  throw new ResumeStorageError("STORAGE_DRIVER_UNAVAILABLE");
 }
 
-export function buildResumeStorageKey(companyId: number, candidateId: number, extension: string): string {
+export function buildResumeStorageKey(
+  companyId: number,
+  candidateId: number,
+  extension: string,
+): string {
+  void companyId;
+  void candidateId;
   return `${randomUUID()}/${randomUUID()}/${randomUUID()}.${extension}`;
 }
 

@@ -35,6 +35,9 @@ jobs:
       - name: TypeScript
         run: pnpm tsc --noEmit
 
+      - name: Unit tests
+        run: pnpm test
+
       - name: ESLint
         run: pnpm eslint lib app scripts --max-warnings 0
 

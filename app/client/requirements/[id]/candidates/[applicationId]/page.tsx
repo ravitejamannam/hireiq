@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
+import DecisionSupportRails from "@/components/candidates/DecisionSupportRails";
 import ClientCandidateProfile from "@/components/client/ClientCandidateProfile";
 import { selectPrimaryClientEvaluation } from "@/components/client/client-labels";
+import { getApplicationAssessmentSummary } from "@/lib/assessments/assessment-service";
 import { requireClientPortal } from "@/lib/auth/authorization";
+import { getDecisionSupportForCandidate } from "@/lib/candidates/decision-support-service";
 import { getOrMaterializeCandidateProfile } from "@/lib/candidates/candidate-profile-service";
 import { getClientApplicationForRequirement } from "@/lib/repositories/application-repository";
-import { getApplicationAssessmentSummary } from "@/lib/assessments/assessment-service";
 
 type ClientCandidateDetailPageProps = {
   params: Promise<{
@@ -23,7 +25,7 @@ export default async function ClientCandidateDetailPage({
   // Ignore tenant query params — company comes from the session User only.
   void searchParams;
 
-  await requireClientPortal();
+  const client = await requireClientPortal();
 
   const { id, applicationId: applicationIdParam } = await params;
   const requirementId = Number(id);
@@ -52,6 +54,18 @@ export default async function ClientCandidateDetailPage({
     application.candidate.id,
   );
   const assessment = await getApplicationAssessmentSummary(application.id);
+  let signals: Awaited<
+    ReturnType<typeof getDecisionSupportForCandidate>
+  >["signals"] = [];
+  try {
+    const view = await getDecisionSupportForCandidate(application.candidate.id, {
+      companyId: client.companyId,
+      skipAdmin: true,
+    });
+    signals = view.signals;
+  } catch {
+    signals = [];
+  }
 
   return (
     <div>
@@ -68,6 +82,10 @@ export default async function ClientCandidateDetailPage({
         >
           ← Back to Requirements
         </Link>
+      </div>
+
+      <div className="mb-8">
+        <DecisionSupportRails signals={signals} />
       </div>
 
       <ClientCandidateProfile

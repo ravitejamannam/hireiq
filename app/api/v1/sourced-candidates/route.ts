@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { resolveCompanyFromApiKey } from "@/lib/api/api-keys";
+import { requireCompanyFromApiRequest } from "@/lib/api/require-company-from-request";
 import { addSourcedCandidateForCompany } from "@/lib/candidates/sourced-intake";
 
 export const dynamic = "force-dynamic";
@@ -16,18 +16,9 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * extension-sourced candidates).
  */
 export async function POST(request: Request) {
-  let companyId: number | null;
-  try {
-    companyId = await resolveCompanyFromApiKey(request.headers.get("authorization"));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("SECRET_UNCONFIGURED")) {
-      return NextResponse.json({ ok: false, error: "API keys not configured." }, { status: 503, headers: NO_STORE });
-    }
-    throw error;
-  }
-  if (!companyId) {
-    return NextResponse.json({ ok: false, error: "Invalid or revoked API key." }, { status: 401, headers: NO_STORE });
-  }
+  const auth = await requireCompanyFromApiRequest(request);
+  if (!auth.ok) return auth.response;
+  const { companyId } = auth;
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
@@ -46,7 +37,7 @@ export async function POST(request: Request) {
     location: typeof body.location === "string" ? body.location : undefined,
     currentEmployer:
       typeof body.currentEmployer === "string" ? body.currentEmployer : undefined,
-    source: body.source === "NAUKRI" ? "NAUKRI" : body.source === "LINKEDIN" ? "LINKEDIN" : ("" as never),
+    source: body.source === "NAUKRI" ? "NAUKRI" : "LINKEDIN",
   });
 
   if (!result.ok) {

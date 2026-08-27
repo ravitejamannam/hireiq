@@ -12,15 +12,16 @@ const interviewerSelect = {
   availability: true,
   createdAt: true,
   updatedAt: true,
-  users: {
-    where: { role: "INTERVIEWER" as const },
-    select: {
-      id: true,
-      email: true,
-      emailVerifiedAt: true,
-    },
-    take: 1,
-  },
+      users: {
+        where: { role: "INTERVIEWER" as const },
+        select: {
+          id: true,
+          email: true,
+          emailVerifiedAt: true,
+          disabledAt: true,
+        },
+        take: 1,
+      },
   invitations: {
     where: {
       acceptedAt: null,

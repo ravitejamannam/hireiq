@@ -86,7 +86,8 @@ export default function DistributionKit({
     <section className="rounded-2xl border border-zinc-200 bg-white p-6">
       <h2 className="text-lg font-bold text-black">Distribution kit</h2>
       <p className="mt-1 text-sm text-zinc-500">
-        {jobTitle} is live everywhere HireIQ can reach. Copy any channel.
+        {jobTitle} is live on HireIQ-controlled channels (hosted apply, job
+        page, XML feed, embed). LinkedIn / Indeed / Naukri stay partner-gated.
       </p>
 
       {applyTokenHint ? (

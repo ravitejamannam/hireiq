@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HireIQ Source</title>
+    <style>
+      body { font: 13px/1.4 system-ui, sans-serif; width: 320px; margin: 0; padding: 16px; color: #111; }
+      label { display: block; margin: 8px 0 4px; font-weight: 600; }
+      input, select { width: 100%; box-sizing: border-box; padding: 6px 8px; }
+      button { margin-top: 12px; width: 100%; padding: 8px; background: #111; color: #fff; border: 0; cursor: pointer; }
+      p { margin: 0 0 8px; color: #555; }
+      #status { margin-top: 10px; min-height: 1.2em; }
+    </style>
+  </head>
+  <body>
+    <p>Paste a HireIQ API key and the requirement id, then submit the person you are looking at. This extension does not scrape LinkedIn.</p>
+    <label for="origin">HireIQ origin</label>
+    <input id="origin" placeholder="https://app.example.com" />
+    <label for="apiKey">API key</label>
+    <input id="apiKey" type="password" placeholder="hireiq_1_…" />
+    <label for="jobId">Requirement / job id</label>
+    <input id="jobId" inputmode="numeric" />
+    <label for="name">Name</label>
+    <input id="name" />
+    <label for="email">Email (optional)</label>
+    <input id="email" type="email" />
+    <label for="source">Source</label>
+    <select id="source">
+      <option value="LINKEDIN">LinkedIn</option>
+      <option value="NAUKRI">Naukri</option>
+    </select>
+    <button id="save" type="button">Save settings</button>
+    <button id="submit" type="button">Submit candidate</button>
+    <p id="status"></p>
+    <script src="popup.js"></script>
+  </body>
+</html>

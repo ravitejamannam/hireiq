@@ -48,12 +48,20 @@ export function validateInterviewerInviteId(id: unknown) {
   return id;
 }
 
-export type InterviewerLoginStatus = "ACTIVE" | "PENDING_INVITE" | "NO_LOGIN";
+export type InterviewerLoginStatus =
+  | "ACTIVE"
+  | "DISABLED"
+  | "PENDING_INVITE"
+  | "NO_LOGIN";
 
 export function resolveInterviewerLoginStatus(input: {
   hasActiveUser: boolean;
+  userDisabled: boolean;
   pendingInviteEmail: string | null;
 }): InterviewerLoginStatus {
+  if (input.hasActiveUser && input.userDisabled) {
+    return "DISABLED";
+  }
   if (input.hasActiveUser) {
     return "ACTIVE";
   }

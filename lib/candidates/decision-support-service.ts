@@ -40,18 +40,30 @@ export type DecisionSupportView = {
 
 export async function getDecisionSupportForCandidate(
   candidateIdInput: unknown,
+  options?: { companyId?: number; skipAdmin?: boolean },
 ): Promise<DecisionSupportView> {
-  await requireAdmin();
+  if (!options?.skipAdmin) {
+    await requireAdmin();
+  }
 
   const candidateId = validateCandidateId(candidateIdInput);
   const candidate = await prisma.candidate.findUnique({
     where: { id: candidateId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, companyId: true },
   });
   if (!candidate) throw new DecisionSupportError("CANDIDATE_NOT_FOUND");
+  if (
+    options?.companyId !== undefined &&
+    candidate.companyId !== options.companyId
+  ) {
+    throw new DecisionSupportError("CANDIDATE_NOT_FOUND");
+  }
 
   const applications = await prisma.application.findMany({
-    where: { candidateId },
+    where: {
+      candidateId,
+      ...(options?.companyId ? { companyId: options.companyId } : {}),
+    },
     select: {
       id: true,
       status: true,
@@ -103,6 +115,25 @@ export async function getDecisionSupportForCandidate(
     attempts.map((a) => [a.invite.applicationId, a]),
   );
 
+  const matchRuns = await prisma.candidateMatchRun.findMany({
+    where: {
+      candidateId,
+      status: "COMPLETED",
+      applicationId: { in: applications.map((a) => a.id) },
+    },
+    select: {
+      applicationId: true,
+      requirementMatches: { select: { result: true } },
+    },
+    orderBy: { id: "desc" },
+  });
+  const matchByApp = new Map<number, (typeof matchRuns)[number]>();
+  for (const run of matchRuns) {
+    if (!matchByApp.has(run.applicationId)) {
+      matchByApp.set(run.applicationId, run);
+    }
+  }
+
   const signals: CandidateSignal[] = [];
 
   for (const app of applications) {
@@ -130,6 +161,22 @@ export async function getDecisionSupportForCandidate(
         label: `Assessment${assessment.invite.roleCategory ? ` · ${assessment.invite.roleCategory}` : ""} — ${scope}`,
         detail: `${assessment.score}/${assessment.maxScore}`,
         meta: integrityMeta,
+      });
+    }
+
+    const matchRun = matchByApp.get(app.id);
+    if (matchRun) {
+      const satisfied = matchRun.requirementMatches.filter(
+        (row) => row.result === "SATISFIED",
+      ).length;
+      const unknown = matchRun.requirementMatches.filter(
+        (row) => row.result === "UNKNOWN",
+      ).length;
+      signals.push({
+        kind: "MATCHING",
+        label: `Evidence coverage — ${scope}`,
+        detail: `${satisfied} satisfied`,
+        meta: `${unknown} unknown (missing evidence, not a fail) · ${matchRun.requirementMatches.length} requirements`,
       });
     }
 
