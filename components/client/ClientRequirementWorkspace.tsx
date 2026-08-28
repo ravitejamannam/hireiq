@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type {
   JobDescriptionAiGenerationStatus,
   JobStatus,
@@ -12,16 +13,19 @@ import {
   clientJobStatusLabels,
   clientRequirementLifecycleLabels,
   formatClientDate,
+  formatRelativePosted,
   type ClientPipelineCounts,
 } from "@/components/client/client-labels";
 import ClientRequirementCandidates from "@/components/client/ClientRequirementCandidates";
 import ClientRequirementNav from "@/components/client/ClientRequirementNav";
 import JobDistributionPanel from "@/components/client/JobDistributionPanel";
 import type { ClientCandidateCardData } from "@/components/client/ClientCandidateCard";
+import JobPostingDetail from "@/components/jobs/JobPostingDetail";
 import type { SafeProviderConnection } from "@/lib/jobs/distribution/connection-service";
 import type { SafeJobDistribution } from "@/lib/jobs/distribution/distribution-service";
 import type { AssessmentLeaderboardPage } from "@/lib/assessments/assessment-service";
 import AssessmentLeaderboardPanel from "@/components/assess/AssessmentLeaderboardPanel";
+import { resolveJobPostingView } from "@/lib/jobs/job-posting-view";
 
 const roleCategoryLabels: Record<RoleCategory, string> = {
   ENGINEERING: "Engineering",
@@ -47,6 +51,10 @@ export type ClientRequirementWorkspaceData = {
   jobDescription: string | null;
   evaluationCriteria: string | null;
   primarySkills: string | null;
+  structuredPayload?: unknown;
+  companyIndustry?: string | null;
+  companyEmployees?: number | null;
+  createdAt: string;
   specificationUpdatedAt: string | null;
   hasDraftSpecification: boolean;
   hasPublishedSpecification: boolean;
@@ -55,6 +63,10 @@ export type ClientRequirementWorkspaceData = {
   clientCompletedAt: string | null;
   applicationCount: number;
   pipelineCounts: ClientPipelineCounts;
+  assignedInterviewer?: {
+    id: number;
+    name: string;
+  } | null;
 };
 
 type ClientRequirementWorkspaceProps = {
@@ -89,6 +101,27 @@ function displayValue(value: string | number | null | undefined) {
   }
 
   return String(value);
+}
+
+function postingView(requirement: ClientRequirementWorkspaceData) {
+  return resolveJobPostingView(
+    {
+      title: requirement.title,
+      companyName: requirement.companyName,
+      companyIndustry: requirement.companyIndustry,
+      companyEmployees: requirement.companyEmployees,
+      location: requirement.location,
+      experienceRange: requirement.experienceRange,
+      numberOfPositions: requirement.numberOfPositions,
+      compensationRange: requirement.compensationRange,
+      jobDescription: requirement.jobDescription,
+      mustHaveRequirements: requirement.mustHaveRequirements,
+      niceToHaveRequirements: requirement.niceToHaveRequirements,
+      primarySkills: requirement.primarySkills,
+      structuredPayload: requirement.structuredPayload,
+    },
+    formatRelativePosted(requirement.createdAt),
+  );
 }
 
 export default function ClientRequirementWorkspace({
@@ -157,10 +190,34 @@ export default function ClientRequirementWorkspace({
       ) : (
         <>
           <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
-            <h2 className="text-lg font-bold text-black">Role / Requirement</h2>
+            <JobPostingDetail
+              view={postingView(requirement)}
+              showHeader={false}
+            />
+          </section>
+
+          {requirement.assignedInterviewer ? (
+            <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
+              <h2 className="text-lg font-bold text-black">Interviewer</h2>
+              <p className="mt-2 text-sm text-zinc-600">
+                {requirement.assignedInterviewer.name} is assigned to this
+                requirement. Open their profile to see background, experience,
+                and public proof of work.
+              </p>
+              <Link
+                href={`/client/interviewers/${requirement.assignedInterviewer.id}`}
+                className="mt-4 inline-flex rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
+              >
+                View interviewer profile
+              </Link>
+            </section>
+          ) : null}
+
+          <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
+            <h2 className="text-lg font-bold text-black">Hiring process</h2>
             <dl className="mt-4 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2">
               <div>
-                <dt className="font-medium text-black">Role Category</dt>
+                <dt className="font-medium text-black">Role category</dt>
                 <dd>
                   {requirement.roleCategory
                     ? roleCategoryLabels[requirement.roleCategory]
@@ -168,23 +225,7 @@ export default function ClientRequirementWorkspace({
                 </dd>
               </div>
               <div>
-                <dt className="font-medium text-black">Experience</dt>
-                <dd>{displayValue(requirement.experienceRange)}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-black">Location</dt>
-                <dd>{displayValue(requirement.location)}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-black">Compensation</dt>
-                <dd>{displayValue(requirement.compensationRange)}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-black">Number of Positions</dt>
-                <dd>{displayValue(requirement.numberOfPositions)}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-black">Target Hire Date</dt>
+                <dt className="font-medium text-black">Target hire date</dt>
                 <dd>
                   {formatClientDate(
                     requirement.targetHireDate
@@ -193,38 +234,8 @@ export default function ClientRequirementWorkspace({
                   )}
                 </dd>
               </div>
-            </dl>
-          </section>
-
-          <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
-            <h2 className="text-lg font-bold text-black">Requirements</h2>
-            <dl className="mt-4 grid gap-4 text-sm text-zinc-600">
-              <div>
-                <dt className="font-medium text-black">Primary Skills</dt>
-                <dd className="mt-1 whitespace-pre-wrap">
-                  {displayValue(requirement.primarySkills)}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-medium text-black">Must Have</dt>
-                <dd className="mt-1 whitespace-pre-wrap">
-                  {displayValue(requirement.mustHaveRequirements)}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-medium text-black">Nice To Have</dt>
-                <dd className="mt-1 whitespace-pre-wrap">
-                  {displayValue(requirement.niceToHaveRequirements)}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-medium text-black">Job Description</dt>
-                <dd className="mt-1 whitespace-pre-wrap">
-                  {displayValue(requirement.jobDescription)}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-medium text-black">Evaluation Criteria</dt>
+              <div className="sm:col-span-2">
+                <dt className="font-medium text-black">Evaluation criteria</dt>
                 <dd className="mt-1 whitespace-pre-wrap">
                   {displayValue(requirement.evaluationCriteria)}
                 </dd>

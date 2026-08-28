@@ -26,9 +26,12 @@ function interviewerJobSelect(interviewerId: number) {
     requirementLifecycle: true,
     sourcingAccessReceivedAt: true,
     shortlistingCompletedAt: true,
+    createdAt: true,
     company: {
       select: {
         name: true,
+        industry: true,
+        employees: true,
       },
     },
     _count: {
@@ -53,7 +56,10 @@ function interviewerJobSelect(interviewerId: number) {
       },
     },
     currentPublishedSpecificationVersion: {
-      select: JOB_SPECIFICATION_SCALAR_SELECT,
+      select: {
+        ...JOB_SPECIFICATION_SCALAR_SELECT,
+        structuredPayload: true,
+      },
     },
   } satisfies Prisma.JobSelect;
 }
@@ -218,7 +224,41 @@ export async function getInterviewerDashboardStats() {
     evaluationsInProgress,
     evaluationsCompleted,
     requirements: await getInterviewerAssignedJobs(),
+    attention: await getInterviewerAttention(interviewer.interviewerId),
   };
+}
+
+async function getInterviewerAttention(interviewerId: number) {
+  const waiting = await prisma.application.findMany({
+    where: {
+      job: { assignedInterviewerId: interviewerId },
+      evaluations: { none: { interviewerId } },
+      status: {
+        in: [
+          "CV_POOL",
+          "EXPERT_REVIEW",
+          "TECH_EVALUATION",
+          "SHORTLISTED",
+          "SELECTED",
+        ],
+      },
+    },
+    select: {
+      id: true,
+      status: true,
+      candidate: { select: { name: true } },
+      job: { select: { id: true, title: true } },
+    },
+    take: 8,
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return waiting.map((application) => ({
+    href: `/interviewer/requirements/${application.job.id}/candidates/${application.id}`,
+    title: `Review ${application.candidate.name}`,
+    meta: application.job.title,
+    urgency: "now" as const,
+  }));
 }
 
 export async function getInterviewerAssignedJobs() {

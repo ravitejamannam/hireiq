@@ -283,6 +283,20 @@ export function matchesClientCandidateSearch(
   );
 }
 
+export function formatRelativePosted(value: Date | string | null | undefined) {
+  if (!value) return "—";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const deltaMs = Date.now() - date.getTime();
+  const minutes = Math.max(0, Math.floor(deltaMs / 60_000));
+  if (minutes < 60) return `${Math.max(1, minutes)}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 14) return `${days}d ago`;
+  return formatClientDate(date);
+}
+
 export function matchesClientRequirementSearch(
   requirement: {
     title: string;

@@ -34,10 +34,17 @@ const jobSelect = {
   shortlistingCompletedAt: true,
   createdAt: true,
   updatedAt: true,
+  currentPublishedSpecificationVersion: {
+    select: {
+      structuredPayload: true,
+    },
+  },
   company: {
     select: {
       id: true,
       name: true,
+      industry: true,
+      employees: true,
     },
   },
   assignedInterviewer: {
@@ -62,7 +69,10 @@ const jobSelect = {
 
 const jobSpecificationSelect = {
   currentPublishedSpecificationVersion: {
-    select: JOB_SPECIFICATION_SCALAR_SELECT,
+    select: {
+      ...JOB_SPECIFICATION_SCALAR_SELECT,
+      structuredPayload: true,
+    },
   },
   specificationVersions: {
     where: {
@@ -122,6 +132,7 @@ export async function getJobById(id: number) {
   return {
     ...rest,
     ...spec,
+    structuredPayload: currentPublishedSpecificationVersion?.structuredPayload ?? null,
     specificationUpdatedAt,
     hasDraftSpecification: draft !== null,
     hasPublishedSpecification: currentPublishedSpecificationVersion != null,

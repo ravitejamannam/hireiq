@@ -25,6 +25,8 @@ import InterviewerShortlistActions from "@/components/interviewer/InterviewerSho
 import AssessmentScoreReadout, {
   type AssessmentScoreSummary,
 } from "@/components/assess/AssessmentScoreReadout";
+import CandidateStructuredProfile from "@/components/candidates/CandidateStructuredProfile";
+import type { SafeCandidateProfile } from "@/lib/candidates/candidate-profile-types";
 
 type Question = {
   id: number;
@@ -60,6 +62,21 @@ type InterviewerCandidateDetailProps = {
     skills: string | null;
     expectedCTC: string | null;
     linkedInUrl: string | null;
+    aboutText?: string | null;
+    roleTitle?: string | null;
+    domains?: string[];
+    githubUrl?: string | null;
+    portfolioUrl?: string | null;
+    twitterUrl?: string | null;
+    videoResumeUrl?: string | null;
+    leetcodeUrl?: string | null;
+    socialLinks?: SafeCandidateProfile["socialLinks"];
+    photoUrl?: string | null;
+    githubProof?: SafeCandidateProfile["githubProof"];
+    leetcodeProof?: SafeCandidateProfile["leetcodeProof"];
+    experiences?: SafeCandidateProfile["experiences"];
+    education?: SafeCandidateProfile["education"];
+    projects?: SafeCandidateProfile["projects"];
   };
   application: {
     status: ApplicationPipelineStatus;
@@ -104,74 +121,51 @@ export default function InterviewerCandidateDetail({
 }: InterviewerCandidateDetailProps) {
   return (
     <div className="space-y-8">
-      <section className="rounded-xl border border-zinc-200 bg-white p-6">
-        <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-          Candidate profile
-        </p>
-        <h1 className="mt-2 text-3xl font-bold text-black">{candidate.name}</h1>
-        <p className="mt-2 text-zinc-600">
-          {formatClientOptional(candidate.headline)}
-        </p>
-
-        <dl className="mt-6 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <dt className="font-medium text-black">Experience</dt>
-            <dd>
-              {candidate.experienceYears === null
-                ? formatClientOptional(null)
-                : `${candidate.experienceYears} years`}
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Location</dt>
-            <dd>{formatClientOptional(candidate.location)}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Current employer</dt>
-            <dd>{formatClientOptional(candidate.currentEmployer)}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Expected CTC</dt>
-            <dd>{formatClientOptional(candidate.expectedCTC)}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">LinkedIn</dt>
-            <dd>
-              {candidate.linkedInUrl ? (
-                <a
-                  href={candidate.linkedInUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-black underline underline-offset-2"
-                >
-                  View profile
-                </a>
-              ) : (
-                formatClientOptional(null)
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Pipeline status</dt>
-            <dd>{getClientPipelineStatusLabel(application.status)}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Source</dt>
-            <dd>{getClientSourceLabel(application.source)}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Expert score</dt>
-            <dd>{formatClientOptional(application.expertScore)}</dd>
-          </div>
-          <div className="sm:col-span-2 lg:col-span-3">
-            <dt className="font-medium text-black">Skills</dt>
-            <dd>{formatClientOptional(candidate.skills)}</dd>
-          </div>
-        </dl>
-        <InterviewerShortlistActions
-          applicationId={applicationId}
-          status={application.status}
+      <section className="space-y-4">
+        <CandidateStructuredProfile
+          profile={{
+            name: candidate.name,
+            headline: candidate.headline,
+            roleTitle: candidate.roleTitle ?? candidate.headline,
+            location: candidate.location,
+            aboutText: candidate.aboutText ?? null,
+            domains: candidate.domains ?? [],
+            experienceYears: candidate.experienceYears,
+            linkedInUrl: candidate.linkedInUrl,
+            githubUrl: candidate.githubUrl ?? null,
+            portfolioUrl: candidate.portfolioUrl ?? null,
+            twitterUrl: candidate.twitterUrl ?? null,
+            videoResumeUrl: candidate.videoResumeUrl ?? null,
+            leetcodeUrl: candidate.leetcodeUrl ?? null,
+            socialLinks: candidate.socialLinks ?? [],
+            photoUrl: candidate.photoUrl ?? null,
+            githubProof: candidate.githubProof ?? null,
+            leetcodeProof: candidate.leetcodeProof ?? null,
+            experiences: candidate.experiences ?? [],
+            education: candidate.education ?? [],
+            projects: candidate.projects ?? [],
+          }}
         />
+        <div className="rounded-xl border border-zinc-200 bg-white p-6">
+          <dl className="grid gap-4 text-sm text-zinc-600 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <dt className="font-medium text-black">Pipeline status</dt>
+              <dd>{getClientPipelineStatusLabel(application.status)}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-black">Source</dt>
+              <dd>{getClientSourceLabel(application.source)}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-black">Expert score</dt>
+              <dd>{formatClientOptional(application.expertScore)}</dd>
+            </div>
+          </dl>
+          <InterviewerShortlistActions
+            applicationId={applicationId}
+            status={application.status}
+          />
+        </div>
       </section>
 
       <AssessmentScoreReadout summary={assessment ?? null} />

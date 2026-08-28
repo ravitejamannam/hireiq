@@ -38,11 +38,11 @@ export const AUTH_RATE_LIMITS = {
   interviewerInvite: { windowMs: 60 * 60 * 1000, max: 20 },
   aiJobDescriptionUser: { windowMs: 60 * 60 * 1000, max: 10 },
   aiJobDescriptionJob: { windowMs: 60 * 60 * 1000, max: 10 },
-  hostedApplyGetIp: { windowMs: 15 * 60 * 1000, max: 60 },
+  hostedApplyGetIp: { windowMs: 15 * 60 * 1000, max: 300 },
   hostedApplyPostIp: { windowMs: 60 * 60 * 1000, max: 10 },
   hostedApplyPostTokenIp: { windowMs: 60 * 60 * 1000, max: 5 },
   hostedApplyPostEmailDistribution: { windowMs: 60 * 60 * 1000, max: 3 },
-  assessmentGetIp: { windowMs: 15 * 60 * 1000, max: 60 },
+  assessmentGetIp: { windowMs: 15 * 60 * 1000, max: 300 },
   assessmentPostIp: { windowMs: 60 * 60 * 1000, max: 20 },
   assessmentPostTokenIp: { windowMs: 60 * 60 * 1000, max: 8 },
   offerAcceptIp: { windowMs: 15 * 60 * 1000, max: 20 },
@@ -57,6 +57,11 @@ export const AUTH_RATE_LIMITS = {
 
 export type AuthRateLimitName = keyof typeof AUTH_RATE_LIMITS;
 
+const DEV_SKIP_GET_LIMITS = new Set<AuthRateLimitName>([
+  "hostedApplyGetIp",
+  "assessmentGetIp",
+]);
+
 function windowStartFor(windowMs: number, now = new Date()) {
   return new Date(Math.floor(now.getTime() / windowMs) * windowMs);
 }
@@ -65,6 +70,13 @@ export async function consumeAuthRateLimit(input: {
   name: AuthRateLimitName;
   key: string;
 }) {
+  if (
+    process.env.NODE_ENV !== "production" &&
+    DEV_SKIP_GET_LIMITS.has(input.name)
+  ) {
+    return;
+  }
+
   const spec = AUTH_RATE_LIMITS[input.name];
   const windowStart = windowStartFor(spec.windowMs);
   const key = `${input.name}:${input.key}`;

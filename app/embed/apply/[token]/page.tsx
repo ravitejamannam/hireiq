@@ -69,7 +69,7 @@ export default async function EmbedApplyPage({ params }: EmbedPageProps) {
         ) : null}
 
         <div className="mt-6">
-          <HostedApplyForm token={token} />
+            <HostedApplyForm token={token} compact />
         </div>
 
         <p className="mt-6 text-center text-[10px] text-zinc-400">

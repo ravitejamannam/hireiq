@@ -1,30 +1,45 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { JobStatus, RequirementLifecycle } from "@prisma/client";
+import type {
+  JobStatus,
+  RequirementLifecycle,
+  RoleCategory,
+} from "@prisma/client";
 
 import { createClientRequirement } from "@/app/actions/job-actions";
 import ClientPostRoleModal, {
   type ClientPostRolePayload,
 } from "@/components/client/ClientPostRoleModal";
-import ClientRequirementCard from "@/components/client/ClientRequirementCard";
 import {
   countPipelineStatuses,
-  matchesClientRequirementSearch,
-  type ClientPipelineCounts,
 } from "@/components/client/client-labels";
+import RequirementBoard from "@/components/jobs/RequirementBoard";
 
 type ClientRequirement = {
   id: number;
   title: string;
   status: JobStatus;
   requirementLifecycle: RequirementLifecycle;
+  roleCategory: RoleCategory | null;
+  experienceRange: string | null;
   location: string | null;
+  compensationRange: string | null;
   numberOfPositions: number | null;
   targetHireDate: Date | null;
+  jobDescription: string | null;
+  mustHaveRequirements: string | null;
+  niceToHaveRequirements: string | null;
+  primarySkills: string | null;
+  createdAt: Date;
+  currentPublishedSpecificationVersion?: {
+    structuredPayload: unknown;
+  } | null;
   company: {
     name: string;
+    industry?: string | null;
+    employees?: number | null;
   };
   applications: Array<{
     status: Parameters<typeof countPipelineStatuses>[0][number];
@@ -44,16 +59,9 @@ export default function ClientRequirementsClient({
   initialRequirements,
 }: ClientRequirementsClientProps) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [actionError, setActionError] = useState("");
-
-  const filteredRequirements = useMemo(() => {
-    return initialRequirements.filter((requirement) =>
-      matchesClientRequirementSearch(requirement, search),
-    );
-  }, [initialRequirements, search]);
 
   function openCreateModal() {
     setActionError("");
@@ -87,7 +95,7 @@ export default function ClientRequirementsClient({
           <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
             Recruitment
           </p>
-          <h1 className="mt-2 text-3xl font-bold text-black">Requirements</h1>
+          <h1 className="mt-2 text-3xl font-bold text-black">Job board</h1>
           <p className="mt-2 text-zinc-600">
             Open and closed roles for {companyName}.
           </p>
@@ -101,76 +109,46 @@ export default function ClientRequirementsClient({
         </button>
       </div>
 
-      <div className="mt-8">
-        <label htmlFor="client-requirements-search" className="sr-only">
-          Search requirements
-        </label>
-        <input
-          id="client-requirements-search"
-          type="text"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search by role, location, lifecycle, or status..."
-          className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-black placeholder:text-zinc-400 outline-none transition focus:border-black"
-        />
-      </div>
-
       {actionError && !isModalOpen ? (
         <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {actionError}
         </div>
       ) : null}
 
-      {initialRequirements.length === 0 ? (
-        <div className="mt-8 rounded-2xl border border-dashed border-zinc-300 bg-white py-16 text-center">
-          <p className="text-lg font-medium text-black">
-            Your company does not have any requirements yet.
-          </p>
-          <p className="mt-2 text-sm text-zinc-500">
-            Post a role to start hiring for {companyName}.
-          </p>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="mt-6 rounded-lg bg-black px-5 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800"
-          >
-            + Post Role
-          </button>
-        </div>
-      ) : filteredRequirements.length === 0 ? (
-        <div className="mt-8 rounded-2xl border border-dashed border-zinc-300 bg-white py-16 text-center">
-          <p className="text-lg font-medium text-black">No matching requirements</p>
-          <p className="mt-2 text-sm text-zinc-500">
-            Try a different role title, location, lifecycle, or status.
-          </p>
-        </div>
-      ) : (
-        <div className="mt-8 grid gap-4">
-          {filteredRequirements.map((requirement) => {
-            const pipelineCounts: ClientPipelineCounts = countPipelineStatuses(
+      <div className="mt-8">
+        <RequirementBoard
+          items={initialRequirements.map((requirement) => {
+            const pipeline = countPipelineStatuses(
               requirement.applications.map((application) => application.status),
             );
-
-            return (
-              <ClientRequirementCard
-                key={requirement.id}
-                id={requirement.id}
-                title={requirement.title}
-                companyName={requirement.company.name}
-                status={requirement.status}
-                requirementLifecycle={requirement.requirementLifecycle}
-                location={requirement.location}
-                numberOfPositions={requirement.numberOfPositions}
-                targetHireDate={requirement.targetHireDate}
-                profileCount={requirement._count.applications}
-                shortlistedCount={pipelineCounts.shortlisted}
-                selectedCount={pipelineCounts.selected}
-                pipelineCounts={pipelineCounts}
-              />
-            );
+            return {
+              id: requirement.id,
+              title: requirement.title,
+              companyName: requirement.company.name,
+              companyIndustry: requirement.company.industry,
+              companyEmployees: requirement.company.employees,
+              location: requirement.location,
+              status: requirement.status,
+              roleCategory: requirement.roleCategory,
+              experienceRange: requirement.experienceRange,
+              numberOfPositions: requirement.numberOfPositions,
+              compensationRange: requirement.compensationRange,
+              jobDescription: requirement.jobDescription,
+              mustHaveRequirements: requirement.mustHaveRequirements,
+              niceToHaveRequirements: requirement.niceToHaveRequirements,
+              primarySkills: requirement.primarySkills,
+              structuredPayload:
+                requirement.currentPublishedSpecificationVersion
+                  ?.structuredPayload,
+              createdAt: requirement.createdAt,
+              href: `/client/requirements/${requirement.id}`,
+              listMeta: `${requirement._count.applications} profiles · ${pipeline.shortlisted} shortlisted`,
+            };
           })}
-        </div>
-      )}
+          emptyTitle="Your company does not have any requirements yet."
+          emptyBody={`Post a role to start hiring for ${companyName}.`}
+        />
+      </div>
 
       <ClientPostRoleModal
         key={isModalOpen ? "open" : "closed"}

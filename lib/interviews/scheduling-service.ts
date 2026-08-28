@@ -156,6 +156,7 @@ export async function listOpenSlotsForBooking(rawToken: string): Promise<{
   jobTitle: string;
   companyName: string;
   interviewerName: string;
+  interviewerId: number | null;
   slots: Array<{ id: number; startAt: Date; durationMinutes: number }>;
 } | null> {
   const invite = await loadLiveInvite(rawToken);
@@ -170,7 +171,7 @@ export async function listOpenSlotsForBooking(rawToken: string): Promise<{
           companyId: true,
           title: true,
           company: { select: { name: true } },
-          assignedInterviewer: { select: { name: true } },
+          assignedInterviewer: { select: { id: true, name: true } },
           interviewSlots: {
             where: { status: InterviewSlotStatus.OPEN, startAt: { gt: new Date() } },
             select: { id: true, startAt: true, durationMinutes: true },
@@ -187,6 +188,7 @@ export async function listOpenSlotsForBooking(rawToken: string): Promise<{
     jobTitle: application.job.title,
     companyName: application.job.company.name,
     interviewerName: application.job.assignedInterviewer?.name ?? "Interviewer",
+    interviewerId: application.job.assignedInterviewer?.id ?? null,
     slots: application.job.interviewSlots,
   };
 }

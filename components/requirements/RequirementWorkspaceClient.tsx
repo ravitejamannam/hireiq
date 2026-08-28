@@ -267,7 +267,16 @@ export default function RequirementWorkspaceClient({
                 Assigned Interviewer:{" "}
               </dt>
               <dd className="inline">
-                {requirement.assignedInterviewer?.name ?? "Not assigned"}
+                {requirement.assignedInterviewer ? (
+                  <Link
+                    href={`/dashboard/interviewers/${requirement.assignedInterviewer.id}`}
+                    className="font-medium text-zinc-900 underline underline-offset-2 hover:text-black"
+                  >
+                    {requirement.assignedInterviewer.name}
+                  </Link>
+                ) : (
+                  "Not assigned"
+                )}
               </dd>
             </div>
             <div>
@@ -286,6 +295,14 @@ export default function RequirementWorkspaceClient({
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {requirement.assignedInterviewer ? (
+            <Link
+              href={`/dashboard/interviewers/${requirement.assignedInterviewer.id}`}
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+            >
+              View interviewer profile
+            </Link>
+          ) : null}
           <Link
             href={`/dashboard/sourcing?requirementId=${requirement.id}`}
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-black hover:bg-zinc-100"

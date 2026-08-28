@@ -3,6 +3,10 @@ import {
   normalizeIdentityEmail,
 } from "@/lib/auth/email-normalization";
 import { HostedApplyValidationError } from "@/lib/apply/hosted-apply-errors";
+import {
+  collectStructuredProfile,
+  type StructuredProfilePayload,
+} from "@/lib/profiles/structured-profile";
 
 const NAME_MAX = 200;
 const EMAIL_MAX = 254;
@@ -28,11 +32,8 @@ export type HostedApplySubmitInput = {
   linkedInUrl: string | null;
   coverLetter: string | null;
   consentAccepted: true;
-  /// T138 voluntary equality information (optional, aggregate-only use).
-  selfIdGender: string | null;
+  profile: StructuredProfilePayload;
 };
-
-const SELF_ID_ALLOWED = new Set(["WOMAN", "MAN", "NON_BINARY", "SELF_DESCRIBE", "PREFER_NOT_TO_SAY"]);
 
 function rejectControls(value: string, field: string, fields: Record<string, string>) {
   if (CONTROL_CHARS.test(value)) {
@@ -133,12 +134,8 @@ export function validateHostedApplySubmitBody(body: unknown): HostedApplySubmitI
     fields.consent = "Consent is required.";
   }
 
-  // T138: optional self-ID. Absent = not provided; invalid values are
-  // silently dropped rather than blocking the application.
-  const selfIdGenderRaw =
-    typeof record.selfIdGender === "string" ? record.selfIdGender.trim() : "";
-  const selfIdGender =
-    selfIdGenderRaw && SELF_ID_ALLOWED.has(selfIdGenderRaw) ? selfIdGenderRaw : null;
+  void record.selfIdGender;
+  void record.selfIdConsentedAt;
 
   const phoneRaw = optionalTrimmed(record.phone);
   if (phoneRaw === undefined) {
@@ -180,16 +177,6 @@ export function validateHostedApplySubmitBody(body: unknown): HostedApplySubmitI
     }
   }
 
-  const linkedInRaw = optionalTrimmed(record.linkedInUrl);
-  if (linkedInRaw === undefined) {
-    fields.linkedInUrl = "LinkedIn URL is invalid.";
-  } else if (linkedInRaw) {
-    const urlError = validateHttpUrl(linkedInRaw, "LinkedIn URL");
-    if (urlError) {
-      fields.linkedInUrl = urlError;
-    }
-  }
-
   const coverRaw = optionalTrimmed(record.coverLetter);
   if (coverRaw === undefined) {
     fields.coverLetter = "Cover letter is invalid.";
@@ -198,6 +185,8 @@ export function validateHostedApplySubmitBody(body: unknown): HostedApplySubmitI
   } else if (coverRaw && CONTROL_CHARS.test(coverRaw)) {
     fields.coverLetter = "Cover letter contains invalid characters.";
   }
+
+  const profile = collectStructuredProfile(record, fields);
 
   if (Object.keys(fields).length > 0) {
     throw new HostedApplyValidationError(fields);
@@ -214,9 +203,9 @@ export function validateHostedApplySubmitBody(body: unknown): HostedApplySubmitI
     phone: typeof phoneRaw === "string" ? phoneRaw : null,
     location: typeof locationRaw === "string" ? locationRaw : null,
     experienceYears,
-    linkedInUrl: typeof linkedInRaw === "string" ? linkedInRaw : null,
+    linkedInUrl: profile.linkedInUrl,
     coverLetter: typeof coverRaw === "string" ? coverRaw : null,
     consentAccepted: true,
-    selfIdGender,
+    profile,
   };
 }

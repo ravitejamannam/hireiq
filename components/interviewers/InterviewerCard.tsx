@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type {
   InterviewerAvailability,
   InterviewerCategory,
@@ -162,6 +163,12 @@ export default function InterviewerCard({
           >
             Edit
           </button>
+          <Link
+            href={`/dashboard/interviewers/${id}`}
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+          >
+            View profile
+          </Link>
           <button
             type="button"
             onClick={() => onDelete(id)}

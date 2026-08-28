@@ -8,6 +8,7 @@ import {
   Briefcase,
   ClipboardList,
   LayoutDashboard,
+  UserRound,
   Users,
 } from "lucide-react";
 
@@ -26,6 +27,11 @@ const links = [
     icon: Briefcase,
     label: "Requirements",
     href: "/interviewer/requirements",
+  },
+  {
+    icon: UserRound,
+    label: "Your Profile",
+    href: "/interviewer/profile",
   },
   {
     icon: Users,

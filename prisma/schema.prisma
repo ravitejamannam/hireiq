@@ -517,6 +517,36 @@ model Interviewer {
   users         User[]
   invitations   InterviewerInvitation[]
   interviewSlots InterviewSlot[]
+  profile        InterviewerProfile?
+}
+
+/// Descriptive interviewer card. Filled manually in the interviewer portal.
+/// Not an evaluation score. Not a candidate profile.
+model InterviewerProfile {
+  id              Int     @id @default(autoincrement())
+  interviewerId   Int     @unique
+  headline        String?
+  location        String?
+  aboutText       String?
+  roleTitle       String?
+  experienceYears Int?
+  domains         Json?
+  linkedInUrl     String?
+  githubUrl       String?
+  portfolioUrl    String?
+  twitterUrl      String?
+  videoUrl        String?
+  experiences     Json?
+  education       Json?
+  projects        Json?
+  leetcodeUrl     String?
+  /// Extra public social URLs not covered by canonical columns.
+  socialLinks     Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  interviewer Interviewer @relation(fields: [interviewerId], references: [id], onDelete: Cascade)
 }
 
 model Candidate {
@@ -568,6 +598,22 @@ model CandidateProfile {
   currentEmployer String?
   expectedCTC     String?
   linkedInUrl     String?
+  aboutText       String?
+  roleTitle       String?
+  domains         Json?
+  githubUrl       String?
+  portfolioUrl    String?
+  twitterUrl      String?
+  videoResumeUrl  String?
+  experiences     Json?
+  education       Json?
+  projects        Json?
+  /// Presentation photo. Not an identity signal.
+  photoStorageKey   String?
+  photoContentType  String?
+  leetcodeUrl       String?
+  /// Extra public social URLs not covered by canonical columns.
+  socialLinks       Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1279,6 +1325,7 @@ model JobDistribution {
 
   reconciliationRuns DistributionReconciliationRun[] @relation("DistributionReconciliationRuns")
   resumeUploads HostedApplyResumeUpload[]
+  photoUploads  HostedApplyPhotoUpload[]
 }
 
 /// External listing identity for one JobDistribution. No fabricated IDs.
@@ -1355,13 +1402,11 @@ model HostedApplySubmission {
   experienceYears           Int?
   linkedInUrl               String?
   coverLetter               String?
+  /// Structured career sections from the hosted apply form.
+  /// Descriptive only. Email/phone stay on this row, not on CandidateProfile.
+  profilePayload            Json?
   consentAcceptedAt         DateTime
   status                    HostedApplySubmissionStatus  @default(RECEIVED)
-
-  /// T138 voluntary equality information. Optional, consented at apply,
-  /// excluded from evaluator surfaces, reported aggregate-only.
-  selfIdGender      String?
-  selfIdConsentedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1624,6 +1669,30 @@ model HostedApplyResumeUpload {
   expiresAt                DateTime
   claimedAt                DateTime?
   createdAt                DateTime                 @default(now())
+
+  distribution JobDistribution @relation(fields: [distributionId], references: [id], onDelete: Restrict)
+
+  @@index([distributionId, createdAt])
+}
+
+/// Pending profile photo for hosted apply. Claim-token pattern, same as resume.
+/// Presentation only — not identity, not evidence.
+model HostedApplyPhotoUpload {
+  id                       Int      @id @default(autoincrement())
+  distributionId           Int
+  jobId                    Int
+  companyId                Int
+  applyTokenHash           String
+  hostedApplySubmissionId  Int?     @unique
+  claimTokenHash           String   @unique
+  storageKey               String
+  fileName                 String
+  contentType              String
+  sizeBytes                Int
+  contentSha256            String
+  expiresAt                DateTime
+  claimedAt                DateTime?
+  createdAt                DateTime @default(now())
 
   distribution JobDistribution @relation(fields: [distributionId], references: [id], onDelete: Restrict)
 

@@ -1,54 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HireIQ
 
-## Getting Started
+Evidence-first hiring OS for companies that run recruiting as an operation, not a spreadsheet plus a job board.
 
-First, run the development server:
+HireIQ is not a résumé wrapper. Every applicant fact traces to a source. Rankings are explained. Interviewers, clients, and admin share the same pipeline with role-specific authority.
+
+## Who uses it
+
+| Portal | Path | Job |
+| --- | --- | --- |
+| Admin | `/dashboard` | Run the hiring desk: requirements, sourcing, pipeline, interviewers, billing |
+| Client | `/client` | Post roles, read candidate profiles, shortlist and hire |
+| Interviewer | `/interviewer` | Publish a profile, evaluate assigned candidates, score interviews |
+| Candidate | `/apply/[token]`, `/schedule/[token]`, `/assess/[token]` | Apply, book, take assessments — no account required |
+
+## Local development
 
 ```bash
+pnpm install
+cp .env.example .env
+pnpm exec prisma migrate deploy
+pnpm db:bootstrap-admin
+pnpm db:bootstrap-dev
 pnpm dev
 ```
 
-Open [http://localhost:4000](http://localhost:4000) with your browser to see the result.
+App: [http://localhost:4000](http://localhost:4000)
 
-### Authentication
+Required env: `DATABASE_URL`, `AUTH_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`. Optional: `RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL`, `GITHUB_TOKEN` (public GitHub proof on profiles).
 
-HireIQ uses Auth.js (`next-auth` v5) with email/password credentials and JWT sessions.
+Demo logins (password from `ADMIN_PASSWORD` / `BOOTSTRAP_PASSWORD`):
 
-Copy `.env.example` to `.env` and set:
+- `admin@hireiq.local`
+- `owner.nimbus@hireiq.local` (client)
+- `interviewer.arjun@hireiq.local`
 
-| Variable | Purpose |
-| --- | --- |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `AUTH_SECRET` | Required secret for signing session tokens (`openssl rand -base64 32`) |
-| `AUTH_URL` | Optional Auth.js public URL |
-| `APP_URL` | Public app URL used in interviewer email links (preferred over `AUTH_URL`) |
-| `RESEND_API_KEY` / `EMAIL_FROM` | Optional Resend delivery for requirement-ready interviewer emails. Leave unset locally to skip real sends. |
-| `ADMIN_EMAIL` / `ADMIN_NAME` / `ADMIN_PASSWORD` | Used only by the admin bootstrap script |
+The demo world is Nimbus Labs with live apply links, a scored pipeline, published interviewer profiles, and billing on a hired analyst role.
 
-Bootstrap the first Admin user (idempotent; does not run on app startup):
+## What is in the product
+
+- Hosted apply (resume, photo, structured profile) with tenant-safe public tokens
+- Pipeline: CV pool → expert review → technical evaluation → shortlist → selected → hired
+- Assessments, interview blueprints, rubric scoring, scheduling
+- Candidate and interviewer profile pages (about, experience, education, public GitHub/LeetCode)
+- Matching, ranking, evidence, identity — kept separate from presentation
+- Client billing on hire, GDPR export/erase, org memberships
+
+## Tests
 
 ```bash
-pnpm db:bootstrap-admin
+pnpm test
+pnpm exec tsc --noEmit
 ```
 
-Then sign in at `/login`.
-
-- Admin users land on `/dashboard`
-- Client users land on `/client`
-
-Dashboard and client routes require an authenticated session. Resource access is authorized server-side by portal role and tenant boundaries.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Do not invent GitHub/LeetCode stats. LinkedIn is a stored URL only — there is no public scrape.

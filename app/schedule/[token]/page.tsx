@@ -1,7 +1,9 @@
 import Link from "next/link";
 
 import SlotPicker from "@/components/scheduling/SlotPicker";
+import InterviewerPublicProfile from "@/components/interviewer/InterviewerPublicProfile";
 import { listOpenSlotsForBooking } from "@/lib/interviews/scheduling-service";
+import { loadSafeInterviewerProfileById } from "@/lib/interviewers/interviewer-profile-service";
 
 export const dynamic = "force-dynamic";
 
@@ -34,10 +36,14 @@ export default async function SchedulePage({ params }: PageProps) {
     );
   }
 
+  const interviewerProfile = booking.interviewerId
+    ? await loadSafeInterviewerProfileById(booking.interviewerId)
+    : null;
+
   return (
-    <main className="mx-auto max-w-2xl px-4 py-12">
+    <main className="mx-auto max-w-5xl px-4 py-12">
       <header>
-        <p className="text-sm font-medium text-indigo-600">{booking.companyName}</p>
+        <p className="text-sm font-medium text-zinc-600">{booking.companyName}</p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-900">
           Book your interview
         </h1>
@@ -48,7 +54,17 @@ export default async function SchedulePage({ params }: PageProps) {
         </p>
       </header>
 
+      {interviewerProfile ? (
+        <section className="mt-8">
+          <h2 className="mb-4 text-lg font-semibold text-zinc-900">
+            Meet your interviewer
+          </h2>
+          <InterviewerPublicProfile profile={interviewerProfile} />
+        </section>
+      ) : null}
+
       <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-zinc-900">Choose a time</h2>
         <SlotPicker
           token={token}
           slots={booking.slots.map((slot) => ({

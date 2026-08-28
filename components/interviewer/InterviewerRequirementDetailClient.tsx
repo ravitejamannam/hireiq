@@ -13,14 +13,16 @@ import {
   clientJobStatusLabels,
   clientPipelineStatusLabels,
   clientRequirementLifecycleLabels,
-  formatClientDate,
   formatClientOptional,
+  formatRelativePosted,
   getClientPipelineStatusLabel,
   getClientSourceLabel,
 } from "@/components/client/client-labels";
 import { completeJobShortlisting } from "@/app/actions/job-actions";
 import { describeUnsentCommunicationEmail } from "@/lib/communication/email-follow-up";
 import InterviewerShortlistActions from "@/components/interviewer/InterviewerShortlistActions";
+import JobPostingDetail from "@/components/jobs/JobPostingDetail";
+import { resolveJobPostingView } from "@/lib/jobs/job-posting-view";
 
 type InterviewerCandidate = {
   id: number;
@@ -58,10 +60,16 @@ type InterviewerRequirementDetailClientProps = {
     jobDescription: string | null;
     evaluationCriteria: string | null;
     primarySkills: string | null;
+    structuredPayload?: unknown;
     requirementLifecycle: RequirementLifecycle;
     sourcingAccessReceivedAt: Date | null;
     shortlistingCompletedAt: Date | null;
-    company: { name: string };
+    createdAt: Date | string;
+    company: {
+      name: string;
+      industry?: string | null;
+      employees?: number | null;
+    };
   };
   candidates: InterviewerCandidate[];
 };
@@ -229,63 +237,37 @@ export default function InterviewerRequirementDetailClient({
       </div>
 
       <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
-        <h2 className="text-lg font-bold text-black">Requirement Overview</h2>
-        <dl className="mt-4 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <dt className="font-medium text-black">Role</dt>
-            <dd>{requirement.roleCategory || "Not set"}</dd>
+        <JobPostingDetail
+          showHeader={false}
+          view={resolveJobPostingView(
+            {
+              title: requirement.title,
+              companyName: requirement.company.name,
+              companyIndustry: requirement.company.industry,
+              companyEmployees: requirement.company.employees,
+              location: requirement.location,
+              experienceRange: requirement.experienceRange,
+              numberOfPositions: requirement.numberOfPositions,
+              compensationRange: requirement.compensationRange,
+              jobDescription: requirement.jobDescription,
+              mustHaveRequirements: requirement.mustHaveRequirements,
+              niceToHaveRequirements: requirement.niceToHaveRequirements,
+              primarySkills: requirement.primarySkills,
+              structuredPayload: requirement.structuredPayload,
+            },
+            formatRelativePosted(requirement.createdAt),
+          )}
+        />
+        {requirement.evaluationCriteria ? (
+          <div className="mt-5 rounded-xl border border-zinc-200 bg-zinc-50/60 p-5">
+            <h3 className="text-sm font-semibold text-black">
+              Evaluation criteria
+            </h3>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-700">
+              {requirement.evaluationCriteria}
+            </p>
           </div>
-          <div>
-            <dt className="font-medium text-black">Location</dt>
-            <dd>{requirement.location || "Not set"}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Experience</dt>
-            <dd>{requirement.experienceRange || "Not set"}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Compensation</dt>
-            <dd>{requirement.compensationRange || "Not set"}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Target hire date</dt>
-            <dd>{formatClientDate(requirement.targetHireDate)}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-black">Positions</dt>
-            <dd>{formatClientOptional(requirement.numberOfPositions)}</dd>
-          </div>
-          <div className="sm:col-span-2 lg:col-span-3">
-            <dt className="font-medium text-black">Primary skills</dt>
-            <dd className="mt-1 whitespace-pre-wrap">
-              {requirement.primarySkills || "Not set"}
-            </dd>
-          </div>
-          <div className="sm:col-span-2 lg:col-span-3">
-            <dt className="font-medium text-black">Must-have requirements</dt>
-            <dd className="mt-1 whitespace-pre-wrap">
-              {requirement.mustHaveRequirements || "Not set"}
-            </dd>
-          </div>
-          <div className="sm:col-span-2 lg:col-span-3">
-            <dt className="font-medium text-black">Nice-to-have requirements</dt>
-            <dd className="mt-1 whitespace-pre-wrap">
-              {requirement.niceToHaveRequirements || "Not set"}
-            </dd>
-          </div>
-          <div className="sm:col-span-2 lg:col-span-3">
-            <dt className="font-medium text-black">Evaluation criteria</dt>
-            <dd className="mt-1 whitespace-pre-wrap">
-              {requirement.evaluationCriteria || "Not set"}
-            </dd>
-          </div>
-          <div className="sm:col-span-2 lg:col-span-3">
-            <dt className="font-medium text-black">Job description</dt>
-            <dd className="mt-1 whitespace-pre-wrap">
-              {requirement.jobDescription || "Not set"}
-            </dd>
-          </div>
-        </dl>
+        ) : null}
       </section>
 
       <section className="mt-10">

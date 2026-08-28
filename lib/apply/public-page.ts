@@ -1,4 +1,5 @@
 import type { PublicDistributionPayload } from "@/lib/jobs/distribution/payload";
+import type { JobPostingNarrative } from "@/lib/jobs/job-posting-view";
 
 export type PublicHostedApplyPage = {
   title: string;
@@ -12,10 +13,18 @@ export type PublicHostedApplyPage = {
   numberOfPositions: number | null;
   compensationRange: string | null;
   companyDisplayName: string | null;
+  companyIndustry: string | null;
+  companyEmployees: number | null;
+  posting: JobPostingNarrative | null;
 };
 
 export function toPublicHostedApplyPage(
   payload: PublicDistributionPayload,
+  extras?: {
+    posting?: JobPostingNarrative | null;
+    companyIndustry?: string | null;
+    companyEmployees?: number | null;
+  },
 ): PublicHostedApplyPage {
   return {
     title: payload.title,
@@ -29,6 +38,9 @@ export function toPublicHostedApplyPage(
     numberOfPositions: payload.numberOfPositions,
     compensationRange: payload.compensationRange,
     companyDisplayName: payload.companyDisplayName,
+    companyIndustry: extras?.companyIndustry ?? null,
+    companyEmployees: extras?.companyEmployees ?? null,
+    posting: extras?.posting ?? null,
   };
 }
 

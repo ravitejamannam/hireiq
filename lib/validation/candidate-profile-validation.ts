@@ -1,3 +1,5 @@
+import { collectStructuredProfile, type StructuredProfilePayload } from "@/lib/profiles/structured-profile";
+
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 
 export const CANDIDATE_PROFILE_LIMITS = {
@@ -48,28 +50,6 @@ function optionalBoundedString(
   return trimmed;
 }
 
-function optionalHttpUrl(value: unknown, label: string, max: number) {
-  const trimmed = optionalBoundedString(value, label, max);
-  if (trimmed === null) {
-    return null;
-  }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(trimmed);
-  } catch {
-    throw new CandidateProfileValidationError(`${label} is invalid.`);
-  }
-
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    throw new CandidateProfileValidationError(
-      `${label} must use http or https.`,
-    );
-  }
-
-  return trimmed;
-}
-
 function optionalExperienceYears(value: unknown) {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -109,6 +89,7 @@ export type ValidatedCandidateProfileUpdate = {
   expectedCTC: string | null;
   linkedInUrl: string | null;
   name: string | null;
+  profile: StructuredProfilePayload;
 };
 
 export function validateCandidateProfileUpdate(
@@ -137,9 +118,22 @@ export function validateCandidateProfileUpdate(
     throw new CandidateProfileValidationError("Name is required.");
   }
 
+  const fields: Record<string, string> = {};
+  const profile = collectStructuredProfile(
+    {
+      ...record,
+      roleTitle: record.roleTitle ?? record.headline,
+      videoUrl: record.videoUrl ?? record.videoResumeUrl,
+    },
+    fields,
+  );
+  if (Object.keys(fields).length > 0) {
+    throw new CandidateProfileValidationError(Object.values(fields)[0]);
+  }
+
   return {
     headline: optionalBoundedString(
-      record.headline,
+      record.headline ?? record.roleTitle,
       "Headline",
       CANDIDATE_PROFILE_LIMITS.headline,
     ),
@@ -164,11 +158,8 @@ export function validateCandidateProfileUpdate(
       "Expected CTC",
       CANDIDATE_PROFILE_LIMITS.expectedCTC,
     ),
-    linkedInUrl: optionalHttpUrl(
-      record.linkedInUrl,
-      "LinkedIn URL",
-      CANDIDATE_PROFILE_LIMITS.linkedInUrl,
-    ),
+    linkedInUrl: profile.linkedInUrl,
     name,
+    profile,
   };
 }

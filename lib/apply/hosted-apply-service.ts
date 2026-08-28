@@ -10,18 +10,27 @@ import {
 import {
   APPLY_LINK_UNAVAILABLE,
   HostedApplyError,
+  HostedApplyValidationError,
   ROLE_NO_LONGER_ACCEPTING,
 } from "@/lib/apply/hosted-apply-errors";
 import { toPublicHostedApplyPage } from "@/lib/apply/public-page";
 import { ingestHostedApplySubmission } from "@/lib/ingestion/hosted-apply-ingestion";
 import { mintAssessmentInviteForApplication } from "@/lib/assessments/assessment-service";
 import { hashSecureToken } from "@/lib/auth/secure-token";
-import { bindPendingResumeToSubmission } from "@/lib/apply/hosted-resume-service";
+import {
+  bindPendingResumeToSubmission,
+  HostedResumeError,
+} from "@/lib/apply/hosted-resume-service";
+import {
+  bindPendingPhotoToSubmission,
+  HostedPhotoError,
+} from "@/lib/apply/hosted-photo-service";
 import {
   consumeAuthRateLimit,
   rateLimitKeyForDigest,
 } from "@/lib/auth/rate-limit";
 import { buildPublicDistributionPayload } from "@/lib/jobs/distribution/payload";
+import { parseJobPostingNarrative } from "@/lib/jobs/job-posting-view";
 import { prisma } from "@/lib/prisma";
 import {
   validateHostedApplySubmitBody,
@@ -65,12 +74,17 @@ async function loadApplyTokenContext(token: string) {
           status: true,
           includeCompensation: true,
           pinnedSpecificationVersion: {
-            select: publicSpecSelect,
+            select: {
+              ...publicSpecSelect,
+              structuredPayload: true,
+            },
           },
           job: {
             select: {
               status: true,
-              company: { select: { name: true } },
+              company: {
+                select: { name: true, industry: true, employees: true },
+              },
             },
           },
         },
@@ -105,15 +119,20 @@ async function loadApplyTokenContext(token: string) {
 
 export async function resolvePublicHostedApply(token: string) {
   const row = await loadApplyTokenContext(token);
+  const spec = row.distribution.pinnedSpecificationVersion;
   const payload = buildPublicDistributionPayload({
-    version: row.distribution.pinnedSpecificationVersion,
+    version: spec,
     applyMode: row.distribution.applyMode,
     applyUrlSnapshot: null,
     includeCompensation: row.distribution.includeCompensation,
     companyDisplayName: row.distribution.job.company.name,
   });
 
-  return toPublicHostedApplyPage(payload);
+  return toPublicHostedApplyPage(payload, {
+    posting: parseJobPostingNarrative(spec.structuredPayload),
+    companyIndustry: row.distribution.job.company.industry,
+    companyEmployees: row.distribution.job.company.employees,
+  });
 }
 
 
@@ -153,6 +172,7 @@ export async function submitHostedApply(input: {
   idempotencyKey: unknown;
   body: unknown;
   resumeClaim?: unknown;
+  photoClaim?: unknown;
 }) {
   const idempotencyKey = validateIdempotencyKey(input.idempotencyKey);
   const existingByKey = await prisma.hostedApplySubmission.findUnique({
@@ -195,9 +215,8 @@ export async function submitHostedApply(input: {
         experienceYears: fields.experienceYears,
         linkedInUrl: fields.linkedInUrl,
         coverLetter: fields.coverLetter,
+        profilePayload: fields.profile as object,
         consentAcceptedAt: new Date(),
-        selfIdGender: fields.selfIdGender,
-        selfIdConsentedAt: fields.selfIdGender ? new Date() : null,
         status: HostedApplySubmissionStatus.RECEIVED,
       },
       select: { id: true },
@@ -207,11 +226,37 @@ export async function submitHostedApply(input: {
     // submission so ingestion can promote it. Fail-closed on invalid
     // claims — a tampered claim must not silently drop the attachment.
     if (input.resumeClaim) {
-      await bindPendingResumeToSubmission({
-        applyTokenRaw: input.token,
-        submissionId: created.id,
-        resumeClaim: input.resumeClaim,
-      });
+      try {
+        await bindPendingResumeToSubmission({
+          applyTokenRaw: input.token,
+          submissionId: created.id,
+          resumeClaim: input.resumeClaim,
+        });
+      } catch (error) {
+        if (error instanceof HostedResumeError) {
+          throw new HostedApplyValidationError({
+            resume: "That resume could not be attached. Upload it again.",
+          });
+        }
+        throw error;
+      }
+    }
+
+    if (input.photoClaim) {
+      try {
+        await bindPendingPhotoToSubmission({
+          applyTokenRaw: input.token,
+          submissionId: created.id,
+          photoClaim: input.photoClaim,
+        });
+      } catch (error) {
+        if (error instanceof HostedPhotoError) {
+          throw new HostedApplyValidationError({
+            photo: "That photo could not be attached. Upload it again.",
+          });
+        }
+        throw error;
+      }
     }
 
     console.info("[hosted-apply] received", {

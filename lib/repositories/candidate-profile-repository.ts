@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
-const profileSelect = {
+export const candidateProfileSelect = {
   id: true,
   candidateId: true,
   companyId: true,
@@ -17,13 +17,49 @@ const profileSelect = {
   currentEmployer: true,
   expectedCTC: true,
   linkedInUrl: true,
+  aboutText: true,
+  roleTitle: true,
+  domains: true,
+  githubUrl: true,
+  portfolioUrl: true,
+  twitterUrl: true,
+  videoResumeUrl: true,
+  leetcodeUrl: true,
+  socialLinks: true,
+  photoStorageKey: true,
+  photoContentType: true,
+  experiences: true,
+  education: true,
+  projects: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.CandidateProfileSelect;
 
 export type CandidateProfileRow = Prisma.CandidateProfileGetPayload<{
-  select: typeof profileSelect;
+  select: typeof candidateProfileSelect;
 }>;
+
+export type CandidateProfileWriteData = {
+  headline: string | null;
+  location: string | null;
+  experienceYears: number | null;
+  skillsText: string | null;
+  currentEmployer: string | null;
+  expectedCTC: string | null;
+  linkedInUrl: string | null;
+  aboutText: string | null;
+  roleTitle: string | null;
+  domains: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+  githubUrl: string | null;
+  portfolioUrl: string | null;
+  twitterUrl: string | null;
+  videoResumeUrl: string | null;
+  leetcodeUrl: string | null;
+  socialLinks: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+  experiences: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+  education: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+  projects: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+};
 
 export async function findProfileByCandidateIdAndCompanyId(
   candidateId: number,
@@ -35,7 +71,7 @@ export async function findProfileByCandidateIdAndCompanyId(
       candidateId,
       companyId,
     },
-    select: profileSelect,
+    select: candidateProfileSelect,
   });
 }
 
@@ -68,22 +104,32 @@ export async function createProfileFromCandidate(
 ) {
   return db.candidateProfile.create({
     data: profileCreateDataFromCandidate(candidate),
-    select: profileSelect,
+    select: candidateProfileSelect,
+  });
+}
+
+export async function upsertProfileFromApply(
+  candidateId: number,
+  companyId: number,
+  data: CandidateProfileWriteData,
+  db: Db = prisma,
+) {
+  return db.candidateProfile.upsert({
+    where: { candidateId },
+    create: {
+      candidateId,
+      companyId,
+      ...data,
+    },
+    update: data,
+    select: candidateProfileSelect,
   });
 }
 
 export async function updateProfileByCandidateIdAndCompanyId(
   candidateId: number,
   companyId: number,
-  data: {
-    headline: string | null;
-    location: string | null;
-    experienceYears: number | null;
-    skillsText: string | null;
-    currentEmployer: string | null;
-    expectedCTC: string | null;
-    linkedInUrl: string | null;
-  },
+  data: CandidateProfileWriteData,
   db: Db = prisma,
 ) {
   return db.candidateProfile.update({
@@ -94,7 +140,7 @@ export async function updateProfileByCandidateIdAndCompanyId(
       },
     },
     data,
-    select: profileSelect,
+    select: candidateProfileSelect,
   });
 }
 

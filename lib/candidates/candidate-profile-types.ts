@@ -5,6 +5,14 @@ import type {
   ApplicationPipelineStatus,
   SourcingDatabaseSource,
 } from "@prisma/client";
+import type {
+  ProfileEducation,
+  ProfileExperience,
+  ProfileProject,
+} from "@/lib/profiles/structured-profile";
+import type { ProfileSocialLink } from "@/lib/profiles/social-platforms";
+import type { GithubProofSnapshot } from "@/lib/profiles/github-public";
+import type { LeetcodeProofSnapshot } from "@/lib/profiles/leetcode-public";
 
 export type SafeCandidateProfile = {
   candidateId: number;
@@ -17,6 +25,22 @@ export type SafeCandidateProfile = {
   currentEmployer: string | null;
   expectedCTC: string | null;
   linkedInUrl: string | null;
+  aboutText: string | null;
+  roleTitle: string | null;
+  domains: string[];
+  githubUrl: string | null;
+  portfolioUrl: string | null;
+  twitterUrl: string | null;
+  videoResumeUrl: string | null;
+  leetcodeUrl: string | null;
+  socialLinks: ProfileSocialLink[];
+  hasPhoto: boolean;
+  photoUrl: string | null;
+  githubProof: GithubProofSnapshot | null;
+  leetcodeProof: LeetcodeProofSnapshot | null;
+  experiences: ProfileExperience[];
+  education: ProfileEducation[];
+  projects: ProfileProject[];
 };
 
 export type SafeCandidateApplicationSummary = {

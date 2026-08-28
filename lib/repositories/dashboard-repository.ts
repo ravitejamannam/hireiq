@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ApplicationPipelineStatus, JobStatus } from "@prisma/client";
+import { isPersonProfilePublished } from "@/lib/profiles/structured-profile";
 
 import {
   applicationScopeWhere,
@@ -150,6 +151,190 @@ export async function getDashboardStats() {
     slaAtRisk,
     openRequirements,
   };
+}
+
+export type DashboardAttentionItem = {
+  href: string;
+  title: string;
+  meta: string;
+  urgency: "now" | "next";
+};
+
+const PIPELINE_STAGE_LABEL: Record<string, string> = {
+  CV_POOL: "CV pool",
+  EXPERT_REVIEW: "Expert review",
+  TECH_EVALUATION: "Technical evaluation",
+  SHORTLISTED: "Shortlisted",
+  SELECTED: "Selected",
+  HIRED: "Hired",
+  REJECTED: "Rejected",
+};
+
+export async function getDashboardAttention(): Promise<DashboardAttentionItem[]> {
+  const user = await requireUser();
+  const now = new Date();
+  const jobScope = jobScopeWhere(user);
+  const applicationScope = applicationScopeWhere(user);
+  const items: DashboardAttentionItem[] = [];
+
+  const [slaJobs, waiting, unpublishedInterviewers] = await Promise.all([
+    prisma.job.findMany({
+      where: {
+        AND: [
+          jobScope,
+          {
+            shortlistingDueAt: { lt: now },
+            shortlistingCompletedAt: null,
+            status: JobStatus.OPEN,
+          },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        company: { select: { name: true } },
+      },
+      take: 5,
+      orderBy: { shortlistingDueAt: "asc" },
+    }),
+    prisma.application.findMany({
+      where: {
+        AND: [
+          applicationScope,
+          {
+            status: {
+              in: [
+                ApplicationPipelineStatus.EXPERT_REVIEW,
+                ApplicationPipelineStatus.TECH_EVALUATION,
+                ApplicationPipelineStatus.SHORTLISTED,
+              ],
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        status: true,
+        candidate: { select: { id: true, name: true } },
+        job: { select: { title: true } },
+      },
+      take: 8,
+      orderBy: { updatedAt: "desc" },
+    }),
+    user.role === "ADMIN"
+      ? prisma.interviewer.findMany({
+          select: {
+            id: true,
+            name: true,
+            profile: {
+              select: {
+                roleTitle: true,
+                aboutText: true,
+                experiences: true,
+                education: true,
+                githubUrl: true,
+                linkedInUrl: true,
+                leetcodeUrl: true,
+              },
+            },
+          },
+          take: 20,
+        })
+      : Promise.resolve([]),
+  ]);
+
+  for (const job of slaJobs) {
+    items.push({
+      href: `/dashboard/requirements/${job.id}`,
+      title: `${job.title} is past shortlist SLA`,
+      meta: job.company.name,
+      urgency: "now",
+    });
+  }
+
+  for (const application of waiting) {
+    items.push({
+      href: `/dashboard/candidates/${application.candidate.id}`,
+      title: `${application.candidate.name} is in ${PIPELINE_STAGE_LABEL[application.status] ?? application.status}`,
+      meta: application.job.title,
+      urgency:
+        application.status === ApplicationPipelineStatus.SHORTLISTED
+          ? "now"
+          : "next",
+    });
+  }
+
+  for (const interviewer of unpublishedInterviewers) {
+    const experiences = Array.isArray(interviewer.profile?.experiences)
+      ? interviewer.profile.experiences
+      : [];
+    const education = Array.isArray(interviewer.profile?.education)
+      ? interviewer.profile.education
+      : [];
+    if (
+      isPersonProfilePublished({
+        roleTitle: interviewer.profile?.roleTitle,
+        aboutText: interviewer.profile?.aboutText,
+        experiences: experiences as never,
+        education: education as never,
+        githubUrl: interviewer.profile?.githubUrl,
+        linkedInUrl: interviewer.profile?.linkedInUrl,
+        leetcodeUrl: interviewer.profile?.leetcodeUrl,
+      })
+    ) {
+      continue;
+    }
+    items.push({
+      href: `/dashboard/interviewers/${interviewer.id}`,
+      title: `${interviewer.name} has not published a profile`,
+      meta: "Hiring teams and candidates cannot learn who is interviewing",
+      urgency: "next",
+    });
+  }
+
+  return items.slice(0, 10);
+}
+
+export async function getClientDashboardAttention(): Promise<DashboardAttentionItem[]> {
+  const user = await requireUser();
+  if (user.role !== "CLIENT" || user.companyId === null) {
+    throw new AuthorizationError();
+  }
+  const applicationScope = applicationScopeWhere(user);
+
+  const waiting = await prisma.application.findMany({
+    where: {
+      AND: [
+        applicationScope,
+        {
+          status: {
+            in: [
+              ApplicationPipelineStatus.SHORTLISTED,
+              ApplicationPipelineStatus.SELECTED,
+            ],
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      status: true,
+      candidate: { select: { name: true } },
+      job: { select: { id: true, title: true } },
+    },
+    take: 8,
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return waiting.map((application) => ({
+    href: `/client/requirements/${application.job.id}/candidates/${application.id}`,
+    title:
+      application.status === ApplicationPipelineStatus.SELECTED
+        ? `Confirm hire for ${application.candidate.name}`
+        : `Review shortlist: ${application.candidate.name}`,
+    meta: application.job.title,
+    urgency: "now" as const,
+  }));
 }
 
 export async function getClientDashboardStats() {

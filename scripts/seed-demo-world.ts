@@ -26,6 +26,7 @@ import {
   CodingTestStatus,
   InterviewResult,
   InterviewType,
+  Prisma,
   Recommendation,
   SourcingDatabaseSource,
 } from "@prisma/client";
@@ -130,6 +131,8 @@ async function main() {
     interviewerIds[iv.email] = await linkInterviewerProfile(iv.email);
   }
   console.log("✓ interviewers:", Object.keys(interviewerIds).length);
+  await seedPublishedInterviewerProfiles(interviewerIds);
+  console.log("✓ interviewer profiles published");
 
   // ── 3. Two published requirements ───────────────────────────────────
   const backend = await ensureJob(company.id, ownerUser.id, {
@@ -139,12 +142,39 @@ async function main() {
     location: "Bengaluru (Hybrid)",
     compensationRange: "₹45L – ₹65L",
     primarySkills: "Go, PostgreSQL, Kubernetes, Redis",
-    mustHaveRequirements: "5+ years backend; distributed systems depth; SQL mastery",
-    niceToHaveRequirements: "gRPC; event-driven architecture; prior startup experience",
+    mustHaveRequirements: [
+      "5–9 years building backend systems in production.",
+      "Strong distributed systems and SQL depth — you have operated multi-tenant services.",
+      "Comfortable owning on-call, instrumentation, and operational quality.",
+      "Clear written design: you can explain a trade-off without a slide deck.",
+    ].join("\n"),
+    niceToHaveRequirements: [
+      "gRPC or event-driven architecture in production.",
+      "Prior startup experience shipping with a small team.",
+    ].join("\n"),
     jobDescription:
-      "Own Nimbus Labs' core platform services: design APIs, model data, and scale our multi-tenant infrastructure. You will work closely with product and infra to ship features end-to-end.",
+      "Nimbus Labs runs a multi-tenant hiring OS. As a backend-heavy senior engineer you design the services, APIs, and data models that keep tenant isolation honest while the product still ships weekly. You will work with product and infra — not through a ticket queue — and you will be evaluated on a skills assessment plus an expert interview, not a keyword scan.",
     evaluationCriteria: "System design depth, coding quality, operational maturity",
     interviewerId: interviewerIds[INTERVIEWERS[0].email],
+    posting: {
+      employmentType: "FULL_TIME",
+      seniorityLevel: "SENIOR",
+      responsibilities: [
+        "Design and build backend services, APIs, and data models for a multi-tenant platform.",
+        "Own features end-to-end: spec, implementation, rollout, and production follow-through.",
+        "Keep tenant isolation, backpressure, and idempotency as first-class constraints.",
+        "Review designs, raise the engineering bar, and delete work that does not earn its keep.",
+        "Work directly with product and infra in Bengaluru hybrid — pairing and written specs.",
+      ],
+      benefits: [
+        "₹45L – ₹65L CTC, scoped to the level and discussed early.",
+        "Hybrid Bengaluru: in-person collaboration with remote-friendly writing.",
+        "A hiring process you can see — role assessment, expert interview, written trail.",
+        "High ownership on a 120-person technology team still small enough to feel.",
+      ],
+      aboutCompany:
+        "Nimbus Labs is a 120-person technology company building hiring infrastructure. The team cares about evidence over résumé theatre: every applicant takes the same assessment and is reviewed by an independent expert before a human decision.",
+    },
   });
   const analyst = await ensureJob(company.id, ownerUser.id, {
     title: `${COMPANY.name}: Revenue Operations Analyst`,
@@ -153,12 +183,37 @@ async function main() {
     location: "Remote (India)",
     compensationRange: "₹18L – ₹28L",
     primarySkills: "SQL, Excel modelling, Billing reconciliation",
-    mustHaveRequirements: "2+ years revops/finance analytics; advanced SQL",
-    niceToHaveRequirements: "SaaS billing exposure; Looker/Tableau",
+    mustHaveRequirements: [
+      "2–5 years in revops, finance analytics, or billing operations.",
+      "Advanced SQL and comfort reconciling messy invoice-level data.",
+      "You write clearly: a cohort note a founder can act on.",
+    ].join("\n"),
+    niceToHaveRequirements: [
+      "SaaS billing exposure (usage, seats, credits).",
+      "Looker or Tableau for self-serve reporting.",
+    ].join("\n"),
     jobDescription:
-      "Keep Nimbus Labs' billing engine honest: reconcile invoices, analyse revenue cohorts, and partner with engineering on billing automation.",
+      "Keep Nimbus Labs' billing engine honest. You reconcile invoices, analyse revenue cohorts, and sit with engineering when automation should replace a spreadsheet. This is a remote full-time analyst role: high agency, tight feedback, and a hiring process that tests the work rather than the brand on your CV.",
     evaluationCriteria: "Analytical rigour, reconciliation accuracy, communication",
     interviewerId: interviewerIds[INTERVIEWERS[1].email],
+    posting: {
+      employmentType: "FULL_TIME",
+      seniorityLevel: "INTERMEDIATE",
+      responsibilities: [
+        "Reconcile invoices and credits so billed revenue matches what customers actually used.",
+        "Build cohort and leakage analyses that finance and product can trust.",
+        "Partner with engineering on billing automation — spec the edge cases, then verify the ship.",
+        "Own the weekly revenue snapshot: what moved, why, and what to do next.",
+      ],
+      benefits: [
+        "₹18L – ₹28L CTC.",
+        "Remote (India) with overlap on IST working hours.",
+        "Transparent hiring: skills assessment plus expert review.",
+        "Direct line to billing and product — no four-layer reporting chain.",
+      ],
+      aboutCompany:
+        "Nimbus Labs is a 120-person technology company. Revenue operations here is not a back-office afterthought: billing correctness is part of the product, and this role sits next to the engineers who ship it.",
+    },
   });
   console.log("✓ published requirements:", backend.job.title.split(": ")[1], "+", analyst.job.title.split(": ")[1]);
 
@@ -301,6 +356,124 @@ async function linkInterviewerProfile(userEmail: string): Promise<number> {
   return interviewer.id;
 }
 
+async function seedPublishedInterviewerProfiles(
+  interviewerIds: Record<string, number>,
+) {
+  const arjunId = interviewerIds["interviewer.arjun@hireiq.local"];
+  const kavyaId = interviewerIds["interviewer.kavya@hireiq.local"];
+  if (arjunId) {
+    await prisma.interviewerProfile.upsert({
+      where: { interviewerId: arjunId },
+      create: { interviewerId: arjunId, ...ARJUN_PROFILE },
+      update: ARJUN_PROFILE,
+    });
+  }
+  if (kavyaId) {
+    await prisma.interviewerProfile.upsert({
+      where: { interviewerId: kavyaId },
+      create: { interviewerId: kavyaId, ...KAVYA_PROFILE },
+      update: KAVYA_PROFILE,
+    });
+  }
+}
+
+const ARJUN_PROFILE = {
+  headline: "Engineering interviewer — systems and backend",
+  location: "Bengaluru",
+  aboutText:
+    "I interview backend and platform engineers for production judgement: isolation, backpressure, incident response. Fifteen years building and reviewing distributed systems. Candidates see this page before they book a slot.",
+  roleTitle: "Staff Engineering Interviewer",
+  experienceYears: 15,
+  domains: ["Engineering"] as Prisma.InputJsonValue,
+  linkedInUrl: "https://linkedin.com/in/arjun-mehta-hireiq",
+  githubUrl: null,
+  portfolioUrl: null,
+  twitterUrl: null,
+  videoUrl: null,
+  leetcodeUrl: null,
+  socialLinks: Prisma.JsonNull,
+  experiences: [
+    {
+      title: "Staff Engineer",
+      company: "Razorpay",
+      startDate: "Apr 2020",
+      endDate: "",
+      isCurrent: true,
+      location: "Bengaluru",
+      summary:
+        "Platform reliability and multi-tenant service design. Interviews senior backend hires for the same bar.",
+    },
+    {
+      title: "Senior Engineer",
+      company: "Google",
+      startDate: "Aug 2014",
+      endDate: "Mar 2020",
+      isCurrent: false,
+      location: "Bengaluru",
+      summary: "Ads serving infrastructure and on-call for latency-critical paths.",
+    },
+  ] as Prisma.InputJsonValue,
+  education: [
+    {
+      school: "IIT Madras",
+      degree: "B.Tech",
+      field: "Computer Science",
+      startDate: "2008",
+      endDate: "2012",
+      summary: "",
+    },
+  ] as Prisma.InputJsonValue,
+  projects: [] as Prisma.InputJsonValue,
+};
+
+const KAVYA_PROFILE = {
+  headline: "Product interviewer — judgement and written clarity",
+  location: "Mumbai",
+  aboutText:
+    "I interview PMs and analysts on problem framing, evidence, and how they write for operators. I do not score on confidence theatre.",
+  roleTitle: "Product Interviewer",
+  experienceYears: 11,
+  domains: ["Product", "Operations"] as Prisma.InputJsonValue,
+  linkedInUrl: "https://linkedin.com/in/kavya-iyer-hireiq",
+  githubUrl: null,
+  portfolioUrl: null,
+  twitterUrl: null,
+  videoUrl: null,
+  leetcodeUrl: null,
+  socialLinks: Prisma.JsonNull,
+  experiences: [
+    {
+      title: "Director of Product",
+      company: "CRED",
+      startDate: "Jan 2021",
+      endDate: "",
+      isCurrent: true,
+      location: "Mumbai",
+      summary: "Owns collections and billing product surfaces used by operators daily.",
+    },
+    {
+      title: "Product Lead",
+      company: "Freshworks",
+      startDate: "Mar 2016",
+      endDate: "Dec 2020",
+      isCurrent: false,
+      location: "Chennai",
+      summary: "Workflow products for support teams; heavy written specs.",
+    },
+  ] as Prisma.InputJsonValue,
+  education: [
+    {
+      school: "ISB Hyderabad",
+      degree: "PGP",
+      field: "Management",
+      startDate: "2014",
+      endDate: "2015",
+      summary: "",
+    },
+  ] as Prisma.InputJsonValue,
+  projects: [] as Prisma.InputJsonValue,
+};
+
 async function ensureMembership(input: {
   userId: number;
   companyId: number;
@@ -342,8 +515,27 @@ async function ensureJob(
     jobDescription: string;
     evaluationCriteria: string;
     interviewerId: number;
+    posting?: {
+      employmentType: "FULL_TIME" | "CONTRACT" | "PART_TIME" | "INTERNSHIP";
+      seniorityLevel: "JUNIOR" | "INTERMEDIATE" | "SENIOR" | "STAFF" | "PRINCIPAL";
+      responsibilities: string[];
+      benefits: string[];
+      aboutCompany: string;
+    };
   },
 ) {
+  const structuredPayload = fields.posting
+    ? {
+        schemaVersion: 2,
+        employmentType: fields.posting.employmentType,
+        seniorityLevel: fields.posting.seniorityLevel,
+        responsibilities: fields.posting.responsibilities,
+        requirements: fields.mustHaveRequirements.split("\n").map((line) => line.trim()).filter(Boolean),
+        benefits: fields.posting.benefits,
+        aboutCompany: fields.posting.aboutCompany,
+      }
+    : undefined;
+
   const existingJob = await prisma.job.findFirst({
     where: { companyId, title: fields.title },
     select: {
@@ -353,6 +545,33 @@ async function ensureJob(
     },
   });
   if (existingJob?.currentPublishedSpecificationVersionId) {
+    await prisma.job.update({
+      where: { id: existingJob.id },
+      data: {
+        jobDescription: fields.jobDescription,
+        mustHaveRequirements: fields.mustHaveRequirements,
+        niceToHaveRequirements: fields.niceToHaveRequirements,
+        primarySkills: fields.primarySkills,
+        compensationRange: fields.compensationRange,
+        location: fields.location,
+        experienceRange: fields.experienceRange,
+        numberOfPositions: 1,
+      },
+    });
+    await prisma.jobSpecificationVersion.update({
+      where: { id: existingJob.currentPublishedSpecificationVersionId },
+      data: {
+        jobDescription: fields.jobDescription,
+        mustHaveRequirements: fields.mustHaveRequirements,
+        niceToHaveRequirements: fields.niceToHaveRequirements,
+        primarySkills: fields.primarySkills,
+        compensationRange: fields.compensationRange,
+        location: fields.location,
+        experienceRange: fields.experienceRange,
+        numberOfPositions: 1,
+        ...(structuredPayload ? { structuredPayload } : {}),
+      },
+    });
     return {
       job: existingJob as { id: number; title: string },
       specVersionId: existingJob.currentPublishedSpecificationVersionId,
@@ -364,6 +583,7 @@ async function ensureJob(
     status: "OPEN" as never,
     companyId,
     createdByUserId,
+    structuredPayload,
     fields: {
       title: fields.title,
       roleCategory: fields.roleCategory as never,
@@ -741,21 +961,50 @@ const daysAgo = (n: number, hour = 10) => {
   return d;
 };
 
+type StoryIdentity = {
+  name: string;
+  employer: string;
+  skills: string;
+  expectedCTC: string;
+  linkedIn: string;
+  location: string;
+  roleTitle: string;
+  headline: string;
+  about: string;
+  domains: string[];
+  experiences: Array<{
+    title: string;
+    company: string;
+    startDate: string;
+    endDate: string;
+    isCurrent: boolean;
+    location: string;
+    summary: string;
+  }>;
+  education: Array<{
+    school: string;
+    degree: string;
+    field: string;
+    startDate: string;
+    endDate: string;
+    summary: string;
+  }>;
+  projects: Array<{
+    name: string;
+    url: string;
+    technologies: string;
+    summary: string;
+  }>;
+};
+
 type StoryArc = {
   fixtureEmail: string;
-  identity: {
-    name: string;
-    employer: string;
-    skills: string;
-    expectedCTC: string;
-    linkedIn: string;
-    location: string;
-  };
+  identity: StoryIdentity;
   appliedDaysAgo: number;
   assessedDaysAgo: number | null;
   scoreFraction: number | null;
   integrity?: { tabSwitches: number; pastes: number; copies: number };
-  decidedDaysAgo?: number; // evaluation / stage-decision moment
+  decidedDaysAgo?: number;
 };
 
 const STORY: StoryArc[] = [
@@ -768,6 +1017,51 @@ const STORY: StoryArc[] = [
       expectedCTC: "₹58L",
       linkedIn: "https://linkedin.com/in/priya-raghavan-eng",
       location: "Bengaluru",
+      roleTitle: "Staff Backend Engineer",
+      headline: "Staff backend engineer at Razorpay",
+      about:
+        "I design payment-path services that stay correct under load. Nine years in backend systems, mostly Go and Postgres, with on-call ownership rather than architecture theatre.",
+      domains: ["Engineering"],
+      experiences: [
+        {
+          title: "Staff Engineer",
+          company: "Razorpay",
+          startDate: "Mar 2021",
+          endDate: "",
+          isCurrent: true,
+          location: "Bengaluru",
+          summary:
+            "Owns multi-tenant ledger APIs, backpressure, and idempotency for checkout volume. Mentors senior engineers on production incidents.",
+        },
+        {
+          title: "Senior Software Engineer",
+          company: "Freshworks",
+          startDate: "Jul 2017",
+          endDate: "Feb 2021",
+          isCurrent: false,
+          location: "Chennai",
+          summary:
+            "Built routing and retry services for a high-throughput messaging product.",
+        },
+      ],
+      education: [
+        {
+          school: "NIT Trichy",
+          degree: "B.Tech",
+          field: "Computer Science",
+          startDate: "2013",
+          endDate: "2017",
+          summary: "",
+        },
+      ],
+      projects: [
+        {
+          name: "Fair queue scheduler",
+          url: "",
+          technologies: "Go, Redis, Postgres",
+          summary: "Tenant-fair job scheduling with isolation and replay.",
+        },
+      ],
     },
     appliedDaysAgo: 12,
     assessedDaysAgo: 9,
@@ -783,6 +1077,43 @@ const STORY: StoryArc[] = [
       expectedCTC: "₹42L",
       linkedIn: "https://linkedin.com/in/arjun-nair-backend",
       location: "Remote (Kochi)",
+      roleTitle: "Senior Backend Engineer",
+      headline: "Senior backend engineer at Swiggy",
+      about:
+        "Event-driven backend work on order and logistics services. Strong on Kafka, weaker on Kubernetes operations — honest about that in interviews.",
+      domains: ["Engineering"],
+      experiences: [
+        {
+          title: "Senior Software Engineer",
+          company: "Swiggy",
+          startDate: "Jan 2022",
+          endDate: "",
+          isCurrent: true,
+          location: "Kochi (Remote)",
+          summary:
+            "Delivery-promise services and consumer Kafka pipelines for live order state.",
+        },
+        {
+          title: "Software Engineer",
+          company: "Udaan",
+          startDate: "Aug 2018",
+          endDate: "Dec 2021",
+          isCurrent: false,
+          location: "Bengaluru",
+          summary: "Inventory APIs and MySQL query work for B2B catalog load.",
+        },
+      ],
+      education: [
+        {
+          school: "College of Engineering Trivandrum",
+          degree: "B.Tech",
+          field: "Electronics",
+          startDate: "2014",
+          endDate: "2018",
+          summary: "",
+        },
+      ],
+      projects: [],
     },
     appliedDaysAgo: 5,
     assessedDaysAgo: 3,
@@ -798,10 +1129,88 @@ const STORY: StoryArc[] = [
       expectedCTC: "₹30L",
       linkedIn: "https://linkedin.com/in/vikram-menon-dev",
       location: "Bengaluru",
+      roleTitle: "Software Engineer",
+      headline: "Software engineer at Flipkart",
+      about:
+        "Django and REST APIs for seller tools. Looking to move into stronger distributed-systems work; assessment showed the gap clearly.",
+      domains: ["Engineering"],
+      experiences: [
+        {
+          title: "Software Engineer",
+          company: "Flipkart",
+          startDate: "Jun 2022",
+          endDate: "",
+          isCurrent: true,
+          location: "Bengaluru",
+          summary: "Seller onboarding APIs and internal admin tools.",
+        },
+      ],
+      education: [
+        {
+          school: "VIT Vellore",
+          degree: "B.Tech",
+          field: "Information Technology",
+          startDate: "2018",
+          endDate: "2022",
+          summary: "",
+        },
+      ],
+      projects: [],
     },
     appliedDaysAgo: 10,
     assessedDaysAgo: 8,
     scoreFraction: 0.33,
+  },
+  {
+    fixtureEmail: "devika.demo@example.com",
+    identity: {
+      name: "Devika Rao",
+      employer: "Zoho",
+      skills: "SQL, Excel modelling, Billing reconciliation",
+      expectedCTC: "₹24L",
+      linkedIn: "https://linkedin.com/in/devika-rao-revops",
+      location: "Chennai",
+      roleTitle: "Revenue Operations Analyst",
+      headline: "RevOps analyst — billing and cohort work",
+      about:
+        "Reconciles invoice-level SaaS billing and writes cohort notes a founder can act on. Hired into Nimbus Labs after a clean shortlist.",
+      domains: ["Finance", "Operations"],
+      experiences: [
+        {
+          title: "Revenue Analyst",
+          company: "Zoho",
+          startDate: "Feb 2023",
+          endDate: "",
+          isCurrent: true,
+          location: "Chennai",
+          summary: "Seat and usage billing reconcilation for mid-market accounts.",
+        },
+        {
+          title: "Finance Associate",
+          company: "Freshworks",
+          startDate: "Jul 2021",
+          endDate: "Jan 2023",
+          isCurrent: false,
+          location: "Chennai",
+          summary: "Month-end close support and spreadsheet models for ARR.",
+        },
+      ],
+      education: [
+        {
+          school: "Loyola College",
+          degree: "B.Com",
+          field: "Accounting",
+          startDate: "2018",
+          endDate: "2021",
+          summary: "",
+        },
+      ],
+      projects: [],
+    },
+    appliedDaysAgo: 21,
+    assessedDaysAgo: 18,
+    scoreFraction: 0.9,
+    decidedDaysAgo: 8,
   },
 ];
 
@@ -838,11 +1247,31 @@ async function runNarrative() {
       where: { candidateId: event.candidateId },
       select: { id: true },
     });
+    const profileData = {
+      headline: arc.identity.headline,
+      location: arc.identity.location,
+      currentEmployer: arc.identity.employer,
+      skillsText: arc.identity.skills,
+      expectedCTC: arc.identity.expectedCTC,
+      linkedInUrl: arc.identity.linkedIn,
+      roleTitle: arc.identity.roleTitle,
+      aboutText: arc.identity.about,
+      domains: arc.identity.domains as Prisma.InputJsonValue,
+      experiences: arc.identity.experiences as Prisma.InputJsonValue,
+      education: arc.identity.education as Prisma.InputJsonValue,
+      projects: arc.identity.projects as Prisma.InputJsonValue,
+    };
     if (profile) {
       await prisma.candidateProfile.update({
         where: { id: profile.id },
+        data: profileData,
+      });
+    } else {
+      await prisma.candidateProfile.create({
         data: {
-          headline: `${arc.identity.skills.split(",")[0]} engineer at ${arc.identity.employer}`,
+          candidateId: event.candidateId,
+          companyId: event.companyId,
+          ...profileData,
         },
       });
     }

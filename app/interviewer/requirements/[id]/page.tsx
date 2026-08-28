@@ -52,9 +52,12 @@ export default async function InterviewerRequirementDetailPage({
         jobDescription: requirement.jobDescription,
         evaluationCriteria: requirement.evaluationCriteria,
         primarySkills: requirement.primarySkills,
+        structuredPayload:
+          requirement.currentPublishedSpecificationVersion?.structuredPayload,
         requirementLifecycle: requirement.requirementLifecycle,
         sourcingAccessReceivedAt: requirement.sourcingAccessReceivedAt,
         shortlistingCompletedAt: requirement.shortlistingCompletedAt,
+        createdAt: requirement.createdAt,
         company: requirement.company,
       }}
       candidates={candidates.map((application) => ({

@@ -4,6 +4,14 @@ import { useState, type FormEvent } from "react";
 import type { RoleCategory } from "@prisma/client";
 
 import type { ClientRequirementEditableInput } from "@/app/actions/job-actions";
+import {
+  EMPLOYMENT_TYPES,
+  SENIORITY_LEVELS,
+  employmentTypeLabels,
+  seniorityLevelLabels,
+  type EmploymentType,
+  type SeniorityLevel,
+} from "@/lib/jobs/job-posting-view";
 
 const roleCategoryOptions = [
   { value: "ENGINEERING", label: "Engineering" },
@@ -15,6 +23,8 @@ const roleCategoryOptions = [
 type FormState = {
   title: string;
   roleCategory: RoleCategory | "";
+  employmentType: EmploymentType;
+  seniorityLevel: SeniorityLevel;
   experienceRange: string;
   location: string;
   compensationRange: string;
@@ -23,6 +33,9 @@ type FormState = {
   mustHaveRequirements: string;
   niceToHaveRequirements: string;
   jobDescription: string;
+  responsibilities: string;
+  benefits: string;
+  aboutCompany: string;
   evaluationCriteria: string;
   primarySkills: string;
 };
@@ -30,6 +43,8 @@ type FormState = {
 const emptyForm: FormState = {
   title: "",
   roleCategory: "",
+  employmentType: "FULL_TIME",
+  seniorityLevel: "INTERMEDIATE",
   experienceRange: "",
   location: "",
   compensationRange: "",
@@ -38,6 +53,9 @@ const emptyForm: FormState = {
   mustHaveRequirements: "",
   niceToHaveRequirements: "",
   jobDescription: "",
+  responsibilities: "",
+  benefits: "",
+  aboutCompany: "",
   evaluationCriteria: "",
   primarySkills: "",
 };
@@ -72,6 +90,11 @@ function parseFields(form: FormState): ClientRequirementEditableInput {
     jobDescription: form.jobDescription.trim() || null,
     evaluationCriteria: form.evaluationCriteria.trim() || null,
     primarySkills: form.primarySkills.trim() || null,
+    employmentType: form.employmentType,
+    seniorityLevel: form.seniorityLevel,
+    responsibilities: form.responsibilities.trim() || null,
+    benefits: form.benefits.trim() || null,
+    aboutCompany: form.aboutCompany.trim() || null,
   };
 }
 
@@ -172,6 +195,58 @@ export default function ClientPostRoleModal({
                   {roleCategoryOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="client-post-role-type"
+                  className="block text-sm font-medium text-black"
+                >
+                  Type
+                </label>
+                <select
+                  id="client-post-role-type"
+                  value={form.employmentType}
+                  disabled={isSaving}
+                  onChange={(event) =>
+                    updateField(
+                      "employmentType",
+                      event.target.value as EmploymentType,
+                    )
+                  }
+                  className={inputClassName}
+                >
+                  {EMPLOYMENT_TYPES.map((value) => (
+                    <option key={value} value={value}>
+                      {employmentTypeLabels[value]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="client-post-role-level"
+                  className="block text-sm font-medium text-black"
+                >
+                  Level
+                </label>
+                <select
+                  id="client-post-role-level"
+                  value={form.seniorityLevel}
+                  disabled={isSaving}
+                  onChange={(event) =>
+                    updateField(
+                      "seniorityLevel",
+                      event.target.value as SeniorityLevel,
+                    )
+                  }
+                  className={inputClassName}
+                >
+                  {SENIORITY_LEVELS.map((value) => (
+                    <option key={value} value={value}>
+                      {seniorityLevelLabels[value]}
                     </option>
                   ))}
                 </select>
@@ -301,6 +376,9 @@ export default function ClientPostRoleModal({
                 >
                   Must Have
                 </label>
+                <p className="mt-1 text-xs text-zinc-500">
+                  One requirement per line.
+                </p>
                 <textarea
                   id="client-post-role-must-have"
                   value={form.mustHaveRequirements}
@@ -337,6 +415,9 @@ export default function ClientPostRoleModal({
                 >
                   Job Description
                 </label>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Short paragraph for “About the role”.
+                </p>
                 <textarea
                   id="client-post-role-description"
                   value={form.jobDescription}
@@ -345,7 +426,64 @@ export default function ClientPostRoleModal({
                     updateField("jobDescription", event.target.value)
                   }
                   className={textareaClassName}
+                  placeholder="What this person will own day to day — one short paragraph, not a résumé dump."
                   required
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="client-post-role-responsibilities"
+                  className="block text-sm font-medium text-black"
+                >
+                  Responsibilities
+                </label>
+                <p className="mt-1 text-xs text-zinc-500">One bullet per line.</p>
+                <textarea
+                  id="client-post-role-responsibilities"
+                  value={form.responsibilities}
+                  disabled={isSaving}
+                  onChange={(event) =>
+                    updateField("responsibilities", event.target.value)
+                  }
+                  className={textareaClassName}
+                  placeholder="Own features end-to-end from spec to production"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="client-post-role-benefits"
+                  className="block text-sm font-medium text-black"
+                >
+                  Benefits
+                </label>
+                <p className="mt-1 text-xs text-zinc-500">One bullet per line.</p>
+                <textarea
+                  id="client-post-role-benefits"
+                  value={form.benefits}
+                  disabled={isSaving}
+                  onChange={(event) =>
+                    updateField("benefits", event.target.value)
+                  }
+                  className={textareaClassName}
+                  placeholder="Competitive pay, health cover, high ownership"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="client-post-role-about-company"
+                  className="block text-sm font-medium text-black"
+                >
+                  About the company
+                </label>
+                <textarea
+                  id="client-post-role-about-company"
+                  value={form.aboutCompany}
+                  disabled={isSaving}
+                  onChange={(event) =>
+                    updateField("aboutCompany", event.target.value)
+                  }
+                  className={textareaClassName}
+                  placeholder="What the company builds and for whom."
                 />
               </div>
               <div>

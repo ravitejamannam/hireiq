@@ -5,9 +5,9 @@ import CandidateEvidencePanel from "@/components/candidates/CandidateEvidencePan
 import CandidateIdentityPanel from "@/components/candidates/CandidateIdentityPanel";
 import CandidateIntelligencePanel from "@/components/candidates/CandidateIntelligencePanel";
 import CandidateMatchingPanel from "@/components/candidates/CandidateMatchingPanel";
-import CandidateProfileForm from "@/components/candidates/CandidateProfileForm";
 import CandidateResumePanel from "@/components/candidates/CandidateResumePanel";
 import CandidateSignalsPanel from "@/components/candidates/CandidateSignalsPanel";
+import CandidateStructuredProfile from "@/components/candidates/CandidateStructuredProfile";
 import CandidateEraseButton from "@/components/candidates/CandidateEraseButton";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import {
@@ -141,18 +141,12 @@ export default async function CandidateProfilePage({
         ) : null}
       </div>
 
-      <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
-        Candidate
-      </p>
-      <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
-        {profile.name}
-      </h1>
-      <p className="mt-2 text-zinc-600">
-        {profile.headline ?? "Headline not provided"}
-      </p>
-
       <div className="mt-8">
-        <CandidateProfileForm profile={profile} />
+        <CandidateStructuredProfile
+          profile={profile}
+          canEdit
+          editHref={`/dashboard/candidates/${candidateId}/edit`}
+        />
       </div>
 
       {candidateId ? (

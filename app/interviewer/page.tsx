@@ -1,15 +1,37 @@
 import Link from "next/link";
 
 import StatCard from "@/components/dashboard/StatCard";
+import WorkQueue from "@/components/dashboard/WorkQueue";
 import {
   clientJobStatusLabels,
   clientRequirementLifecycleLabels,
   formatClientDate,
 } from "@/components/client/client-labels";
 import { getInterviewerDashboardStats } from "@/lib/repositories/interviewer-portal-repository";
+import {
+  getInterviewerOwnProfile,
+  interviewerProfileIsPublished,
+} from "@/lib/interviewers/interviewer-profile-service";
 
 export default async function InterviewerDashboardPage() {
-  const stats = await getInterviewerDashboardStats();
+  const [stats, profile] = await Promise.all([
+    getInterviewerDashboardStats(),
+    getInterviewerOwnProfile(),
+  ]);
+  const published = interviewerProfileIsPublished(profile);
+  const attention = [
+    ...(published
+      ? []
+      : [
+          {
+            href: "/interviewer/profile/edit",
+            title: "Publish your interviewer profile",
+            meta: "Clients and candidates read this page before they meet you",
+            urgency: "now" as const,
+          },
+        ]),
+    ...stats.attention,
+  ];
 
   return (
     <div>
@@ -17,9 +39,9 @@ export default async function InterviewerDashboardPage() {
         <p className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
           Interviewer portal
         </p>
-        <h1 className="mt-2 text-3xl font-bold text-black">Dashboard</h1>
+        <h1 className="mt-2 text-3xl font-bold text-black">Your desk</h1>
         <p className="mt-2 text-zinc-600">
-          Assigned requirements and evaluation progress.
+          Candidates waiting for your judgement, then the roles you own.
         </p>
       </div>
 
@@ -39,6 +61,14 @@ export default async function InterviewerDashboardPage() {
         <StatCard
           title="Evaluations Completed"
           value={stats.evaluationsCompleted}
+        />
+      </div>
+
+      <div className="mt-8">
+        <WorkQueue
+          title="Waiting on you"
+          items={attention}
+          empty="No candidates are waiting for an evaluation."
         />
       </div>
 

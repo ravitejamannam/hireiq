@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
 
@@ -71,6 +72,11 @@ export async function anonymizeCandidateForAdmin(input: {
   });
   erasedItems.push("candidate-identity");
 
+  const photoKeys = await prisma.candidateProfile.findMany({
+    where: { candidateId },
+    select: { photoStorageKey: true },
+  });
+
   // 2. Profile descriptive fields
   await prisma.candidateProfile.updateMany({
     where: { candidateId },
@@ -81,6 +87,20 @@ export async function anonymizeCandidateForAdmin(input: {
       expectedCTC: null,
       linkedInUrl: null,
       location: null,
+      aboutText: null,
+      roleTitle: null,
+      domains: Prisma.JsonNull,
+      githubUrl: null,
+      portfolioUrl: null,
+      twitterUrl: null,
+      videoResumeUrl: null,
+      leetcodeUrl: null,
+      socialLinks: Prisma.JsonNull,
+      photoStorageKey: null,
+      photoContentType: null,
+      experiences: Prisma.JsonNull,
+      education: Prisma.JsonNull,
+      projects: Prisma.JsonNull,
     },
   });
   erasedItems.push("profile");
@@ -112,6 +132,7 @@ export async function anonymizeCandidateForAdmin(input: {
         location: null,
         linkedInUrl: null,
         coverLetter: null,
+        profilePayload: Prisma.JsonNull,
       },
     });
     erasedItems.push("hosted-apply-submissions");
@@ -179,6 +200,32 @@ export async function anonymizeCandidateForAdmin(input: {
         parseErrorCode: "ERASED",
       },
     });
+
+    const hostedPhotos = await prisma.hostedApplyPhotoUpload.findMany({
+      where: { hostedApplySubmissionId: { in: submissionIds } },
+      select: { storageKey: true },
+    });
+    for (const upload of hostedPhotos) {
+      try {
+        const { deleteResume } = await import("@/lib/resumes/storage");
+        await deleteResume(upload.storageKey);
+      } catch {
+        // best-effort object delete
+      }
+    }
+  }
+
+  for (const photo of photoKeys) {
+    if (!photo.photoStorageKey) continue;
+    try {
+      const { deleteResume } = await import("@/lib/resumes/storage");
+      await deleteResume(photo.photoStorageKey);
+    } catch {
+      // best-effort object delete
+    }
+  }
+  if (photoKeys.some((row) => row.photoStorageKey)) {
+    erasedItems.push("profile-photo");
   }
 
   return { candidateId, erasedItems };

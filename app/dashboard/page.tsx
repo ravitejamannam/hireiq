@@ -4,13 +4,17 @@ import { PortalRole } from "@prisma/client";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import AdminOnboardingChecklist from "@/components/onboarding/AdminOnboardingChecklist";
 import StatCard from "@/components/dashboard/StatCard";
+import WorkQueue from "@/components/dashboard/WorkQueue";
 import {
   formatJobDateTime,
   getSlaStatus,
   requirementLifecycleLabels,
 } from "@/components/jobs/JobCard";
 import { requireUser } from "@/lib/auth/authorization";
-import { getDashboardStats } from "@/lib/repositories/dashboard-repository";
+import {
+  getDashboardAttention,
+  getDashboardStats,
+} from "@/lib/repositories/dashboard-repository";
 
 const portalRoleLabels: Record<PortalRole, string> = {
   ADMIN: "Admin",
@@ -19,20 +23,20 @@ const portalRoleLabels: Record<PortalRole, string> = {
 };
 
 export default async function DashboardPage() {
-  const [user, stats] = await Promise.all([
+  const [user, stats, attention] = await Promise.all([
     requireUser(),
     getDashboardStats(),
+    getDashboardAttention(),
   ]);
 
-  // T120: admin onboarding checklist context
-  const companyId = user.role === "ADMIN" ? 1 : null;
-  const checklistContext = companyId
-    ? {
-        hasCompany: stats.companies > 0 || true,
-        hasJob: stats.activeRequirements > 0 || stats.pipelineCandidates > 0,
-        hasShortlisted: stats.shortlisted > 0,
-      }
-    : null;
+  const checklistContext =
+    user.role === "ADMIN"
+      ? {
+          hasCompany: stats.companies > 0,
+          hasJob: stats.activeRequirements > 0 || stats.pipelineCandidates > 0,
+          hasShortlisted: stats.shortlisted > 0,
+        }
+      : null;
 
   return (
     <DashboardLayout>
@@ -47,11 +51,10 @@ export default async function DashboardPage() {
             {portalRoleLabels[user.role]}
           </p>
           <h1 className="mt-1.5 text-3xl font-black tracking-tight text-stone-900 sm:text-4xl">
-            Command Center
+            Today
           </h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-stone-600">
-            Operational overview across requirements, candidates, and
-            sourcing SLA.
+            What needs a hiring decision, not a dashboard tour.
           </p>
         </div>
       </header>
@@ -65,6 +68,14 @@ export default async function DashboardPage() {
         <StatCard title="Shortlisted" value={stats.shortlisted} />
         <StatCard title="Selected" value={stats.selected} />
         <StatCard title="SLA At Risk" value={stats.slaAtRisk} />
+      </div>
+
+      <div className="mt-8">
+        <WorkQueue
+          title="Work for today"
+          items={attention}
+          empty="No blocked hiring work. Open a requirement when the next role needs movement."
+        />
       </div>
 
       <section className="mt-12">

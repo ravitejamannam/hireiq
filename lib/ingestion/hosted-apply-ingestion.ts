@@ -29,7 +29,11 @@ import {
 
 import { createEvidence } from "@/lib/repositories/candidate-evidence-repository";
 import { claimPendingResumeInIngestion } from "@/lib/apply/hosted-resume-service";
+import { claimPendingPhotoInIngestion } from "@/lib/apply/hosted-photo-service";
 import { getPrismaErrorCode } from "@/lib/prisma-error";
+import { upsertProfileFromApply } from "@/lib/repositories/candidate-profile-repository";
+import { candidateProfileWriteFromStructured } from "@/lib/candidates/candidate-profile-write";
+import { parseStoredStructuredProfile } from "@/lib/profiles/structured-profile";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -291,6 +295,22 @@ export async function ingestHostedApplySubmission(submissionId: unknown) {
         candidateId = candidate.id;
       }
 
+      const profilePayload = parseStoredStructuredProfile(fresh.profilePayload);
+      await upsertProfileFromApply(
+        candidateId,
+        fresh.job.companyId,
+        candidateProfileWriteFromStructured({
+          location: fresh.location,
+          experienceYears: fresh.experienceYears,
+          expectedCTC: null,
+          payload: {
+            ...profilePayload,
+            linkedInUrl: profilePayload.linkedInUrl ?? fresh.linkedInUrl,
+          },
+        }),
+        tx,
+      );
+
       let applicationId = locked.applicationId;
       if (!applicationId) {
         const existingApplication = await tx.application.findUnique({
@@ -338,6 +358,10 @@ export async function ingestHostedApplySubmission(submissionId: unknown) {
         candidateId,
         applicationId,
         occurredAt: fresh.createdAt,
+      });
+      await claimPendingPhotoInIngestion(tx, id, {
+        candidateId,
+        companyId: fresh.companyId,
       });
 
       // T91: capture the hosted-apply submission as candidate evidence inside

@@ -113,6 +113,8 @@ export default async function ClientRequirementDetailPage({
           id: requirement.id,
           title: requirement.title,
           companyName: requirement.company.name,
+          companyIndustry: requirement.company.industry,
+          companyEmployees: requirement.company.employees,
           status: requirement.status,
           requirementLifecycle: requirement.requirementLifecycle,
           roleCategory: requirement.roleCategory,
@@ -128,6 +130,8 @@ export default async function ClientRequirementDetailPage({
           jobDescription: requirement.jobDescription,
           evaluationCriteria: requirement.evaluationCriteria,
           primarySkills: requirement.primarySkills,
+          structuredPayload: requirement.structuredPayload,
+          createdAt: requirement.createdAt.toISOString(),
           specificationUpdatedAt: requirement.specificationUpdatedAt
             ? requirement.specificationUpdatedAt.toISOString()
             : null,
@@ -140,6 +144,12 @@ export default async function ClientRequirementDetailPage({
             : null,
           applicationCount: applications.length,
           pipelineCounts,
+          assignedInterviewer: requirement.assignedInterviewer
+            ? {
+                id: requirement.assignedInterviewer.id,
+                name: requirement.assignedInterviewer.name,
+              }
+            : null,
         }}
         candidates={candidates}
         shortlistedCount={shortlistedCount}

@@ -19,7 +19,7 @@ import { validatePublicApplyToken } from "@/lib/validation/hosted-apply-validati
 
 export const dynamic = "force-dynamic";
 
-const MAX_BODY_BYTES = 32 * 1024;
+const MAX_BODY_BYTES = 96 * 1024;
 const NO_STORE = { "Cache-Control": "no-store" };
 
 function ipFromRequest(request: Request) {
@@ -87,6 +87,10 @@ export async function POST(
       resumeClaim:
         body && typeof body === "object" && !Array.isArray(body)
           ? (body as Record<string, unknown>).resumeClaim
+          : undefined,
+      photoClaim:
+        body && typeof body === "object" && !Array.isArray(body)
+          ? (body as Record<string, unknown>).photoClaim
           : undefined,
     });
 

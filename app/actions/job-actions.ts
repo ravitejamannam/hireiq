@@ -62,6 +62,11 @@ export type ClientRequirementEditableInput = {
   jobDescription?: unknown;
   evaluationCriteria?: unknown;
   primarySkills?: unknown;
+  employmentType?: unknown;
+  seniorityLevel?: unknown;
+  responsibilities?: unknown;
+  benefits?: unknown;
+  aboutCompany?: unknown;
 };
 
 function revalidateClientRequirementPaths(jobId: number) {

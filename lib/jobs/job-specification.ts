@@ -139,6 +139,7 @@ export async function createPostedJobWithPublishedSpecification(input: {
   createdByUserId?: number | null;
   sourcingDatabaseSource?: SourcingDatabaseSource | null;
   sourcingAccessDetails?: string | null;
+  structuredPayload?: Prisma.InputJsonValue;
 }) {
   const completed = validateJobRequirementCompletion({
     ...input.fields,
@@ -165,7 +166,7 @@ export async function createPostedJobWithPublishedSpecification(input: {
         status: JobSpecificationVersionStatus.PUBLISHED,
         publishedAt: new Date(),
         createdByUserId: input.createdByUserId ?? null,
-        structuredPayload: LEGACY_STRUCTURED_PAYLOAD,
+        structuredPayload: input.structuredPayload ?? LEGACY_STRUCTURED_PAYLOAD,
         ...completed,
       },
     });
@@ -225,6 +226,7 @@ export async function upsertDraftSpecification(input: {
   expectedUpdatedAt?: Date | null;
   createdByUserId?: number | null;
   requireOptimisticLock?: boolean;
+  structuredPayload?: Prisma.InputJsonValue;
   db?: Db;
 }) {
   assertSpecificationEditableForLifecycle(input.lifecycle);
@@ -259,6 +261,9 @@ export async function upsertDraftSpecification(input: {
       data: {
         ...fields,
         createdByUserId: input.createdByUserId ?? existing.createdByUserId,
+        ...(input.structuredPayload
+          ? { structuredPayload: input.structuredPayload }
+          : {}),
       },
     });
 
@@ -282,7 +287,7 @@ export async function upsertDraftSpecification(input: {
       versionNumber: await nextVersionNumber(db, input.jobId),
       status: JobSpecificationVersionStatus.DRAFT,
       createdByUserId: input.createdByUserId ?? null,
-      structuredPayload: LEGACY_STRUCTURED_PAYLOAD,
+      structuredPayload: input.structuredPayload ?? LEGACY_STRUCTURED_PAYLOAD,
       ...fields,
     },
   });
@@ -349,7 +354,9 @@ export async function publishDraftSpecification(input: {
       status: JobSpecificationVersionStatus.PUBLISHED,
       publishedAt: new Date(),
       createdByUserId: input.createdByUserId ?? draft?.createdByUserId ?? null,
-      structuredPayload: LEGACY_STRUCTURED_PAYLOAD,
+      structuredPayload:
+        (draft?.structuredPayload as Prisma.InputJsonValue | undefined) ??
+        LEGACY_STRUCTURED_PAYLOAD,
       ...completed,
     },
   });

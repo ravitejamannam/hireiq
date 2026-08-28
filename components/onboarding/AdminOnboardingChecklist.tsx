@@ -25,8 +25,8 @@ const STEPS = [
     n: 3,
     title: "Share the apply link",
     body: "Every published role gets a hosted apply page with resume upload. Candidates can apply from any channel.",
-    cta: null,
-    done: () => false,
+    cta: { label: "Requirements", href: "/dashboard/requirements" },
+    done: (ctx: AdminChecklistContext) => ctx.hasJob,
   },
   {
     n: 4,

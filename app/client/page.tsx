@@ -3,13 +3,18 @@ import Link from "next/link";
 import ClientRequirementCard from "@/components/client/ClientRequirementCard";
 import ClientOnboardingChecklist from "@/components/onboarding/ClientOnboardingChecklist";
 import StatCard from "@/components/dashboard/StatCard";
+import WorkQueue from "@/components/dashboard/WorkQueue";
 import { requireClientPortal } from "@/lib/auth/authorization";
-import { getClientDashboardStats } from "@/lib/repositories/dashboard-repository";
+import {
+  getClientDashboardAttention,
+  getClientDashboardStats,
+} from "@/lib/repositories/dashboard-repository";
 
 export default async function ClientDashboardPage() {
-  const [client, stats] = await Promise.all([
+  const [client, stats, attention] = await Promise.all([
     requireClientPortal(),
     getClientDashboardStats(),
+    getClientDashboardAttention(),
   ]);
 
   return (
@@ -19,10 +24,10 @@ export default async function ClientDashboardPage() {
           Client portal
         </p>
         <h1 className="mt-2 text-3xl font-bold text-black">
-          Welcome back, {client.name}
+          Hiring at {client.company.name}
         </h1>
         <p className="mt-2 text-zinc-600">
-          Recruitment overview for {client.company.name}.
+          Decisions waiting on you, {client.name}.
         </p>
       </div>
 
@@ -43,6 +48,14 @@ export default async function ClientDashboardPage() {
         <StatCard title="Shortlisted" value={stats.shortlisted} />
         <StatCard title="Selected" value={stats.selected} />
         <StatCard title="Hired" value={stats.hired} />
+      </div>
+
+      <div className="mt-8">
+        <WorkQueue
+          title="Decisions waiting"
+          items={attention}
+          empty="No shortlist or hire decisions are waiting. New candidates will land here when HireIQ is ready for you."
+        />
       </div>
 
       <section className="mt-12">

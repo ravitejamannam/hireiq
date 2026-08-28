@@ -19,6 +19,10 @@ import {
   updateProfileByCandidateIdAndCompanyId,
   type CandidateProfileRow,
 } from "@/lib/repositories/candidate-profile-repository";
+import { candidateProfileWriteFromStructured } from "@/lib/candidates/candidate-profile-write";
+import { parseStoredStructuredProfile } from "@/lib/profiles/structured-profile";
+import { fetchGithubProof } from "@/lib/profiles/github-public";
+import { fetchLeetcodeProof } from "@/lib/profiles/leetcode-public";
 import {
   CandidateProfileValidationError,
   validateCandidateId,
@@ -29,19 +33,66 @@ import { getPrismaErrorCode } from "@/lib/prisma-error";
 function toSafeProfile(
   name: string,
   row: CandidateProfileRow,
+  proof?: {
+    githubProof: SafeCandidateProfile["githubProof"];
+    leetcodeProof: SafeCandidateProfile["leetcodeProof"];
+  },
 ): SafeCandidateProfile {
+  const structured = parseStoredStructuredProfile({
+    roleTitle: row.roleTitle,
+    aboutText: row.aboutText,
+    domains: row.domains,
+    videoUrl: row.videoResumeUrl,
+    githubUrl: row.githubUrl,
+    portfolioUrl: row.portfolioUrl,
+    twitterUrl: row.twitterUrl,
+    linkedInUrl: row.linkedInUrl,
+    leetcodeUrl: row.leetcodeUrl,
+    socialLinks: row.socialLinks,
+    experiences: row.experiences,
+    education: row.education,
+    projects: row.projects,
+  });
+  const hasPhoto = Boolean(row.photoStorageKey);
+
   return {
     candidateId: row.candidateId,
     companyId: row.companyId,
     name,
-    headline: row.headline,
+    headline: row.headline ?? structured.roleTitle,
     location: row.location,
     experienceYears: row.experienceYears,
     skillsText: row.skillsText,
     currentEmployer: row.currentEmployer,
     expectedCTC: row.expectedCTC,
     linkedInUrl: row.linkedInUrl,
+    aboutText: structured.aboutText,
+    roleTitle: structured.roleTitle,
+    domains: structured.domains,
+    githubUrl: structured.githubUrl,
+    portfolioUrl: structured.portfolioUrl,
+    twitterUrl: structured.twitterUrl,
+    videoResumeUrl: structured.videoUrl,
+    leetcodeUrl: structured.leetcodeUrl,
+    socialLinks: structured.socialLinks,
+    hasPhoto,
+    photoUrl: hasPhoto
+      ? `/api/candidates/${row.candidateId}/photo`
+      : null,
+    githubProof: proof?.githubProof ?? null,
+    leetcodeProof: proof?.leetcodeProof ?? null,
+    experiences: structured.experiences,
+    education: structured.education,
+    projects: structured.projects,
   };
+}
+
+async function withProof(profile: SafeCandidateProfile): Promise<SafeCandidateProfile> {
+  const [githubProof, leetcodeProof] = await Promise.all([
+    fetchGithubProof(profile.githubUrl),
+    fetchLeetcodeProof(profile.leetcodeUrl),
+  ]);
+  return { ...profile, githubProof, leetcodeProof };
 }
 
 async function materializeProfile(candidateId: number, companyId: number) {
@@ -124,7 +175,7 @@ export async function getOrMaterializeCandidateProfile(
     candidate.id,
     candidate.companyId,
   );
-  return toSafeProfile(materialized.name, materialized.row);
+  return withProof(toSafeProfile(materialized.name, materialized.row));
 }
 
 export async function getCandidateProfilePageData(
@@ -136,7 +187,9 @@ export async function getCandidateProfilePageData(
     candidate.id,
     candidate.companyId,
   );
-  const profile = toSafeProfile(materialized.name, materialized.row);
+  const profile = await withProof(
+    toSafeProfile(materialized.name, materialized.row),
+  );
   const applications = await listApplicationsForCandidate(
     profile.candidateId,
     profile.companyId,
@@ -183,15 +236,15 @@ export async function updateCandidateProfileForAdmin(
     const row = await updateProfileByCandidateIdAndCompanyId(
       candidate.id,
       candidate.companyId,
-      {
-        headline: validated.headline,
+      candidateProfileWriteFromStructured({
         location: validated.location,
         experienceYears: validated.experienceYears,
+        expectedCTC: validated.expectedCTC,
         skillsText: validated.skillsText,
         currentEmployer: validated.currentEmployer,
-        expectedCTC: validated.expectedCTC,
-        linkedInUrl: validated.linkedInUrl,
-      },
+        headline: validated.headline,
+        payload: validated.profile,
+      }),
       tx,
     );
 
@@ -204,7 +257,7 @@ export async function updateCandidateProfileForAdmin(
       throw new AuthorizationError("Resource not found.");
     }
 
-    return toSafeProfile(nameRow.name, row);
+    return withProof(toSafeProfile(nameRow.name, row));
   });
 
   return updated;
