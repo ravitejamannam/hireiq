@@ -9,8 +9,9 @@ export const dynamic = "force-dynamic";
 const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
- * POST /api/ops/cron — retry outbound email and partner webhooks.
+ * POST/GET /api/ops/cron — retry outbound email and partner webhooks.
  * Authorize with `Authorization: Bearer $CRON_SECRET`.
+ * Vercel Cron issues GET; Hobby only allows a daily schedule.
  */
 export async function POST(request: Request) {
   if (!bearerCronSecretMatches(request.headers.get("authorization"))) {
@@ -36,4 +37,8 @@ export async function POST(request: Request) {
       { status: 500, headers: NO_STORE },
     );
   }
+}
+
+export async function GET(request: Request) {
+  return POST(request);
 }

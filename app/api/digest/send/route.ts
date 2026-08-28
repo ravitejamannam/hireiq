@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
- * POST /api/digest/send — trigger the recruiter digest.
+ * POST/GET /api/digest/send — trigger the recruiter digest.
  *
  * Authenticated by `Authorization: Bearer $CRON_SECRET`
  * (Vercel Cron sends this header automatically when CRON_SECRET is set).
@@ -30,4 +30,8 @@ export async function POST(request: Request) {
       { status: 500, headers: NO_STORE },
     );
   }
+}
+
+export async function GET(request: Request) {
+  return POST(request);
 }

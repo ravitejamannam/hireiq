@@ -2,15 +2,15 @@
   "crons": [
     {
       "path": "/api/ops/cron",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 4 * * *"
     },
     {
       "path": "/api/digest/send",
-      "schedule": "0 8 * * 1-5"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/integrations/reconcile",
-      "schedule": "15 * * * *"
+      "schedule": "0 5 * * *"
     }
   ]
 }
