@@ -83,7 +83,9 @@ export default async function RequirementWorkspacePage({
   let assessmentLeaderboard = null;
   try {
     assessmentLeaderboard =
-      await getAssessmentLeaderboardForJob(requirementId);
+      await getAssessmentLeaderboardForJob(requirementId, {
+        audience: "hiring",
+      });
   } catch {
     assessmentLeaderboard = null;
   }
@@ -94,16 +96,10 @@ export default async function RequirementWorkspacePage({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
-      applyTokens: {
-        where: { revokedAt: null },
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: { tokenHash: true },
-      },
+      applyUrlSnapshot: true,
     },
   });
-  const applyTokenHint =
-    distributionRow?.applyTokens[0]?.tokenHash.slice(0, 8) ?? null;
+  const applyUrl = distributionRow?.applyUrlSnapshot ?? null;
 
   return (
     <RequirementWorkspaceClient
@@ -116,7 +112,7 @@ export default async function RequirementWorkspacePage({
       ranking={ranking}
       evidenceCapture={evidenceCapture}
       assessmentLeaderboard={assessmentLeaderboard}
-      applyTokenHint={applyTokenHint}
+      applyUrl={applyUrl}
       distributionId={distributionRow?.id ?? null}
       companyId={requirement.companyId}
     />

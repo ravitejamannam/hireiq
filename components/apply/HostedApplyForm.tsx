@@ -15,6 +15,7 @@ import {
 type HostedApplyFormProps = {
   token: string;
   compact?: boolean;
+  expectsAssessment?: boolean;
 };
 
 type FieldErrors = Record<string, string>;
@@ -69,6 +70,7 @@ function tabForError(errors: FieldErrors): ProfileEditorTab | null {
 
 export default function HostedApplyForm({
   token,
+  expectsAssessment = true,
 }: HostedApplyFormProps) {
   const idempotencyKey = useRef<string | null>(null);
   const [tab, setTab] = useState<ProfileEditorTab>("basic");
@@ -286,8 +288,9 @@ export default function HostedApplyForm({
         </div>
         <h3 className="mt-3 font-bold text-emerald-900">Application received</h3>
         <p className="mt-1 text-sm text-emerald-700">
-          Your candidate profile is ready — watch your inbox for the role
-          assessment.
+          {expectsAssessment
+            ? "We could not open the role assessment just now. The hiring team still has your profile."
+            : "Your profile is with the hiring team. This role does not include an online assessment."}
         </p>
       </div>
     );

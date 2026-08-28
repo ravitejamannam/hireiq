@@ -90,7 +90,8 @@ export default async function PublicAssessmentPage({ params }: AssessPageProps) 
         <p className="text-sm text-zinc-500">{page.companyDisplayName}</p>
         <h1 className="mt-2 text-3xl font-bold text-black">{page.title}</h1>
         <p className="mt-2 text-sm text-zinc-600">
-          You have 48 hours from applying to complete this assessment.
+          You have 48 hours from applying to complete this assessment. The
+          score is this role&apos;s test — not a hire decision.
         </p>
         <div className="mt-8">
           <AssessmentTakeForm

@@ -7,6 +7,15 @@ const nextConfig: NextConfig = {
    * loads from node_modules at runtime (T97 resume text extraction).
    */
   serverExternalPackages: ["pdf-parse"],
+  async redirects() {
+    return [
+      {
+        source: "/c/:companySlug",
+        destination: "/careers/:companySlug",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

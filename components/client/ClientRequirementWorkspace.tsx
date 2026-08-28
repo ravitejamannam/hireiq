@@ -38,6 +38,7 @@ export type ClientRequirementWorkspaceData = {
   id: number;
   title: string;
   companyName: string;
+  companyPublicSlug: string | null;
   status: JobStatus;
   requirementLifecycle: RequirementLifecycle;
   roleCategory: RoleCategory | null;
@@ -257,6 +258,18 @@ export default function ClientRequirementWorkspace({
             connections={connections}
             distributions={distributions}
           />
+
+          {requirement.companyPublicSlug ? (
+            <p className="mt-3 text-sm text-zinc-600">
+              Public careers hub:{" "}
+              <Link
+                href={`/careers/${encodeURIComponent(requirement.companyPublicSlug)}`}
+                className="font-semibold underline underline-offset-2"
+              >
+                /careers/{requirement.companyPublicSlug}
+              </Link>
+            </p>
+          ) : null}
 
           {assessmentLeaderboard ? (
             <AssessmentLeaderboardPanel board={assessmentLeaderboard} />

@@ -55,7 +55,9 @@ export default async function ClientRequirementDetailPage({
         jobId: requirementId,
         companyId: client.companyId,
       }),
-      getAssessmentLeaderboardForJob(requirementId).catch(() => null),
+      getAssessmentLeaderboardForJob(requirementId, {
+        audience: "hiring",
+      }).catch(() => null),
     ]);
 
   const pipelineCounts = countPipelineStatuses(
@@ -113,6 +115,7 @@ export default async function ClientRequirementDetailPage({
           id: requirement.id,
           title: requirement.title,
           companyName: requirement.company.name,
+          companyPublicSlug: requirement.company.publicSlug,
           companyIndustry: requirement.company.industry,
           companyEmployees: requirement.company.employees,
           status: requirement.status,

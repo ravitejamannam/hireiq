@@ -8,7 +8,8 @@ const globalForPrisma = globalThis as {
 function prismaClientGeneration() {
   const candidate = Object.keys(Prisma.CandidateProfileScalarFieldEnum).sort().join(",");
   const interviewer = Object.keys(Prisma.InterviewerProfileScalarFieldEnum).sort().join(",");
-  return `${candidate}|${interviewer}`;
+  const company = Object.keys(Prisma.CompanyScalarFieldEnum).sort().join(",");
+  return `${candidate}|${interviewer}|${company}`;
 }
 
 function createPrismaClient() {

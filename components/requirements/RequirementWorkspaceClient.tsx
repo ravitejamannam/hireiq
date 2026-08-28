@@ -74,7 +74,7 @@ type RequirementWorkspaceClientProps = {
   ranking?: JobRankingPageData | null;
   evidenceCapture?: JobEvidenceCapturePageData | null;
   assessmentLeaderboard?: AssessmentLeaderboardPage | null;
-  applyTokenHint?: string | null;
+  applyUrl?: string | null;
   distributionId?: number | null;
   companyId?: number;
 };
@@ -137,7 +137,7 @@ export default function RequirementWorkspaceClient({
   ranking,
   evidenceCapture,
   assessmentLeaderboard,
-  applyTokenHint,
+  applyUrl,
   distributionId,
   companyId,
 }: RequirementWorkspaceClientProps) {
@@ -402,9 +402,10 @@ export default function RequirementWorkspaceClient({
         <div className="mt-8 space-y-8">
           <DistributionKit
             jobTitle={requirement.title}
-            applyTokenHint={applyTokenHint ?? null}
+            applyUrl={applyUrl ?? null}
             distributionId={distributionId ?? null}
             companyId={companyId ?? null}
+            companyPublicSlug={requirement.company.publicSlug}
           />
           <SourcedCandidateForm jobId={requirement.id} />
           <section className="rounded-xl border border-zinc-200 bg-white p-6">

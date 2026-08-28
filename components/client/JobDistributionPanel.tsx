@@ -20,6 +20,7 @@ import {
 } from "@/app/actions/distribution-actions";
 import type { SafeProviderConnection } from "@/lib/jobs/distribution/connection-service";
 import type { SafeJobDistribution } from "@/lib/jobs/distribution/distribution-service";
+import { hostedApplyPathFromSnapshot } from "@/lib/apply/hosted-apply-url";
 
 const PROVIDERS: Array<{
   value: DistributionProvider;
@@ -424,19 +425,29 @@ export default function JobDistributionPanel({
                 <button
                   type="button"
                   className="rounded-lg border border-zinc-300 px-3 py-1 text-sm font-medium text-black"
-                  onClick={() =>
-                    navigator.clipboard.writeText(
+                  onClick={() => {
+                    const origin = window.location.origin;
+                    const path = hostedApplyPathFromSnapshot(
                       selectedDistribution.applyUrlSnapshot!,
-                    )
-                  }
+                    );
+                    void navigator.clipboard.writeText(
+                      path ? `${origin}${path}` : selectedDistribution.applyUrlSnapshot!,
+                    );
+                  }}
                 >
                   Copy apply URL
                 </button>
                 <a
-                  href={`${selectedDistribution.applyUrlSnapshot.replace(/\/$/, "")}/leaderboard`}
+                  href={
+                    hostedApplyPathFromSnapshot(
+                      selectedDistribution.applyUrlSnapshot,
+                    )
+                      ? `${hostedApplyPathFromSnapshot(selectedDistribution.applyUrlSnapshot)}/leaderboard`
+                      : `${selectedDistribution.applyUrlSnapshot.replace(/\/$/, "")}/leaderboard`
+                  }
                   className="rounded-lg border border-zinc-300 px-3 py-1 text-sm font-medium text-black"
                 >
-                  Open leaderboard
+                  Open public leaderboard
                 </a>
               </div>
             ) : null}

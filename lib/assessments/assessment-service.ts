@@ -1,13 +1,11 @@
 import {
   AssessmentAttemptStatus,
   Prisma,
-  RoleCategory,
 } from "@prisma/client";
 
 import {
   ASSESSMENT_ALREADY_SUBMITTED,
   ASSESSMENT_ANSWERS_REQUIRED,
-  ASSESSMENT_BANK_EMPTY,
   ASSESSMENT_UNAVAILABLE,
   ASSESSMENT_WINDOW_CLOSED,
   AssessmentError,
@@ -33,6 +31,16 @@ import {
   selectAdaptiveMix,
   type ScoringKey,
 } from "@/lib/assessments/assessment-math";
+import {
+  loadAssessmentQuestionsByIds,
+  selectAssessmentQuestionsForCategory,
+} from "@/lib/assessments/assessment-snapshot";
+import {
+  HIRING_ASSESSMENT_LEADERBOARD_LIMIT,
+  PUBLIC_ASSESSMENT_LEADERBOARD_LIMIT,
+  toHiringLeaderboardName,
+  toPublicLeaderboardName,
+} from "@/lib/assessments/leaderboard-privacy";
 import { hashSecureToken } from "@/lib/auth/secure-token";
 import { prisma } from "@/lib/prisma";
 import { getPrismaErrorCode } from "@/lib/prisma-error";
@@ -58,9 +66,11 @@ export type PublicAssessmentPage = {
   submittedAt: string | null;
 };
 
+export type LeaderboardAudience = "public" | "hiring";
+
 export type AssessmentLeaderboardRow = {
   rank: number;
-  name: string;
+  displayName: string;
   score: number;
   maxScore: number;
   submittedAt: string;
@@ -69,6 +79,8 @@ export type AssessmentLeaderboardRow = {
 export type AssessmentLeaderboardPage = {
   title: string;
   companyDisplayName: string;
+  audience: LeaderboardAudience;
+  totalCompleted: number;
   rows: AssessmentLeaderboardRow[];
 };
 
@@ -106,46 +118,6 @@ function parseScoringKey(value: unknown): ScoringKey {
 
 function windowMs() {
   return ASSESSMENT_WINDOW_HOURS * 60 * 60 * 1000;
-}
-
-async function loadQuestionsForCategory(
-  roleCategory: RoleCategory,
-  db: Db,
-  options: { incrementUsage?: boolean } = {},
-) {
-  // T102 leakage control: only active questions, ordered least-used first
-  // so exposure spreads across the bank instead of burning the same items.
-  const questions = await db.assessmentBankQuestion.findMany({
-    where: { roleCategory, active: true },
-    orderBy: [{ timesUsed: "asc" }, { sortOrder: "asc" }],
-    select: {
-      id: true,
-      prompt: true,
-      choices: true,
-      correctIndex: true,
-      weight: true,
-      difficulty: true,
-    },
-  });
-
-  if (questions.length === 0) {
-    throw new AssessmentError(ASSESSMENT_BANK_EMPTY, "UNAVAILABLE");
-  }
-
-  // T137: adaptive selection — draw a difficulty-balanced mix from the
-  // least-used questions in each tier (TestGorilla-style), falling back
-  // across tiers when one runs short. Randomisation inside each tier
-  // preserves T126's leakage protection.
-  const selected = selectAdaptiveMix(questions);
-
-  if (options.incrementUsage && selected.length > 0) {
-    await db.assessmentBankQuestion.updateMany({
-      where: { id: { in: selected.map((question) => question.id) } },
-      data: { timesUsed: { increment: 1 } },
-    });
-  }
-
-  return selected;
 }
 
 export async function upsertAssessmentBank(db: Db = prisma) {
@@ -189,7 +161,10 @@ export async function mintAssessmentInviteForApplication(
         select: {
           roleCategory: true,
           currentPublishedSpecificationVersion: {
-            select: { roleCategory: true },
+            select: {
+              roleCategory: true,
+              assessmentQuestionIds: true,
+            },
           },
         },
       },
@@ -226,9 +201,15 @@ export async function mintAssessmentInviteForApplication(
     return { assessmentUrl };
   }
 
-  const questions = await loadQuestionsForCategory(roleCategory, db, {
-    incrementUsage: true,
-  });
+  const pinnedIds =
+    application.job.currentPublishedSpecificationVersion?.assessmentQuestionIds ??
+    [];
+  const questions =
+    pinnedIds.length > 0
+      ? await loadAssessmentQuestionsByIds(pinnedIds, db)
+      : await selectAssessmentQuestionsForCategory(roleCategory, db, {
+          incrementUsage: true,
+        });
   const scoringKey: ScoringKey = {};
   for (const question of questions) {
     scoringKey[String(question.id)] = {
@@ -495,7 +476,10 @@ export async function submitPublicAssessment(input: {
   };
 }
 
-export async function getAssessmentLeaderboardForJob(jobId: number) {
+export async function getAssessmentLeaderboardForJob(
+  jobId: number,
+  options: { audience: LeaderboardAudience },
+) {
   const job = await prisma.job.findUnique({
     where: { id: jobId },
     select: {
@@ -508,36 +492,52 @@ export async function getAssessmentLeaderboardForJob(jobId: number) {
     throw new AssessmentError(ASSESSMENT_UNAVAILABLE, "UNAVAILABLE");
   }
 
-  const attempts = await prisma.assessmentAttempt.findMany({
-    where: {
-      status: AssessmentAttemptStatus.COMPLETED,
-      invite: {
-        application: { jobId },
-        revokedAt: null,
-      },
+  const where = {
+    status: AssessmentAttemptStatus.COMPLETED,
+    invite: {
+      application: { jobId },
+      revokedAt: null,
     },
-    select: {
-      score: true,
-      maxScore: true,
-      submittedAt: true,
-      invite: {
-        select: {
-          application: {
-            select: {
-              candidate: { select: { name: true } },
+  } as const;
+
+  const limit =
+    options.audience === "public"
+      ? PUBLIC_ASSESSMENT_LEADERBOARD_LIMIT
+      : HIRING_ASSESSMENT_LEADERBOARD_LIMIT;
+
+  const [totalCompleted, attempts] = await Promise.all([
+    prisma.assessmentAttempt.count({ where }),
+    prisma.assessmentAttempt.findMany({
+      where,
+      select: {
+        score: true,
+        maxScore: true,
+        submittedAt: true,
+        invite: {
+          select: {
+            application: {
+              select: {
+                candidate: { select: { name: true } },
+              },
             },
           },
         },
       },
-    },
-    orderBy: [{ score: "desc" }, { submittedAt: "asc" }],
-  });
+      orderBy: [{ score: "desc" }, { submittedAt: "asc" }],
+      take: limit,
+    }),
+  ]);
+
+  const displayName =
+    options.audience === "public"
+      ? toPublicLeaderboardName
+      : toHiringLeaderboardName;
 
   const rows: AssessmentLeaderboardRow[] = attempts
     .filter((attempt) => attempt.submittedAt)
     .map((attempt, index) => ({
       rank: index + 1,
-      name: attempt.invite.application.candidate.name,
+      displayName: displayName(attempt.invite.application.candidate.name),
       score: attempt.score,
       maxScore: attempt.maxScore,
       submittedAt: attempt.submittedAt!.toISOString(),
@@ -546,6 +546,8 @@ export async function getAssessmentLeaderboardForJob(jobId: number) {
   return {
     title: job.title,
     companyDisplayName: job.company.name,
+    audience: options.audience,
+    totalCompleted,
     rows,
   } satisfies AssessmentLeaderboardPage;
 }
@@ -568,7 +570,9 @@ export async function getAssessmentLeaderboardForInviteToken(rawToken: unknown) 
     throw new AssessmentError(ASSESSMENT_UNAVAILABLE, "UNAVAILABLE");
   }
 
-  return getAssessmentLeaderboardForJob(invite.application.jobId);
+  return getAssessmentLeaderboardForJob(invite.application.jobId, {
+    audience: "public",
+  });
 }
 
 export async function getAssessmentLeaderboardForApplyToken(rawToken: unknown) {
@@ -591,7 +595,9 @@ export async function getAssessmentLeaderboardForApplyToken(rawToken: unknown) {
     throw new AssessmentError(ASSESSMENT_UNAVAILABLE, "UNAVAILABLE");
   }
 
-  return getAssessmentLeaderboardForJob(applyToken.distribution.jobId);
+  return getAssessmentLeaderboardForJob(applyToken.distribution.jobId, {
+    audience: "public",
+  });
 }
 
 export async function getApplicationAssessmentSummary(applicationId: number) {

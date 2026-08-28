@@ -13,6 +13,7 @@ export type PublicHostedApplyPage = {
   numberOfPositions: number | null;
   compensationRange: string | null;
   companyDisplayName: string | null;
+  companyPublicSlug: string | null;
   companyIndustry: string | null;
   companyEmployees: number | null;
   posting: JobPostingNarrative | null;
@@ -22,6 +23,7 @@ export function toPublicHostedApplyPage(
   payload: PublicDistributionPayload,
   extras?: {
     posting?: JobPostingNarrative | null;
+    companyPublicSlug?: string | null;
     companyIndustry?: string | null;
     companyEmployees?: number | null;
   },
@@ -38,6 +40,7 @@ export function toPublicHostedApplyPage(
     numberOfPositions: payload.numberOfPositions,
     compensationRange: payload.compensationRange,
     companyDisplayName: payload.companyDisplayName,
+    companyPublicSlug: extras?.companyPublicSlug ?? null,
     companyIndustry: extras?.companyIndustry ?? null,
     companyEmployees: extras?.companyEmployees ?? null,
     posting: extras?.posting ?? null,

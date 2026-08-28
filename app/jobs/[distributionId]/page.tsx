@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { hostedApplyPathFromSnapshot } from "@/lib/apply/hosted-apply-url";
+import { displayJobTitle } from "@/lib/jobs/job-posting-view";
 import { getPublicJobByDistributionId } from "@/lib/jobs/public-feed/public-feed-service";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +26,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const job = await getPublicJobByDistributionId(id);
   if (!job) return { title: "Job not found" };
 
+  const title = displayJobTitle(job.title, job.companyName);
+
   return {
-    title: `${job.title} — ${job.companyName}`,
+    title: `${title} — ${job.companyName}`,
     description: job.description.slice(0, 160),
     robots: { index: true, follow: true },
   };
@@ -49,10 +53,12 @@ export default async function PublicJobPage({ params }: PageProps) {
     notFound();
   }
 
+  const title = displayJobTitle(job.title, job.companyName);
+
   const jsonLd = {
     "@context": "https://schema.org/",
     "@type": "JobPosting",
-    title: job.title,
+    title,
     description: `<p>${job.description.replaceAll("\n", "</p><p>")}</p>`,
     datePosted: job.datePosted.toISOString(),
     ...(job.validThrough ? { validThrough: job.validThrough.toISOString() } : {}),
@@ -69,45 +75,61 @@ export default async function PublicJobPage({ params }: PageProps) {
     url: job.applyUrl,
   };
 
+  const applyHref =
+    hostedApplyPathFromSnapshot(job.applyUrl) ?? job.applyUrl;
+
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-[#F7F4EE]">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <article className="mx-auto max-w-3xl px-4 py-12">
-        <header className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-          <p className="text-sm font-medium text-indigo-600">{job.companyName}</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
-            {job.title}
+      <article className="mx-auto max-w-3xl px-6 py-12">
+        <header className="rounded-2xl border border-stone-200 bg-white p-8 shadow-sm">
+          <p className="text-sm font-medium text-stone-500">{job.companyName}</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-stone-900">
+            {title}
           </h1>
           {job.location ? (
-            <p className="mt-2 text-slate-600">📍 {job.location}</p>
+            <p className="mt-2 text-stone-600">{job.location}</p>
           ) : null}
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <a
-              href={job.applyUrl}
-              className="inline-flex items-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            <Link
+              href={applyHref}
+              className="inline-flex items-center rounded-full bg-stone-900 px-5 py-2.5 text-sm font-semibold text-[#FBF9F4] transition hover:bg-stone-700"
             >
-              Apply now →
-            </a>
-            <span className="text-xs text-slate-500">
-              Applications are handled securely via HireIQ.
+              Apply now
+            </Link>
+            <span className="text-xs text-stone-500">
+              Apply, take the role assessment, see the public board. Assessment
+              is not a hire score.
             </span>
           </div>
         </header>
 
-        <section className="mt-8 rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">About the role</h2>
-          <div className="prose prose-slate mt-4 max-w-none whitespace-pre-line text-slate-700">
+        <section className="mt-8 rounded-2xl border border-stone-200 bg-white p-8 shadow-sm">
+          <h2 className="text-lg font-semibold text-stone-900">About the role</h2>
+          <div className="prose prose-stone mt-4 max-w-none whitespace-pre-line text-stone-700">
             {job.description}
           </div>
         </section>
 
-        <footer className="mt-8 text-center text-xs text-slate-400">
-          <Link href="/" className="hover:text-slate-600">
-            Powered by HireIQ
-          </Link>
+        <footer className="mt-8 text-center text-sm text-stone-500">
+          {job.companyPublicSlug ? (
+            <p>
+              <Link
+                href={`/careers/${encodeURIComponent(job.companyPublicSlug)}`}
+                className="font-semibold underline underline-offset-2 hover:text-stone-800"
+              >
+                More open roles at {job.companyName}
+              </Link>
+            </p>
+          ) : null}
+          <p className="mt-4 text-xs text-stone-400">
+            <Link href="/" className="hover:text-stone-600">
+              Powered by HireIQ
+            </Link>
+          </p>
         </footer>
       </article>
     </main>

@@ -7,6 +7,7 @@ import {
 
 import { prisma } from "@/lib/prisma";
 import { getPrismaErrorCode } from "@/lib/prisma-error";
+import { allocateCompanyPublicSlug } from "@/lib/companies/public-slug";
 
 export class CompanyOnboardingError extends Error {
   constructor(message: string) {
@@ -105,11 +106,13 @@ export async function createClientCompanyForUser(input: {
         );
       }
 
+      const publicSlug = await allocateCompanyPublicSlug(name, tx);
       const company = await tx.company.create({
         data: {
           name,
           industry,
           employees,
+          publicSlug,
         },
         select: { id: true, name: true },
       });

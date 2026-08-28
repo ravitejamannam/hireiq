@@ -83,7 +83,12 @@ async function loadApplyTokenContext(token: string) {
             select: {
               status: true,
               company: {
-                select: { name: true, industry: true, employees: true },
+                select: {
+                  name: true,
+                  publicSlug: true,
+                  industry: true,
+                  employees: true,
+                },
               },
             },
           },
@@ -130,6 +135,7 @@ export async function resolvePublicHostedApply(token: string) {
 
   return toPublicHostedApplyPage(payload, {
     posting: parseJobPostingNarrative(spec.structuredPayload),
+    companyPublicSlug: row.distribution.job.company.publicSlug,
     companyIndustry: row.distribution.job.company.industry,
     companyEmployees: row.distribution.job.company.employees,
   });
@@ -162,7 +168,8 @@ async function assessmentUrlForApplication(applicationId: number | null) {
   try {
     const minted = await mintAssessmentInviteForApplication(applicationId);
     return minted?.assessmentUrl ?? null;
-  } catch {
+  } catch (error) {
+    console.error("[hosted-apply] assessment mint failed", error);
     return null;
   }
 }

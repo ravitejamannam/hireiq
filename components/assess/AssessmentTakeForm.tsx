@@ -163,7 +163,11 @@ export default function AssessmentTakeForm({
           {pct}%
         </p>
         <p className="mt-1 text-sm font-medium text-emerald-600">
-          {result.score} of {result.maxScore} correct
+          {result.score} of {result.maxScore} points
+        </p>
+        <p className="mt-3 text-sm text-emerald-800">
+          This is your score on this role&apos;s assessment, not a hire
+          decision.
         </p>
         <a
           href={leaderboardHref}

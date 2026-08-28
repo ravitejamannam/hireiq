@@ -6,6 +6,8 @@ import {
   type SourcingDatabaseSource,
 } from "@prisma/client";
 
+import { AssessmentError } from "@/lib/assessments/assessment-errors";
+import { snapshotAssessmentQuestionIds } from "@/lib/assessments/assessment-snapshot";
 import { prisma } from "@/lib/prisma";
 import {
   JobSpecificationError,
@@ -168,6 +170,10 @@ export async function createPostedJobWithPublishedSpecification(input: {
         createdByUserId: input.createdByUserId ?? null,
         structuredPayload: input.structuredPayload ?? LEGACY_STRUCTURED_PAYLOAD,
         ...completed,
+        assessmentQuestionIds: await pinAssessmentQuestionIds(
+          completed.roleCategory,
+          tx,
+        ),
       },
     });
 
@@ -198,6 +204,20 @@ export async function createDraftSpecificationForJob(input: {
       ...specFieldsFromRecord(input.fields),
     },
   });
+}
+
+async function pinAssessmentQuestionIds(
+  roleCategory: RoleCategory,
+  db: Prisma.TransactionClient,
+) {
+  try {
+    return await snapshotAssessmentQuestionIds(roleCategory, db);
+  } catch (error) {
+    if (error instanceof AssessmentError) {
+      throw new JobSpecificationError(error.message);
+    }
+    throw error;
+  }
 }
 
 async function loadDraft(db: Db, jobId: number) {
@@ -358,6 +378,10 @@ export async function publishDraftSpecification(input: {
         (draft?.structuredPayload as Prisma.InputJsonValue | undefined) ??
         LEGACY_STRUCTURED_PAYLOAD,
       ...completed,
+      assessmentQuestionIds: await pinAssessmentQuestionIds(
+        completed.roleCategory,
+        input.db,
+      ),
     },
   });
 

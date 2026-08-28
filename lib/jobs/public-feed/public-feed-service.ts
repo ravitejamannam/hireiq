@@ -1,5 +1,6 @@
 import { Prisma, JobDistributionStatus, ApplyMode } from "@prisma/client";
 
+import { publicAbsoluteApplyUrl } from "@/lib/apply/hosted-apply-url";
 import { prisma } from "@/lib/prisma";
 
 import { toCanonicalJobPosting, type CanonicalJobPosting } from "./canonical-job";
@@ -30,24 +31,30 @@ const distributionInclude = {
   },
   job: {
     select: {
-      company: { select: { name: true } },
+      company: { select: { name: true, publicSlug: true } },
     },
   },
 } satisfies Prisma.JobDistributionInclude;
+
+export function publicHostedDistributionWhere(
+  companyId?: number,
+): Prisma.JobDistributionWhereInput {
+  return {
+    ...(companyId != null ? { companyId } : {}),
+    status: JobDistributionStatus.PUBLISHED,
+    applyMode: ApplyMode.HIREIQ_HOSTED,
+    applyUrlSnapshot: { not: null },
+    job: { status: "OPEN" },
+    pinnedSpecificationVersion: { status: "PUBLISHED" },
+  };
+}
 
 export async function listPublicFeedJobs(
   companyId: number,
   db: Db = prisma,
 ): Promise<CanonicalJobPosting[]> {
   const rows = await db.jobDistribution.findMany({
-    where: {
-      companyId,
-      status: JobDistributionStatus.PUBLISHED,
-      applyMode: ApplyMode.HIREIQ_HOSTED,
-      applyUrlSnapshot: { not: null },
-      job: { status: "OPEN" },
-      pinnedSpecificationVersion: { status: "PUBLISHED" },
-    },
+    where: publicHostedDistributionWhere(companyId),
     select: {
       id: true,
       createdAt: true,
@@ -61,7 +68,12 @@ export async function listPublicFeedJobs(
   const postings: CanonicalJobPosting[] = [];
   for (const row of rows) {
     const posting = toCanonicalJobPosting(row);
-    if (posting) postings.push(posting);
+    if (posting) {
+      postings.push({
+        ...posting,
+        applyUrl: publicAbsoluteApplyUrl(posting.applyUrl),
+      });
+    }
   }
   return postings;
 }
@@ -75,10 +87,7 @@ export async function getPublicJobByDistributionId(
   const row = await db.jobDistribution.findFirst({
     where: {
       id: distributionId,
-      status: JobDistributionStatus.PUBLISHED,
-      applyMode: ApplyMode.HIREIQ_HOSTED,
-      job: { status: "OPEN" },
-      pinnedSpecificationVersion: { status: "PUBLISHED" },
+      ...publicHostedDistributionWhere(),
     },
     select: {
       id: true,
@@ -88,7 +97,12 @@ export async function getPublicJobByDistributionId(
     },
   });
 
-  return row ? toCanonicalJobPosting(row) : null;
+  const posting = row ? toCanonicalJobPosting(row) : null;
+  if (!posting) return null;
+  return {
+    ...posting,
+    applyUrl: publicAbsoluteApplyUrl(posting.applyUrl),
+  };
 }
 
 /** True when the company has at least one publicly feedable job. */
@@ -97,14 +111,7 @@ export async function companyHasPublicFeed(
   db: Db = prisma,
 ): Promise<boolean> {
   const count = await db.jobDistribution.count({
-    where: {
-      companyId,
-      status: JobDistributionStatus.PUBLISHED,
-      applyMode: ApplyMode.HIREIQ_HOSTED,
-      applyUrlSnapshot: { not: null },
-      job: { status: "OPEN" },
-      pinnedSpecificationVersion: { status: "PUBLISHED" },
-    },
+    where: publicHostedDistributionWhere(companyId),
   });
   return count > 0;
 }

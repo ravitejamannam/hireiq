@@ -43,6 +43,7 @@ const jobSelect = {
     select: {
       id: true,
       name: true,
+      publicSlug: true,
       industry: true,
       employees: true,
     },

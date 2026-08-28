@@ -1,5 +1,6 @@
 import { unstable_noStore as noStore } from "next/cache";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import HostedApplyForm from "@/components/apply/HostedApplyForm";
 import JobPostingDetail from "@/components/jobs/JobPostingDetail";
@@ -138,17 +139,29 @@ export default async function HostedApplyPage({ params }: ApplyPageProps) {
             Apply now
           </h2>
           <p className="mt-1.5 text-sm text-zinc-500">
-            No account needed — about 2 minutes. After applying you&apos;ll
-            take a short role assessment and can see where you stand on the
-            public leaderboard.
+            No account needed — about 2 minutes. After you apply you take this
+            role&apos;s assessment. That score is not a hire decision.
           </p>
           <div className="mt-6">
-            <HostedApplyForm token={token} />
+            <HostedApplyForm
+              token={token}
+              expectsAssessment={page.roleCategory != null}
+            />
           </div>
         </section>
 
         <footer className="py-10 text-center">
           <LinkLeaderboard token={token} />
+          {page.companyPublicSlug ? (
+            <p className="mt-3">
+              <Link
+                href={`/careers/${encodeURIComponent(page.companyPublicSlug)}`}
+                className="text-sm font-semibold text-zinc-500 underline underline-offset-2 hover:text-zinc-700"
+              >
+                More open roles at {page.companyDisplayName ?? "this company"} →
+              </Link>
+            </p>
+          ) : null}
           <p className="mt-4 text-xs text-zinc-400">
             Applications are handled securely by HireIQ · Your data belongs to
             you

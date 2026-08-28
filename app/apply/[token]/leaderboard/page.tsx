@@ -51,7 +51,9 @@ export default async function ApplyLeaderboardPage({ params }: PageProps) {
         <p className="text-sm text-zinc-500">{board.companyDisplayName}</p>
         <h1 className="mt-2 text-3xl font-bold text-black">{board.title}</h1>
         <p className="mt-2 text-sm text-zinc-600">
-          Public ranking of completed assessments for this role.
+          Public ranking of completed assessments for this role. Names are first
+          name and last initial. This board is the assessment only — not a hire
+          score.
         </p>
         <AssessmentLeaderboard board={board} />
         <Link

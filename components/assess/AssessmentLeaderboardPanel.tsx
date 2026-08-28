@@ -10,8 +10,9 @@ export default function AssessmentLeaderboardPanel({
     <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
       <h2 className="text-lg font-bold text-black">Assessment leaderboard</h2>
       <p className="mt-1 text-sm text-zinc-600">
-        Ranked by completed 48-hour role assessments. Names and scores are
-        also public on the apply link.
+        Hiring-team view: full names, ranked by completed role assessments.
+        The public apply board shows first name and last initial only.
+        Assessment score is not a hire score, matching score, or ranking score.
       </p>
       <AssessmentLeaderboard board={board} />
     </section>

@@ -1,6 +1,7 @@
 "use server";
 
 import { requireAdmin } from "@/lib/auth/authorization";
+import { allocateCompanyPublicSlug } from "@/lib/companies/public-slug";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
@@ -10,13 +11,13 @@ export async function createCompany(
   employees: number,
 ) {
   await requireAdmin();
+  const publicSlug = await allocateCompanyPublicSlug(name);
   const company = await prisma.company.create({
     data: {
       name,
-
       industry,
-
       employees,
+      publicSlug,
     },
   });
 

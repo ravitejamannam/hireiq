@@ -15,8 +15,10 @@ export const CANONICAL_FEED_VERSION = 1;
 
 export type CanonicalJobPosting = {
   externalRef: string; // stable public reference: distribution id
+  distributionId: number;
   title: string;
   companyName: string;
+  companyPublicSlug: string;
   location: string | null;
   description: string;
   applyUrl: string;
@@ -41,7 +43,7 @@ type DistributionWithSpec = Prisma.JobDistributionGetPayload<{
     };
     job: {
       select: {
-        company: { select: { name: true } };
+        company: { select: { name: true, publicSlug: true } },
       };
     };
   };
@@ -60,8 +62,10 @@ export function toCanonicalJobPosting(
 
   return {
     externalRef: `dist-${row.id}`,
+    distributionId: row.id,
     title: spec.title,
     companyName: row.job.company.name,
+    companyPublicSlug: row.job.company.publicSlug,
     location: spec.location?.trim() || null,
     description,
     applyUrl,

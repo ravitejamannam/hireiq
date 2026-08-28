@@ -318,10 +318,12 @@ enum JobRankingCoverageStatus {
 }
 
 model Company {
-  id        Int    @id @default(autoincrement())
-  name      String
-  industry  String
-  employees Int
+  id         Int    @id @default(autoincrement())
+  name       String
+  industry   String
+  employees  Int
+  /// Public careers hub path: /careers/{publicSlug}. Stable after create; not a rename of the company.
+  publicSlug String @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -437,6 +439,9 @@ model JobSpecificationVersion {
   evaluationCriteria     String?
   primarySkills          String?
   structuredPayload      Json                    @default("{}")
+  /// Frozen assessment bank IDs for this published version. Empty on DRAFT
+  /// and on specs published before pinning existed (those mint from the live bank).
+  assessmentQuestionIds  Int[]                   @default([])
 
   /// AI JD proposal only. Canonical jobDescription is unchanged until human accept.
   aiProposedJobDescription String?

@@ -69,7 +69,11 @@ export default async function EmbedApplyPage({ params }: EmbedPageProps) {
         ) : null}
 
         <div className="mt-6">
-            <HostedApplyForm token={token} compact />
+            <HostedApplyForm
+              token={token}
+              compact
+              expectsAssessment={page.roleCategory != null}
+            />
         </div>
 
         <p className="mt-6 text-center text-[10px] text-zinc-400">

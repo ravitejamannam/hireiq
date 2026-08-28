@@ -36,12 +36,13 @@ import {
   storePendingHostedResume,
 } from "../lib/apply/hosted-resume-service";
 import { submitHostedApply } from "../lib/apply/hosted-apply-service";
-import { mintAssessmentInviteForApplication, submitPublicAssessment } from "../lib/assessments/assessment-service";
+import { mintAssessmentInviteForApplication, submitPublicAssessment, upsertAssessmentBank } from "../lib/assessments/assessment-service";
+import { snapshotAssessmentQuestionIds } from "../lib/assessments/assessment-snapshot";
 import { upsertBlueprintCore, applyRubricScores } from "../lib/interviews/blueprint-service";
 import { executeRunCandidateMatching } from "../lib/candidates/matching/matching-service";
 import { executeRunJobRanking } from "../lib/candidates/ranking/ranking-service";
 import { createPostedJobWithPublishedSpecification } from "../lib/jobs/job-specification";
-import { mintHostedApplyTokenMaterial } from "../lib/apply/apply-token";
+import { mintHostedApplyTokenMaterial, rewriteHostedApplySnapshotsToPublicOrigin } from "../lib/apply/apply-token";
 import { generateBillingForHiredApplication } from "../lib/billing/generate-hire-billing";
 import { prisma } from "../lib/prisma";
 import {
@@ -79,16 +80,36 @@ async function main() {
   }
   const passwordHash = await hashPassword(passwordRaw);
 
+  await upsertAssessmentBank(prisma);
+  console.log("✓ assessment bank");
+
   // ── 1. Company + clients ────────────────────────────────────────────
   let company = await prisma.company.findFirst({
     where: { name: COMPANY.name },
-    select: { id: true, name: true },
+    select: { id: true, name: true, publicSlug: true },
   });
   if (!company) {
     company = await prisma.company.create({
-      data: { name: COMPANY.name, industry: COMPANY.industry, employees: COMPANY.employees },
-      select: { id: true, name: true },
+      data: {
+        name: COMPANY.name,
+        industry: COMPANY.industry,
+        employees: COMPANY.employees,
+        publicSlug: COMPANY.slug,
+      },
+      select: { id: true, name: true, publicSlug: true },
     });
+  } else if (company.publicSlug !== COMPANY.slug) {
+    const taken = await prisma.company.findUnique({
+      where: { publicSlug: COMPANY.slug },
+      select: { id: true },
+    });
+    if (!taken || taken.id === company.id) {
+      company = await prisma.company.update({
+        where: { id: company.id },
+        data: { publicSlug: COMPANY.slug },
+        select: { id: true, name: true, publicSlug: true },
+      });
+    }
   }
   console.log("✓ company:", company.name);
 
@@ -277,6 +298,10 @@ async function main() {
 
   // ── 8. Analyst role: shortlist + hire + billing ════════════════════
   const analystDistribution = await ensureHostedDistribution(analyst.job.id, analyst.specVersionId);
+  const rewritten = await rewriteHostedApplySnapshotsToPublicOrigin(prisma);
+  if (rewritten > 0) {
+    console.log(`✓ apply snapshots rewritten to current APP_URL (${rewritten})`);
+  }
   await simpleCandidate({
     token: analystDistribution.applyToken!,
     name: "Devika Rao",
@@ -572,6 +597,25 @@ async function ensureJob(
         ...(structuredPayload ? { structuredPayload } : {}),
       },
     });
+    const publishedSpec = await prisma.jobSpecificationVersion.findUnique({
+      where: { id: existingJob.currentPublishedSpecificationVersionId },
+      select: { assessmentQuestionIds: true, roleCategory: true },
+    });
+    if (
+      publishedSpec &&
+      publishedSpec.assessmentQuestionIds.length === 0 &&
+      publishedSpec.roleCategory
+    ) {
+      await prisma.jobSpecificationVersion.update({
+        where: { id: existingJob.currentPublishedSpecificationVersionId },
+        data: {
+          assessmentQuestionIds: await snapshotAssessmentQuestionIds(
+            publishedSpec.roleCategory,
+            prisma,
+          ),
+        },
+      });
+    }
     return {
       job: existingJob as { id: number; title: string },
       specVersionId: existingJob.currentPublishedSpecificationVersionId,
