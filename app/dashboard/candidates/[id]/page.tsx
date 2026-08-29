@@ -24,6 +24,8 @@ import { getCandidateIdentity } from "@/lib/candidates/identity/identity-service
 import { getCandidateIntelligence } from "@/lib/candidates/intelligence/intelligence-service";
 import { getCandidateMatching } from "@/lib/candidates/matching/matching-service";
 import { getCandidateProfilePageData } from "@/lib/candidates/candidate-profile-service";
+import { getCandidateHiringTimelines } from "@/lib/hiring/requirement-desk";
+import ApplicationTimeline from "@/components/hiring/ApplicationTimeline";
 
 type CandidateProfilePageProps = {
   params: Promise<{
@@ -58,6 +60,20 @@ export default async function CandidateProfilePage({
   }
 
   const { profile, applications } = pageData;
+
+  let timelines: Awaited<ReturnType<typeof getCandidateHiringTimelines>> = [];
+  try {
+    timelines = await getCandidateHiringTimelines(candidateId);
+  } catch (error) {
+    if (
+      error instanceof AuthenticationError ||
+      error instanceof AuthorizationError
+    ) {
+      timelines = [];
+    } else {
+      throw error;
+    }
+  }
 
   let identity = null;
   try {
@@ -181,6 +197,17 @@ export default async function CandidateProfilePage({
           runs={matching.runs}
         />
       ) : null}
+
+      <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
+        <h2 className="text-lg font-bold text-black">Hiring timeline</h2>
+        <p className="mt-1 text-sm text-zinc-600">
+          Apply, assessment, interviews, ranking, and offer events. Assessment
+          score is not a hire decision.
+        </p>
+        <div className="mt-6">
+          <ApplicationTimeline events={timelines} showCandidate={false} />
+        </div>
+      </section>
 
       <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
         <h2 className="text-lg font-bold text-black">Applications</h2>

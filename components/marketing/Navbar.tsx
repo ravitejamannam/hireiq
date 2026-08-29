@@ -1,10 +1,10 @@
 import Link from "next/link";
 
 const links = [
-  { label: "Ideology", href: "#ideology" },
-  { label: "How it works", href: "#workflow" },
-  { label: "Proof", href: "#proof" },
-  { label: "FAQ", href: "#faq" },
+  { label: "Ideology", href: "/#ideology" },
+  { label: "How it works", href: "/#workflow" },
+  { label: "Proof", href: "/#proof" },
+  { label: "FAQ", href: "/#faq" },
 ];
 
 export default function Navbar() {
@@ -33,6 +33,12 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Link
+            href="/careers"
+            className="rounded-full px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-200/60"
+          >
+            Careers
+          </Link>
           <Link
             href="/login"
             className="rounded-full px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-200/60"

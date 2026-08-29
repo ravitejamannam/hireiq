@@ -7,16 +7,27 @@ import { mintOfferAcceptanceAction } from "@/app/actions/offer-actions";
 /**
  * T133: admin mints a single-use offer acceptance link (shown once).
  */
-export default function MintOfferLinkButton({ applicationId }: { applicationId: number }) {
+export default function MintOfferLinkButton({
+  applicationId,
+}: {
+  applicationId: number;
+}) {
   const [link, setLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [terms, setTerms] = useState("");
+  const [compensation, setCompensation] = useState("");
+  const [proposedStartDate, setProposedStartDate] = useState("");
   const [isPending, startTransition] = useTransition();
 
   function onMint() {
     setError(null);
     startTransition(async () => {
-      const res = await mintOfferAcceptanceAction(applicationId);
+      const res = await mintOfferAcceptanceAction(applicationId, {
+        terms,
+        compensation,
+        proposedStartDate,
+      });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -26,7 +37,36 @@ export default function MintOfferLinkButton({ applicationId }: { applicationId: 
   }
 
   return (
-    <div className="mt-3">
+    <div className="mt-3 space-y-3">
+      <label className="block text-xs font-medium text-zinc-600">
+        Compensation
+        <input
+          type="text"
+          value={compensation}
+          onChange={(event) => setCompensation(event.target.value)}
+          placeholder="As discussed"
+          className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900"
+        />
+      </label>
+      <label className="block text-xs font-medium text-zinc-600">
+        Proposed start date
+        <input
+          type="date"
+          value={proposedStartDate}
+          onChange={(event) => setProposedStartDate(event.target.value)}
+          className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900"
+        />
+      </label>
+      <label className="block text-xs font-medium text-zinc-600">
+        Terms
+        <textarea
+          value={terms}
+          onChange={(event) => setTerms(event.target.value)}
+          rows={3}
+          placeholder="Probation, notice, work location…"
+          className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900"
+        />
+      </label>
       <button
         type="button"
         onClick={onMint}
@@ -36,10 +76,10 @@ export default function MintOfferLinkButton({ applicationId }: { applicationId: 
         {isPending ? "Minting…" : "✍️ Mint offer acceptance link"}
       </button>
 
-      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       {link ? (
-        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
           <p className="text-xs font-semibold text-emerald-800">
             Share this link with the candidate — it&apos;s shown once.
           </p>

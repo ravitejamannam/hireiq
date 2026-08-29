@@ -324,6 +324,8 @@ model Company {
   employees  Int
   /// Public careers hub path: /careers/{publicSlug}. Stable after create; not a rename of the company.
   publicSlug String @unique
+  /// When true, the public careers hub may show application counts. Off by default.
+  publishApplicationCount Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -384,6 +386,9 @@ model Job {
   sourcingAccessReceivedAt DateTime?
   shortlistingDueAt        DateTime?
   shortlistingCompletedAt  DateTime?
+
+  /// Ordered interview types for this requirement. Empty = default phone screen, then technical.
+  interviewRoundPlan InterviewType[] @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -960,9 +965,17 @@ model Application {
   expertScore Int?
   rejectionReason String?
 
-  /// T133 offer acceptance token (SHA-256 at rest) + acceptance timestamp.
+  /// First time this application reached SHORTLISTED. Null until that transition.
+  shortlistedAt DateTime?
+
+  /// T133 offer pack: hashed token, terms, and candidate decision timestamps.
   offerAcceptanceTokenHash String? @unique
+  offerMintedAt            DateTime?
   offerAcceptedAt          DateTime?
+  offerDeclinedAt          DateTime?
+  offerTerms               String?
+  offerCompensation        String?
+  proposedStartDate        DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

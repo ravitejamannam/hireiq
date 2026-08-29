@@ -9,6 +9,8 @@ import { requireClientPortal } from "@/lib/auth/authorization";
 import { getDecisionSupportForCandidate } from "@/lib/candidates/decision-support-service";
 import { getOrMaterializeCandidateProfile } from "@/lib/candidates/candidate-profile-service";
 import { getClientApplicationForRequirement } from "@/lib/repositories/application-repository";
+import { getApplicationHiringTimeline } from "@/lib/hiring/requirement-desk";
+import ApplicationTimeline from "@/components/hiring/ApplicationTimeline";
 
 type ClientCandidateDetailPageProps = {
   params: Promise<{
@@ -49,6 +51,8 @@ export default async function ClientCandidateDetailPage({
     notFound();
   }
 
+  const timeline = await getApplicationHiringTimeline(application.id);
+
   const evaluation = selectPrimaryClientEvaluation(application.evaluations);
   const profile = await getOrMaterializeCandidateProfile(
     application.candidate.id,
@@ -87,6 +91,19 @@ export default async function ClientCandidateDetailPage({
       <div className="mb-8">
         <DecisionSupportRails signals={signals} />
       </div>
+
+      {timeline && timeline.length > 0 ? (
+        <section className="mb-8 rounded-xl border border-zinc-200 bg-white p-6">
+          <h2 className="text-lg font-bold text-black">Hiring timeline</h2>
+          <p className="mt-1 text-sm text-zinc-600">
+            Apply, assessment, interviews, ranking, and offer. Assessment score
+            is not a hire decision.
+          </p>
+          <div className="mt-6">
+            <ApplicationTimeline events={timeline} />
+          </div>
+        </section>
+      ) : null}
 
       <ClientCandidateProfile
         candidate={{

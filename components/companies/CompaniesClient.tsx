@@ -27,10 +27,11 @@ export default function CompaniesClient({
 
   async function handleSaveCompany(
     company: {
-  name: string;
-  industry: string;
-  employees: number;
-}
+      name: string;
+      industry: string;
+      employees: number;
+      publishApplicationCount?: boolean;
+    },
   ) {
     if (editingCompany){
       await updateCompany(
@@ -38,12 +39,14 @@ export default function CompaniesClient({
         company.name,
         company.industry,
         company.employees,
+        company.publishApplicationCount,
       );
      } else {
       await createCompany(
         company.name,
         company.industry,
         company.employees,
+        company.publishApplicationCount ?? false,
       );
 
       
@@ -146,6 +149,8 @@ export default function CompaniesClient({
                 name: editingCompany.name,
                 industry: editingCompany.industry,
                 employees: editingCompany.employees,
+                publishApplicationCount:
+                  editingCompany.publishApplicationCount ?? false,
               }
             : undefined
         }

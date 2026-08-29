@@ -1,27 +1,21 @@
 /**
- * T105: comprehensive demo-world seed — exercises EVERY product feature.
+ * Client-demo seed — a full hiring world, not a thin fixture.
  *
- * Replaces bootstrap-dev.ts + bootstrap-dev-pipeline.ts.
+ * 8 companies × 6 live openings × 8 pipeline seats, plus Nimbus as the
+ * deep path (resume claim, assessment integrity, matching, ranking, rubric).
  *
- * Demo world: one showcase company ("Nimbus Labs") with a full hiring
- * lifecycle across two roles, built through REAL service functions
- * (not raw writes) wherever the codebase allows:
- *
- *   hosted apply (+resume claim) → ingestion → evidence → resume document
- *   → assessment invite → scored attempt (with integrity signals)
- *   → matching run → ranking run
- *   → interview blueprint → rubric-scored evaluation
- *   → interviews / coding tests / reports → scheduling slots + booking
- *   → pipeline to HIRED → billing
- *
- * Idempotent: safe to re-run; existing rows are detected and skipped.
+ * Built through real service functions wherever the codebase allows.
+ * Idempotent: safe to re-run; existing rows are skipped.
  *
  * Usage: pnpm db:bootstrap-dev   (BOOTSTRAP_PASSWORD or ADMIN_PASSWORD)
  */
 
 import "dotenv/config";
 
+import { createHash, randomBytes } from "crypto";
+
 import {
+  ApplicationIngestionChannel,
   ApplicationPipelineStatus,
   CodingTestStatus,
   InterviewResult,
@@ -44,23 +38,23 @@ import { executeRunJobRanking } from "../lib/candidates/ranking/ranking-service"
 import { createPostedJobWithPublishedSpecification } from "../lib/jobs/job-specification";
 import { mintHostedApplyTokenMaterial, rewriteHostedApplySnapshotsToPublicOrigin } from "../lib/apply/apply-token";
 import { generateBillingForHiredApplication } from "../lib/billing/generate-hire-billing";
+import { shortlistedAtPatch } from "../lib/hiring/pipeline-timestamps";
 import { prisma } from "../lib/prisma";
 import {
   UserValidationError,
   validateBootstrapPassword,
 } from "../lib/validation/user-validation";
-
-const COMPANY = {
-  slug: "nimbus",
-  name: "Nimbus Labs",
-  industry: "Technology",
-  employees: 120,
-};
-
-const INTERVIEWERS = [
-  { email: "interviewer.arjun@hireiq.local", name: "Arjun Mehta", category: "ENGINEERING" },
-  { email: "interviewer.kavya@hireiq.local", name: "Kavya Iyer", category: "PRODUCT" },
-];
+import {
+  DEMO_COMPANIES,
+  DEMO_INTERVIEWERS,
+  PIPELINE_PACK,
+  demoApplicant,
+  rolesForCompany,
+  type CompanyDef,
+  type InterviewerDef,
+  type PipelineSeat,
+  type RoleSpec,
+} from "./demo-world/catalog";
 
 async function main() {
   const passwordRaw =
@@ -83,66 +77,8 @@ async function main() {
   await upsertAssessmentBank(prisma);
   console.log("✓ assessment bank");
 
-  // ── 1. Company + clients ────────────────────────────────────────────
-  let company = await prisma.company.findFirst({
-    where: { name: COMPANY.name },
-    select: { id: true, name: true, publicSlug: true },
-  });
-  if (!company) {
-    company = await prisma.company.create({
-      data: {
-        name: COMPANY.name,
-        industry: COMPANY.industry,
-        employees: COMPANY.employees,
-        publicSlug: COMPANY.slug,
-      },
-      select: { id: true, name: true, publicSlug: true },
-    });
-  } else if (company.publicSlug !== COMPANY.slug) {
-    const taken = await prisma.company.findUnique({
-      where: { publicSlug: COMPANY.slug },
-      select: { id: true },
-    });
-    if (!taken || taken.id === company.id) {
-      company = await prisma.company.update({
-        where: { id: company.id },
-        data: { publicSlug: COMPANY.slug },
-        select: { id: true, name: true, publicSlug: true },
-      });
-    }
-  }
-  console.log("✓ company:", company.name);
-
-  const ownerUser = await ensureUser({
-    email: `owner.${COMPANY.slug}@hireiq.local`,
-    name: `${COMPANY.name} Owner`,
-    passwordHash,
-    role: "CLIENT",
-  });
-  await ensureMembership({
-    userId: ownerUser.id,
-    companyId: company.id,
-    role: "OWNER",
-    actorUserId: null,
-  });
-
-  const memberUser = await ensureUser({
-    email: `member.${COMPANY.slug}@hireiq.local`,
-    name: `${COMPANY.name} Member`,
-    passwordHash,
-    role: "CLIENT",
-  });
-  await ensureMembership({
-    userId: memberUser.id,
-    companyId: company.id,
-    role: "MEMBER",
-    actorUserId: ownerUser.id,
-  });
-  console.log("✓ client accounts: owner + member");
-
-  // ── 2. Interviewers with logins ─────────────────────────────────────
   const interviewerIds: Record<string, number> = {};
-  for (const iv of INTERVIEWERS) {
+  for (const iv of DEMO_INTERVIEWERS) {
     await ensureUser({
       email: iv.email,
       name: iv.name,
@@ -151,170 +87,137 @@ async function main() {
     });
     interviewerIds[iv.email] = await linkInterviewerProfile(iv.email);
   }
-  console.log("✓ interviewers:", Object.keys(interviewerIds).length);
+  console.log("✓ interviewers:", DEMO_INTERVIEWERS.length);
   await seedPublishedInterviewerProfiles(interviewerIds);
   console.log("✓ interviewer profiles published");
 
-  // ── 3. Two published requirements ───────────────────────────────────
-  const backend = await ensureJob(company.id, ownerUser.id, {
-    title: `${COMPANY.name}: Senior Backend Engineer`,
-    roleCategory: "ENGINEERING",
-    experienceRange: "5-9 years",
-    location: "Bengaluru (Hybrid)",
-    compensationRange: "₹45L – ₹65L",
-    primarySkills: "Go, PostgreSQL, Kubernetes, Redis",
-    mustHaveRequirements: [
-      "5–9 years building backend systems in production.",
-      "Strong distributed systems and SQL depth — you have operated multi-tenant services.",
-      "Comfortable owning on-call, instrumentation, and operational quality.",
-      "Clear written design: you can explain a trade-off without a slide deck.",
-    ].join("\n"),
-    niceToHaveRequirements: [
-      "gRPC or event-driven architecture in production.",
-      "Prior startup experience shipping with a small team.",
-    ].join("\n"),
-    jobDescription:
-      "Nimbus Labs runs a multi-tenant hiring OS. As a backend-heavy senior engineer you design the services, APIs, and data models that keep tenant isolation honest while the product still ships weekly. You will work with product and infra — not through a ticket queue — and you will be evaluated on a skills assessment plus an expert interview, not a keyword scan.",
-    evaluationCriteria: "System design depth, coding quality, operational maturity",
-    interviewerId: interviewerIds[INTERVIEWERS[0].email],
-    posting: {
-      employmentType: "FULL_TIME",
-      seniorityLevel: "SENIOR",
-      responsibilities: [
-        "Design and build backend services, APIs, and data models for a multi-tenant platform.",
-        "Own features end-to-end: spec, implementation, rollout, and production follow-through.",
-        "Keep tenant isolation, backpressure, and idempotency as first-class constraints.",
-        "Review designs, raise the engineering bar, and delete work that does not earn its keep.",
-        "Work directly with product and infra in Bengaluru hybrid — pairing and written specs.",
-      ],
-      benefits: [
-        "₹45L – ₹65L CTC, scoped to the level and discussed early.",
-        "Hybrid Bengaluru: in-person collaboration with remote-friendly writing.",
-        "A hiring process you can see — role assessment, expert interview, written trail.",
-        "High ownership on a 120-person technology team still small enough to feel.",
-      ],
-      aboutCompany:
-        "Nimbus Labs is a 120-person technology company building hiring infrastructure. The team cares about evidence over résumé theatre: every applicant takes the same assessment and is reviewed by an independent expert before a human decision.",
-    },
-  });
-  const analyst = await ensureJob(company.id, ownerUser.id, {
-    title: `${COMPANY.name}: Revenue Operations Analyst`,
-    roleCategory: "FINANCE",
-    experienceRange: "2-5 years",
-    location: "Remote (India)",
-    compensationRange: "₹18L – ₹28L",
-    primarySkills: "SQL, Excel modelling, Billing reconciliation",
-    mustHaveRequirements: [
-      "2–5 years in revops, finance analytics, or billing operations.",
-      "Advanced SQL and comfort reconciling messy invoice-level data.",
-      "You write clearly: a cohort note a founder can act on.",
-    ].join("\n"),
-    niceToHaveRequirements: [
-      "SaaS billing exposure (usage, seats, credits).",
-      "Looker or Tableau for self-serve reporting.",
-    ].join("\n"),
-    jobDescription:
-      "Keep Nimbus Labs' billing engine honest. You reconcile invoices, analyse revenue cohorts, and sit with engineering when automation should replace a spreadsheet. This is a remote full-time analyst role: high agency, tight feedback, and a hiring process that tests the work rather than the brand on your CV.",
-    evaluationCriteria: "Analytical rigour, reconciliation accuracy, communication",
-    interviewerId: interviewerIds[INTERVIEWERS[1].email],
-    posting: {
-      employmentType: "FULL_TIME",
-      seniorityLevel: "INTERMEDIATE",
-      responsibilities: [
-        "Reconcile invoices and credits so billed revenue matches what customers actually used.",
-        "Build cohort and leakage analyses that finance and product can trust.",
-        "Partner with engineering on billing automation — spec the edge cases, then verify the ship.",
-        "Own the weekly revenue snapshot: what moved, why, and what to do next.",
-      ],
-      benefits: [
-        "₹18L – ₹28L CTC.",
-        "Remote (India) with overlap on IST working hours.",
-        "Transparent hiring: skills assessment plus expert review.",
-        "Direct line to billing and product — no four-layer reporting chain.",
-      ],
-      aboutCompany:
-        "Nimbus Labs is a 120-person technology company. Revenue operations here is not a back-office afterthought: billing correctness is part of the product, and this role sits next to the engineers who ship it.",
-    },
-  });
-  console.log("✓ published requirements:", backend.job.title.split(": ")[1], "+", analyst.job.title.split(": ")[1]);
-
-  // Blueprint for backend rubric
-  await upsertBlueprintCore(backend.specVersionId, [
-    { name: "System Design", description: "Distributed systems reasoning", weight: 40 },
-    { name: "Coding Depth", weight: 35 },
-    { name: "Communication", weight: 25 },
-  ], [
-    { competencyName: "System Design", question: "Design a multi-tenant job queue with fair scheduling.", difficulty: "HARD", guidance: "Look for isolation, backpressure, and idempotency." },
-    { competencyName: "Coding Depth", question: "Implement an LRU cache with TTL support.", difficulty: "MEDIUM" },
-  ]);
-  console.log("✓ interview blueprint attached to backend spec");
-
-  // ── 4. Distribution + booking slots (backend role) ──────────────────
-  const distribution = await ensureHostedDistribution(backend.job.id, backend.specVersionId);
-  console.log("✓ hosted distribution published (apply link live)");
-
-  const existingSlots = await prisma.interviewSlot.count({ where: { jobId: backend.job.id } });
-  if (existingSlots === 0) {
-    const base = new Date(Date.now() + 3 * 86400000);
-    base.setUTCHours(10, 0, 0, 0);
-    await prisma.interviewSlot.createMany({
-      data: [0, 1, 2].map((d) => ({
-        jobId: backend.job.id,
-        interviewerId: interviewerIds[INTERVIEWERS[0].email],
-        interviewType: InterviewType.TECHNICAL,
-        startAt: new Date(base.getTime() + d * 3600000),
-        durationMinutes: 60,
-      })),
+  for (let companyIndex = 0; companyIndex < DEMO_COMPANIES.length; companyIndex += 1) {
+    const def = DEMO_COMPANIES[companyIndex]!;
+    const company = await ensureCompany(def);
+    const ownerUser = await ensureUser({
+      email: `owner.${def.slug}@hireiq.local`,
+      name: `${def.name} Owner`,
+      passwordHash,
+      role: "CLIENT",
     });
+    await ensureMembership({
+      userId: ownerUser.id,
+      companyId: company.id,
+      role: "OWNER",
+      actorUserId: null,
+    });
+    const memberUser = await ensureUser({
+      email: `member.${def.slug}@hireiq.local`,
+      name: `${def.name} Member`,
+      passwordHash,
+      role: "CLIENT",
+    });
+    await ensureMembership({
+      userId: memberUser.id,
+      companyId: company.id,
+      role: "MEMBER",
+      actorUserId: ownerUser.id,
+    });
+
+    const roles = rolesForCompany(def);
+    for (let jobIndex = 0; jobIndex < roles.length; jobIndex += 1) {
+      const role = roles[jobIndex]!;
+      const interviewer = DEMO_INTERVIEWERS[jobIndex % DEMO_INTERVIEWERS.length]!;
+      const interviewerId = interviewerIds[interviewer.email]!;
+      const posted = await ensureJob(company.id, ownerUser.id, roleToJobFields(role, interviewerId));
+      const distribution = await ensureHostedDistribution(posted.job.id, posted.specVersionId);
+      await ensureSlots(posted.job.id, interviewerId, companyIndex, jobIndex);
+
+      if (def.slug === "nimbus" && role.key === "backend") {
+        await upsertBlueprintCore(
+          posted.specVersionId,
+          [
+            { name: "System Design", description: "Distributed systems reasoning", weight: 40 },
+            { name: "Coding Depth", weight: 35 },
+            { name: "Communication", weight: 25 },
+          ],
+          [
+            {
+              competencyName: "System Design",
+              question: "Design a multi-tenant job queue with fair scheduling.",
+              difficulty: "HARD",
+              guidance: "Look for isolation, backpressure, and idempotency.",
+            },
+            {
+              competencyName: "Coding Depth",
+              question: "Implement an LRU cache with TTL support.",
+              difficulty: "MEDIUM",
+            },
+          ],
+        );
+        if (!(await hostedApplyExists("ananya.demo@example.com"))) {
+          await candidateViaRealServices({
+            token: distribution.applyToken!,
+            name: "Ananya Sharma",
+            email: "ananya.demo@example.com",
+            resumeText:
+              "Ananya Sharma\nStaff Engineer\nSkills: Go, Kubernetes, gRPC, Postgres\n9 years building payment platforms at scale.\n",
+            integrity: { tabSwitches: 1, pastes: 0, copies: 2 },
+          });
+        }
+        await simpleCandidate({
+          token: distribution.applyToken!,
+          name: "Rohit Verma",
+          email: "rohit.demo@example.com",
+          scoreFraction: 0.6,
+          pipelineStatus: ApplicationPipelineStatus.TECH_EVALUATION,
+        });
+        await simpleCandidate({
+          token: distribution.applyToken!,
+          name: "Meera Joshi",
+          email: "meera.demo@example.com",
+          scoreFraction: null,
+          pipelineStatus: ApplicationPipelineStatus.CV_POOL,
+        });
+      }
+
+      if (def.slug === "nimbus" && role.key === "finance") {
+        await simpleCandidate({
+          token: distribution.applyToken!,
+          name: "Devika Rao",
+          email: "devika.demo@example.com",
+          scoreFraction: 0.9,
+          pipelineStatus: ApplicationPipelineStatus.HIRED,
+          withInterviewPacket: true,
+        });
+      }
+
+      await seedPipelineRoster({
+        token: distribution.applyToken!,
+        slug: def.slug,
+        jobKey: role.key,
+        city: def.city,
+        compensation: role.compensationRange,
+      });
+      console.log(`  · ${def.slug}/${role.key}`);
+    }
+    console.log(`✓ ${def.name}: 6 openings, pipeline seats filled`);
   }
-  console.log("✓ booking slots open:", await prisma.interviewSlot.count({ where: { jobId: backend.job.id, status: "OPEN" } }));
 
-  // ── 5. Candidate A: full happy path via REAL service calls ─────────
-  await candidateViaRealServices({
-    token: distribution.applyToken!,
-    name: "Ananya Sharma",
-    email: "ananya.demo@example.com",
-    resumeText: "Ananya Sharma\nStaff Engineer\nSkills: Go, Kubernetes, gRPC, Postgres\n9 years building payment platforms at scale.\n",
-    integrity: { tabSwitches: 1, pastes: 0, copies: 2 },
-  });
-
-  // ── 6. Candidate B: applied, assessed mid, moved to TECH_EVALUATION ─
-  await simpleCandidate({
-    token: distribution.applyToken!,
-    name: "Rohit Verma",
-    email: "rohit.demo@example.com",
-    scoreFraction: 0.6,
-    pipelineStatus: ApplicationPipelineStatus.TECH_EVALUATION,
-  });
-
-  // ── 7. Candidate C: CV pool only ────────────────────────────────────
-  await simpleCandidate({
-    token: distribution.applyToken!,
-    name: "Meera Joshi",
-    email: "meera.demo@example.com",
-    scoreFraction: null, // did not take assessment
-    pipelineStatus: ApplicationPipelineStatus.CV_POOL,
-  });
-
-  // ── 8. Analyst role: shortlist + hire + billing ════════════════════
-  const analystDistribution = await ensureHostedDistribution(analyst.job.id, analyst.specVersionId);
   const rewritten = await rewriteHostedApplySnapshotsToPublicOrigin(prisma);
   if (rewritten > 0) {
     console.log(`✓ apply snapshots rewritten to current APP_URL (${rewritten})`);
   }
-  await simpleCandidate({
-    token: analystDistribution.applyToken!,
-    name: "Devika Rao",
-    email: "devika.demo@example.com",
-    scoreFraction: 0.9,
-    pipelineStatus: ApplicationPipelineStatus.HIRED,
-    withInterviewPacket: true,
-  });
-  console.log("✓ analyst pipeline: shortlist → hired → billing");
 
-  console.log("\nDemo logins (password in BOOTSTRAP_PASSWORD):");
-  console.log("  admin@hireiq.local / owner.nimbus@hireiq.local / member.nimbus@hireiq.local");
-  console.log("  arjun+kavya interviewer logins");
+  const [companies, jobs, applications, interviewers] = await Promise.all([
+    prisma.company.count(),
+    prisma.job.count({ where: { status: "OPEN" } }),
+    prisma.application.count(),
+    prisma.interviewer.count(),
+  ]);
+  console.log(
+    `\nDemo world: ${companies} companies, ${jobs} open roles, ${applications} applications, ${interviewers} interviewers`,
+  );
+  console.log("\nDemo logins (password in BOOTSTRAP_PASSWORD / ADMIN_PASSWORD):");
+  console.log("  Admin        admin@hireiq.local");
+  console.log("  Client       owner.nimbus@hireiq.local  (also owner.{slug}@hireiq.local)");
+  console.log("  Interviewer  interviewer.arjun@hireiq.local");
+  console.log("  Careers      /careers  and  /careers/nimbus");
 }
 
 // ────────────────────────── helpers ──────────────────────────
@@ -361,18 +264,21 @@ async function linkInterviewerProfile(userEmail: string): Promise<number> {
   });
   if (user.interviewerId) return user.interviewerId;
 
-  const iv = INTERVIEWERS.find((i) => i.email === userEmail);
+  const iv = DEMO_INTERVIEWERS.find((i) => i.email === userEmail);
   if (!iv) throw new Error(`No fixture interviewer for ${userEmail}`);
 
-  const interviewer = await prisma.interviewer.upsert({
-    where: { id: -1 },
-    update: {},
-    create: { name: iv.name, category: iv.category as never, availability: "AVAILABLE" },
-  }).catch(async () => {
-    const found = await prisma.interviewer.findFirst({ where: { name: iv.name } });
-    if (!found) throw new Error("interviewer upsert failed");
-    return found;
+  let interviewer = await prisma.interviewer.findFirst({
+    where: { name: iv.name },
   });
+  if (!interviewer) {
+    interviewer = await prisma.interviewer.create({
+      data: {
+        name: iv.name,
+        category: iv.category as never,
+        availability: "AVAILABLE",
+      },
+    });
+  }
 
   await prisma.user.update({
     where: { id: user.id },
@@ -384,120 +290,67 @@ async function linkInterviewerProfile(userEmail: string): Promise<number> {
 async function seedPublishedInterviewerProfiles(
   interviewerIds: Record<string, number>,
 ) {
-  const arjunId = interviewerIds["interviewer.arjun@hireiq.local"];
-  const kavyaId = interviewerIds["interviewer.kavya@hireiq.local"];
-  if (arjunId) {
+  for (const iv of DEMO_INTERVIEWERS) {
+    const interviewerId = interviewerIds[iv.email];
+    if (!interviewerId) continue;
+    const profile = interviewerProfileData(iv);
     await prisma.interviewerProfile.upsert({
-      where: { interviewerId: arjunId },
-      create: { interviewerId: arjunId, ...ARJUN_PROFILE },
-      update: ARJUN_PROFILE,
-    });
-  }
-  if (kavyaId) {
-    await prisma.interviewerProfile.upsert({
-      where: { interviewerId: kavyaId },
-      create: { interviewerId: kavyaId, ...KAVYA_PROFILE },
-      update: KAVYA_PROFILE,
+      where: { interviewerId },
+      create: { interviewerId, ...profile },
+      update: profile,
     });
   }
 }
 
-const ARJUN_PROFILE = {
-  headline: "Engineering interviewer — systems and backend",
-  location: "Bengaluru",
-  aboutText:
-    "I interview backend and platform engineers for production judgement: isolation, backpressure, incident response. Fifteen years building and reviewing distributed systems. Candidates see this page before they book a slot.",
-  roleTitle: "Staff Engineering Interviewer",
-  experienceYears: 15,
-  domains: ["Engineering"] as Prisma.InputJsonValue,
-  linkedInUrl: "https://linkedin.com/in/arjun-mehta-hireiq",
-  githubUrl: null,
-  portfolioUrl: null,
-  twitterUrl: null,
-  videoUrl: null,
-  leetcodeUrl: null,
-  socialLinks: Prisma.JsonNull,
-  experiences: [
-    {
-      title: "Staff Engineer",
-      company: "Razorpay",
-      startDate: "Apr 2020",
-      endDate: "",
-      isCurrent: true,
-      location: "Bengaluru",
-      summary:
-        "Platform reliability and multi-tenant service design. Interviews senior backend hires for the same bar.",
-    },
-    {
-      title: "Senior Engineer",
-      company: "Google",
-      startDate: "Aug 2014",
-      endDate: "Mar 2020",
-      isCurrent: false,
-      location: "Bengaluru",
-      summary: "Ads serving infrastructure and on-call for latency-critical paths.",
-    },
-  ] as Prisma.InputJsonValue,
-  education: [
-    {
-      school: "IIT Madras",
-      degree: "B.Tech",
-      field: "Computer Science",
-      startDate: "2008",
-      endDate: "2012",
-      summary: "",
-    },
-  ] as Prisma.InputJsonValue,
-  projects: [] as Prisma.InputJsonValue,
-};
-
-const KAVYA_PROFILE = {
-  headline: "Product interviewer — judgement and written clarity",
-  location: "Mumbai",
-  aboutText:
-    "I interview PMs and analysts on problem framing, evidence, and how they write for operators. I do not score on confidence theatre.",
-  roleTitle: "Product Interviewer",
-  experienceYears: 11,
-  domains: ["Product", "Operations"] as Prisma.InputJsonValue,
-  linkedInUrl: "https://linkedin.com/in/kavya-iyer-hireiq",
-  githubUrl: null,
-  portfolioUrl: null,
-  twitterUrl: null,
-  videoUrl: null,
-  leetcodeUrl: null,
-  socialLinks: Prisma.JsonNull,
-  experiences: [
-    {
-      title: "Director of Product",
-      company: "CRED",
-      startDate: "Jan 2021",
-      endDate: "",
-      isCurrent: true,
-      location: "Mumbai",
-      summary: "Owns collections and billing product surfaces used by operators daily.",
-    },
-    {
-      title: "Product Lead",
-      company: "Freshworks",
-      startDate: "Mar 2016",
-      endDate: "Dec 2020",
-      isCurrent: false,
-      location: "Chennai",
-      summary: "Workflow products for support teams; heavy written specs.",
-    },
-  ] as Prisma.InputJsonValue,
-  education: [
-    {
-      school: "ISB Hyderabad",
-      degree: "PGP",
-      field: "Management",
-      startDate: "2014",
-      endDate: "2015",
-      summary: "",
-    },
-  ] as Prisma.InputJsonValue,
-  projects: [] as Prisma.InputJsonValue,
-};
+function interviewerProfileData(iv: InterviewerDef) {
+  const slug = iv.name.toLowerCase().replace(/\s+/g, "-");
+  return {
+    headline: iv.headline,
+    location: iv.location,
+    aboutText: iv.aboutText,
+    roleTitle: iv.roleTitle,
+    experienceYears: iv.experienceYears,
+    domains: iv.domains as Prisma.InputJsonValue,
+    linkedInUrl: `https://linkedin.com/in/${slug}-hireiq`,
+    githubUrl: null,
+    portfolioUrl: null,
+    twitterUrl: null,
+    videoUrl: null,
+    leetcodeUrl: null,
+    socialLinks: Prisma.JsonNull,
+    experiences: [
+      {
+        title: iv.currentTitle,
+        company: iv.currentCompany,
+        startDate: "Jan 2021",
+        endDate: "",
+        isCurrent: true,
+        location: iv.location,
+        summary: iv.aboutText.split(".")[0] + ".",
+      },
+      {
+        title: iv.priorTitle,
+        company: iv.priorCompany,
+        startDate: "Mar 2016",
+        endDate: "Dec 2020",
+        isCurrent: false,
+        location: iv.location,
+        summary: `Prior work at ${iv.priorCompany}.`,
+      },
+    ] as Prisma.InputJsonValue,
+    education: [
+      {
+        school: iv.school,
+        degree: iv.degree,
+        field: iv.field,
+        startDate: "2008",
+        endDate: "2012",
+        summary: "",
+      },
+    ] as Prisma.InputJsonValue,
+    projects: [] as Prisma.InputJsonValue,
+  };
+}
 
 async function ensureMembership(input: {
   userId: number;
@@ -540,6 +393,8 @@ async function ensureJob(
     jobDescription: string;
     evaluationCriteria: string;
     interviewerId: number;
+    numberOfPositions?: number;
+    interviewRoundPlan?: InterviewType[];
     posting?: {
       employmentType: "FULL_TIME" | "CONTRACT" | "PART_TIME" | "INTERNSHIP";
       seniorityLevel: "JUNIOR" | "INTERMEDIATE" | "SENIOR" | "STAFF" | "PRINCIPAL";
@@ -549,6 +404,7 @@ async function ensureJob(
     };
   },
 ) {
+  const positions = fields.numberOfPositions ?? 1;
   const structuredPayload = fields.posting
     ? {
         schemaVersion: 2,
@@ -580,7 +436,11 @@ async function ensureJob(
         compensationRange: fields.compensationRange,
         location: fields.location,
         experienceRange: fields.experienceRange,
-        numberOfPositions: 1,
+        numberOfPositions: positions,
+        assignedInterviewerId: fields.interviewerId,
+        ...(fields.interviewRoundPlan
+          ? { interviewRoundPlan: fields.interviewRoundPlan }
+          : {}),
       },
     });
     await prisma.jobSpecificationVersion.update({
@@ -593,7 +453,7 @@ async function ensureJob(
         compensationRange: fields.compensationRange,
         location: fields.location,
         experienceRange: fields.experienceRange,
-        numberOfPositions: 1,
+        numberOfPositions: positions,
         ...(structuredPayload ? { structuredPayload } : {}),
       },
     });
@@ -635,7 +495,7 @@ async function ensureJob(
       location: fields.location,
       compensationRange: fields.compensationRange,
       targetHireDate: new Date(Date.now() + 45 * 86400000),
-      numberOfPositions: 1,
+      numberOfPositions: positions,
       mustHaveRequirements: fields.mustHaveRequirements,
       niceToHaveRequirements: fields.niceToHaveRequirements,
       jobDescription: fields.jobDescription,
@@ -650,6 +510,9 @@ async function ensureJob(
     data: {
       assignedInterviewerId: fields.interviewerId,
       requirementLifecycle: "INTERVIEWER_NOTIFIED",
+      ...(fields.interviewRoundPlan
+        ? { interviewRoundPlan: fields.interviewRoundPlan }
+        : {}),
       currentPublishedSpecificationVersionId: (
         await prisma.jobSpecificationVersion.findFirst({
           where: { jobId: created.id },
@@ -809,7 +672,11 @@ async function simpleCandidate(input: {
   scoreFraction: number | null;
   pipelineStatus: ApplicationPipelineStatus;
   withInterviewPacket?: boolean;
+  location?: string;
 }) {
+  if (await hostedApplyExists(input.email)) {
+    return;
+  }
   const submitted = await submitHostedApply({
     token: input.token,
     idempotencyKey: crypto.randomUUID(),
@@ -818,9 +685,10 @@ async function simpleCandidate(input: {
       email: input.email,
       consent: true,
       experienceYears: 4,
+      location: input.location ?? "India",
     },
   });
-  if (!submitted.success && !submitted.success) {
+  if (!submitted.success) {
     // idempotent re-run: submission exists; continue
   }
   const app = await applicationByEmail(input.email);
@@ -892,25 +760,7 @@ async function simpleCandidate(input: {
     });
 
     if (input.pipelineStatus === ApplicationPipelineStatus.HIRED) {
-      // Requirement lifecycle must reach SOURCING_SHORTLISTING before hire
-      // billing is permitted (mirrors the real client SELECT flow).
-      const jobRow = await prisma.application.findUniqueOrThrow({
-        where: { id: app.id },
-        select: { jobId: true, companyId: true },
-      });
-      await prisma.job.update({
-        where: { id_companyId: { id: jobRow.jobId, companyId: jobRow.companyId } },
-        data: { requirementLifecycle: "SOURCING_SHORTLISTING" },
-      });
-      await prisma.$transaction(async (tx) => {
-        const hasLine = await tx.billingLineItem.findUnique({
-          where: { applicationId: app.id },
-          select: { id: true },
-        });
-        if (!hasLine) {
-          await generateBillingForHiredApplication(tx, app.id);
-        }
-      });
+      await billHiredApplication(app.id);
     }
   }
 }
@@ -918,31 +768,15 @@ async function simpleCandidate(input: {
 // ────────────────────────── small utilities ──────────────────────────
 
 async function applicationByEmail(email: string) {
-  // Candidates have no user account; resolve by email through the hosted
-  // apply submission chain (authoritative for public applicants).
+  const emailNormalized = email.trim().toLowerCase();
   const row = await prisma.hostedApplySubmission.findFirst({
-    where: { emailNormalized: email },
+    where: { emailNormalized },
     select: { id: true },
     orderBy: { id: "desc" },
   });
-  if (row) {
-    const event = await prisma.applicationIngestionEvent.findFirst({
-      where: { hostedApplySubmissionId: row.id, applicationId: { not: null } },
-      select: { applicationId: true },
-      orderBy: { id: "desc" },
-    });
-    if (event?.applicationId) return { id: event.applicationId };
-  }
-
-  // resolve by email
-  // through the hosted apply submission chain instead.
-  const submission = await prisma.hostedApplySubmission.findFirst({
-    where: { emailNormalized: email },
-    select: { id: true },
-    orderBy: { id: "desc" },
-  });
+  if (!row) throw new Error(`application not resolved for ${email}`);
   const event = await prisma.applicationIngestionEvent.findFirst({
-    where: { hostedApplySubmissionId: submission?.id },
+    where: { hostedApplySubmissionId: row.id, applicationId: { not: null } },
     select: { applicationId: true },
     orderBy: { id: "desc" },
   });
@@ -951,7 +785,21 @@ async function applicationByEmail(email: string) {
 }
 
 async function movePipeline(applicationId: number, status: ApplicationPipelineStatus) {
-  await prisma.application.update({ where: { id: applicationId }, data: { status } });
+  const existing = await prisma.application.findUnique({
+    where: { id: applicationId },
+    select: { shortlistedAt: true },
+  });
+  const shortlistStamp =
+    (status === ApplicationPipelineStatus.SHORTLISTED ||
+      status === ApplicationPipelineStatus.SELECTED ||
+      status === ApplicationPipelineStatus.HIRED) &&
+    !existing?.shortlistedAt
+      ? { shortlistedAt: new Date() }
+      : shortlistedAtPatch(status, existing?.shortlistedAt);
+  await prisma.application.update({
+    where: { id: applicationId },
+    data: { status, ...shortlistStamp },
+  });
 }
 
 async function publishedSpecForApp(applicationId: number): Promise<number> {
@@ -977,6 +825,296 @@ async function assignedInterviewer(jobId: number): Promise<number> {
   });
   if (!job.assignedInterviewerId) throw new Error("no assigned interviewer");
   return job.assignedInterviewerId;
+}
+
+function sha256Hex(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+async function hostedApplyExists(email: string) {
+  const row = await prisma.hostedApplySubmission.findFirst({
+    where: { emailNormalized: email.trim().toLowerCase() },
+    select: { id: true },
+  });
+  return Boolean(row);
+}
+
+async function ensureCompany(def: CompanyDef) {
+  const data = {
+    name: def.name,
+    industry: def.industry,
+    employees: def.employees,
+    publicSlug: def.slug,
+    publishApplicationCount: def.publishApplicationCount,
+    agencyMarkupBps: def.agencyMarkupBps,
+  };
+  const bySlug = await prisma.company.findUnique({
+    where: { publicSlug: def.slug },
+    select: { id: true, name: true, publicSlug: true },
+  });
+  if (bySlug) {
+    return prisma.company.update({
+      where: { id: bySlug.id },
+      data: {
+        name: def.name,
+        industry: def.industry,
+        employees: def.employees,
+        publishApplicationCount: def.publishApplicationCount,
+        agencyMarkupBps: def.agencyMarkupBps,
+      },
+      select: { id: true, name: true, publicSlug: true },
+    });
+  }
+  const byName = await prisma.company.findFirst({
+    where: { name: def.name },
+    select: { id: true, publicSlug: true },
+  });
+  if (byName) {
+    const taken = await prisma.company.findUnique({
+      where: { publicSlug: def.slug },
+      select: { id: true },
+    });
+    return prisma.company.update({
+      where: { id: byName.id },
+      data: {
+        ...data,
+        publicSlug: !taken || taken.id === byName.id ? def.slug : byName.publicSlug,
+      },
+      select: { id: true, name: true, publicSlug: true },
+    });
+  }
+  return prisma.company.create({
+    data,
+    select: { id: true, name: true, publicSlug: true },
+  });
+}
+
+function roleToJobFields(role: RoleSpec, interviewerId: number) {
+  return {
+    title: role.title,
+    roleCategory: role.roleCategory,
+    experienceRange: role.experienceRange,
+    location: role.location,
+    compensationRange: role.compensationRange,
+    primarySkills: role.primarySkills,
+    mustHaveRequirements: role.mustHaveRequirements,
+    niceToHaveRequirements: role.niceToHaveRequirements,
+    jobDescription: role.jobDescription,
+    evaluationCriteria: role.evaluationCriteria,
+    interviewerId,
+    numberOfPositions: role.numberOfPositions,
+    interviewRoundPlan: role.interviewRoundPlan as InterviewType[],
+    posting: {
+      employmentType: role.employmentType,
+      seniorityLevel: role.seniorityLevel,
+      responsibilities: role.responsibilities,
+      benefits: role.benefits,
+      aboutCompany: role.aboutCompany,
+    },
+  };
+}
+
+async function ensureSlots(
+  jobId: number,
+  interviewerId: number,
+  companyIndex: number,
+  jobIndex: number,
+) {
+  const existing = await prisma.interviewSlot.count({ where: { jobId } });
+  if (existing > 0) return;
+  const base = new Date();
+  base.setUTCDate(base.getUTCDate() + 5);
+  base.setUTCHours(9, 0, 0, 0);
+  const offsetMs = (companyIndex * 6 + jobIndex) * 3600000;
+  try {
+    await prisma.interviewSlot.createMany({
+      data: [0, 1, 2].map((slot) => ({
+        jobId,
+        interviewerId,
+        interviewType: InterviewType.TECHNICAL,
+        startAt: new Date(base.getTime() + offsetMs + slot * 90 * 60000),
+        durationMinutes: 60,
+      })),
+    });
+  } catch {
+    // Unique (interviewerId, startAt) can collide on a dense re-run; skip.
+  }
+}
+
+async function seedPipelineRoster(input: {
+  token: string;
+  slug: string;
+  jobKey: string;
+  city: string;
+  compensation: string;
+}) {
+  for (let i = 0; i < PIPELINE_PACK.length; i += 1) {
+    const seat = PIPELINE_PACK[i]!;
+    const person = demoApplicant({
+      slug: input.slug,
+      jobKey: input.jobKey,
+      seatIndex: i,
+      city: input.city,
+    });
+    const already = await hostedApplyExists(person.email);
+    await simpleCandidate({
+      token: input.token,
+      name: person.name,
+      email: person.email,
+      scoreFraction: seat.scoreFraction,
+      pipelineStatus: seat.status as ApplicationPipelineStatus,
+      location: person.location,
+    });
+    if (already) continue;
+    const app = await applicationByEmail(person.email);
+    await stampSource(app.id, seat.source);
+    await attachSeatArtifacts(app.id, seat, input.compensation);
+  }
+}
+
+async function stampSource(applicationId: number, source: PipelineSeat["source"]) {
+  await prisma.applicationIngestionEvent.updateMany({
+    where: { applicationId },
+    data: { sourceChannel: source as ApplicationIngestionChannel },
+  });
+}
+
+async function attachSeatArtifacts(
+  applicationId: number,
+  seat: PipelineSeat,
+  compensation: string,
+) {
+  const existingInterviews = await prisma.interview.count({
+    where: { applicationId },
+  });
+  if (existingInterviews === 0 && seat.interviews.length > 0) {
+    const result =
+      seat.interviewResult === "PASSED"
+        ? InterviewResult.PASSED
+        : seat.interviewResult === "FAILED"
+          ? InterviewResult.FAILED
+          : InterviewResult.PENDING;
+    await prisma.interview.createMany({
+      data: seat.interviews.map((type, index) => ({
+        applicationId,
+        type: type as InterviewType,
+        interviewAt: new Date(Date.now() - (6 - index) * 86400000),
+        result,
+      })),
+    });
+  }
+
+  if (seat.offer !== "none") {
+    await stampOffer(applicationId, seat.offer, compensation);
+  }
+
+  if (seat.status === "SELECTED" || seat.status === "HIRED" || seat.offer === "declined") {
+    const interviewerId = await assignedInterviewer(
+      await jobIdForApplication(applicationId),
+    );
+    await prisma.evaluation.upsert({
+      where: {
+        applicationId_interviewerId: { applicationId, interviewerId },
+      },
+      create: {
+        applicationId,
+        interviewerId,
+        overallScore: seat.status === "HIRED" ? 88 : 74,
+        recommendation:
+          seat.status === "REJECTED" ? Recommendation.NO_HIRE : Recommendation.HIRE,
+        evaluatedAt: new Date(),
+      },
+      update: {},
+    });
+    const reports = await prisma.report.count({ where: { applicationId } });
+    if (reports === 0) {
+      await prisma.report.create({
+        data: {
+          applicationId,
+          recommendation:
+            seat.status === "REJECTED" ? Recommendation.NO_HIRE : Recommendation.HIRE,
+          notes:
+            seat.offer === "declined"
+              ? "Panel recommended hire; candidate declined the offer."
+              : "Panel aligned on evidence from assessment and interview.",
+        },
+      });
+    }
+    const tests = await prisma.codingTest.count({ where: { applicationId } });
+    if (tests === 0 && (seat.status === "HIRED" || seat.status === "SELECTED")) {
+      await prisma.codingTest.create({
+        data: {
+          applicationId,
+          title: "Take-home work sample",
+          score: seat.status === "HIRED" ? 90 : 78,
+          maxScore: 100,
+          takenAt: new Date(Date.now() - 4 * 86400000),
+          status: CodingTestStatus.COMPLETED,
+        },
+      });
+    }
+  }
+
+  if (seat.bill) {
+    await billHiredApplication(applicationId);
+  }
+}
+
+async function stampOffer(
+  applicationId: number,
+  kind: "minted" | "accepted" | "declined",
+  compensation: string,
+) {
+  const existing = await prisma.application.findUnique({
+    where: { id: applicationId },
+    select: { offerMintedAt: true },
+  });
+  if (existing?.offerMintedAt) return;
+  const now = new Date();
+  await prisma.application.update({
+    where: { id: applicationId },
+    data: {
+      offerAcceptanceTokenHash: sha256Hex(`offer_${randomBytes(24).toString("hex")}`),
+      offerMintedAt: now,
+      offerTerms:
+        kind === "declined"
+          ? "Standard full-time terms. Candidate declined."
+          : "Full-time employment. Probation 3 months. Notice 60 days. Benefits as discussed in the offer conversation.",
+      offerCompensation: compensation,
+      proposedStartDate: new Date(now.getTime() + 21 * 86400000),
+      offerAcceptedAt: kind === "accepted" ? now : null,
+      offerDeclinedAt: kind === "declined" ? now : null,
+    },
+  });
+}
+
+async function billHiredApplication(applicationId: number) {
+  const jobRow = await prisma.application.findUniqueOrThrow({
+    where: { id: applicationId },
+    select: {
+      jobId: true,
+      companyId: true,
+      job: { select: { requirementLifecycle: true } },
+    },
+  });
+  if (
+    jobRow.job.requirementLifecycle === "REQUIREMENT_POSTED" ||
+    jobRow.job.requirementLifecycle === "INTERVIEWER_NOTIFIED"
+  ) {
+    await prisma.job.update({
+      where: { id_companyId: { id: jobRow.jobId, companyId: jobRow.companyId } },
+      data: { requirementLifecycle: "SOURCING_SHORTLISTING" },
+    });
+  }
+  await prisma.$transaction(async (tx) => {
+    const hasLine = await tx.billingLineItem.findUnique({
+      where: { applicationId },
+      select: { id: true },
+    });
+    if (!hasLine) {
+      await generateBillingForHiredApplication(tx, applicationId);
+    }
+  });
 }
 
 main()

@@ -15,16 +15,82 @@ import { prisma } from "@/lib/prisma";
  * applications is infeasible (256-bit random).
  */
 
+export type OfferTermsInput = {
+  terms?: string | null;
+  compensation?: string | null;
+  proposedStartDate?: string | null;
+};
+
 export type OfferAcceptanceResult =
   | { ok: true; acceptUrlPath: string }
   | { ok: false; error: string };
+
+const offerPublicSelect = {
+  id: true,
+  offerAcceptedAt: true,
+  offerDeclinedAt: true,
+  offerTerms: true,
+  offerCompensation: true,
+  proposedStartDate: true,
+  candidate: { select: { name: true, location: true, expectedCTC: true } },
+  job: {
+    select: {
+      title: true,
+      location: true,
+      company: { select: { name: true } },
+    },
+  },
+} as const;
+
+export type PublicOfferRecord = {
+  id: number;
+  offerAcceptedAt: Date | null;
+  offerDeclinedAt: Date | null;
+  offerTerms: string | null;
+  offerCompensation: string | null;
+  proposedStartDate: Date | null;
+  candidate: { name: string; location: string | null; expectedCTC: string | null };
+  job: {
+    title: string;
+    location: string | null;
+    company: { name: string };
+  };
+};
 
 function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+export function isOfferTokenShape(rawToken: string): boolean {
+  return /^offer_[a-f0-9]{48}$/.test(rawToken);
+}
+
+function parseProposedStartDate(value: string | null | undefined): Date | null {
+  if (!value?.trim()) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function trimToNull(value: string | null | undefined, max = 4000): string | null {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return null;
+  return trimmed.slice(0, max);
+}
+
+export async function findApplicationByOfferToken(
+  rawToken: string,
+): Promise<PublicOfferRecord | null> {
+  if (!isOfferTokenShape(rawToken)) return null;
+  return prisma.application.findUnique({
+    where: { offerAcceptanceTokenHash: sha256Hex(rawToken) },
+    select: offerPublicSelect,
+  });
+}
+
 export async function mintOfferAcceptance(
   applicationId: number,
+  terms: OfferTermsInput = {},
 ): Promise<OfferAcceptanceResult> {
   let companyId: number | null;
   try {
@@ -56,10 +122,22 @@ export async function mintOfferAcceptance(
     return { ok: false, error: "This offer has already been accepted." };
   }
 
+  const proposedStartDate = parseProposedStartDate(terms.proposedStartDate);
+  if (terms.proposedStartDate?.trim() && !proposedStartDate) {
+    return { ok: false, error: "Proposed start date is invalid." };
+  }
+
   const rawToken = `offer_${randomBytes(24).toString("hex")}`;
   await prisma.application.update({
     where: { id: application.id },
-    data: { offerAcceptanceTokenHash: sha256Hex(rawToken) },
+    data: {
+      offerAcceptanceTokenHash: sha256Hex(rawToken),
+      offerMintedAt: new Date(),
+      offerDeclinedAt: null,
+      offerTerms: trimToNull(terms.terms),
+      offerCompensation: trimToNull(terms.compensation, 200),
+      proposedStartDate,
+    },
   });
 
   return { ok: true, acceptUrlPath: `/offer/${rawToken}` };
@@ -72,26 +150,23 @@ export async function mintOfferAcceptance(
 export async function acceptOffer(
   rawToken: string,
 ): Promise<
-  | { ok: true; alreadyAccepted: boolean; acceptedAt: Date | null; candidateName: string; jobTitle: string; companyName: string }
+  | {
+      ok: true;
+      alreadyAccepted: boolean;
+      acceptedAt: Date | null;
+      candidateName: string;
+      jobTitle: string;
+      companyName: string;
+    }
   | { ok: false; error: string }
 > {
-  if (!/^offer_[a-f0-9]{48}$/.test(rawToken)) {
-    return { ok: false, error: "Invalid offer link." };
-  }
-
-  const application = await prisma.application.findUnique({
-    where: { offerAcceptanceTokenHash: sha256Hex(rawToken) },
-    select: {
-      id: true,
-      offerAcceptedAt: true,
-      candidate: { select: { name: true } },
-      job: {
-        select: { title: true, company: { select: { name: true } } },
-      },
-    },
-  });
+  const application = await findApplicationByOfferToken(rawToken);
   if (!application) {
     return { ok: false, error: "This offer link is invalid or was revoked." };
+  }
+
+  if (application.offerDeclinedAt) {
+    return { ok: false, error: "This offer was declined." };
   }
 
   if (application.offerAcceptedAt) {
@@ -105,17 +180,109 @@ export async function acceptOffer(
     };
   }
 
+  const now = new Date();
   const updated = await prisma.application.updateMany({
-    // Guarded update: only stamp when not already accepted (race-safe).
-    where: { id: application.id, offerAcceptedAt: null },
-    data: { offerAcceptedAt: new Date() },
+    where: {
+      id: application.id,
+      offerAcceptedAt: null,
+      offerDeclinedAt: null,
+    },
+    data: { offerAcceptedAt: now },
   });
 
-  const acceptedAt = updated.count > 0 ? new Date() : application.offerAcceptedAt;
+  if (updated.count === 0) {
+    const latest = await prisma.application.findUnique({
+      where: { id: application.id },
+      select: { offerAcceptedAt: true, offerDeclinedAt: true },
+    });
+    if (latest?.offerDeclinedAt) {
+      return { ok: false, error: "This offer was declined." };
+    }
+    return {
+      ok: true,
+      alreadyAccepted: true,
+      acceptedAt: latest?.offerAcceptedAt ?? null,
+      candidateName: application.candidate.name,
+      jobTitle: application.job.title,
+      companyName: application.job.company.name,
+    };
+  }
+
   return {
     ok: true,
-    alreadyAccepted: updated.count === 0,
-    acceptedAt,
+    alreadyAccepted: false,
+    acceptedAt: now,
+    candidateName: application.candidate.name,
+    jobTitle: application.job.title,
+    companyName: application.job.company.name,
+  };
+}
+
+export async function declineOffer(
+  rawToken: string,
+): Promise<
+  | {
+      ok: true;
+      alreadyDeclined: boolean;
+      declinedAt: Date | null;
+      candidateName: string;
+      jobTitle: string;
+      companyName: string;
+    }
+  | { ok: false; error: string }
+> {
+  const application = await findApplicationByOfferToken(rawToken);
+  if (!application) {
+    return { ok: false, error: "This offer link is invalid or was revoked." };
+  }
+
+  if (application.offerAcceptedAt) {
+    return { ok: false, error: "This offer was already accepted." };
+  }
+
+  if (application.offerDeclinedAt) {
+    return {
+      ok: true,
+      alreadyDeclined: true,
+      declinedAt: application.offerDeclinedAt,
+      candidateName: application.candidate.name,
+      jobTitle: application.job.title,
+      companyName: application.job.company.name,
+    };
+  }
+
+  const now = new Date();
+  const updated = await prisma.application.updateMany({
+    where: {
+      id: application.id,
+      offerAcceptedAt: null,
+      offerDeclinedAt: null,
+    },
+    data: { offerDeclinedAt: now },
+  });
+
+  if (updated.count === 0) {
+    const latest = await prisma.application.findUnique({
+      where: { id: application.id },
+      select: { offerAcceptedAt: true, offerDeclinedAt: true },
+    });
+    if (latest?.offerAcceptedAt) {
+      return { ok: false, error: "This offer was already accepted." };
+    }
+    return {
+      ok: true,
+      alreadyDeclined: true,
+      declinedAt: latest?.offerDeclinedAt ?? null,
+      candidateName: application.candidate.name,
+      jobTitle: application.job.title,
+      companyName: application.job.company.name,
+    };
+  }
+
+  return {
+    ok: true,
+    alreadyDeclined: false,
+    declinedAt: now,
     candidateName: application.candidate.name,
     jobTitle: application.job.title,
     companyName: application.job.company.name,

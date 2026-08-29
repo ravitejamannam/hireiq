@@ -27,6 +27,7 @@ const distributionInclude = {
       mustHaveRequirements: true,
       publishedAt: true,
       targetHireDate: true,
+      structuredPayload: true,
     },
   },
   job: {

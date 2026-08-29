@@ -134,6 +134,10 @@ export const clientFitDecisionLabels: Record<string, string> = {
 export const clientSourceLabels: Record<string, string> = {
   LINKEDIN: "LinkedIn",
   NAUKRI: "Naukri",
+  HOSTED_APPLY: "Hosted apply",
+  INDEED: "Indeed",
+  REFERRAL: "Referral",
+  MANUAL: "Manual",
 };
 
 export function formatClientOptional(value: string | number | null | undefined) {

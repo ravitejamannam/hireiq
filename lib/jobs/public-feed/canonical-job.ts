@@ -1,5 +1,11 @@
 import { Prisma } from "@prisma/client";
 
+import {
+  inferEmploymentType,
+  parseJobPostingNarrative,
+  type EmploymentType,
+} from "@/lib/jobs/job-posting-view";
+
 /**
  * Canonical public job projection (T96 Phase 1).
  *
@@ -11,7 +17,7 @@ import { Prisma } from "@prisma/client";
  * consumers may pin to a version for reproducible rendering (§43).
  */
 
-export const CANONICAL_FEED_VERSION = 1;
+export const CANONICAL_FEED_VERSION = 2;
 
 export type CanonicalJobPosting = {
   externalRef: string; // stable public reference: distribution id
@@ -20,6 +26,7 @@ export type CanonicalJobPosting = {
   companyName: string;
   companyPublicSlug: string;
   location: string | null;
+  employmentType: EmploymentType | null;
   description: string;
   applyUrl: string;
   datePosted: Date;
@@ -39,11 +46,12 @@ type DistributionWithSpec = Prisma.JobDistributionGetPayload<{
         mustHaveRequirements: true;
         publishedAt: true;
         targetHireDate: true;
+        structuredPayload: true;
       };
     };
     job: {
       select: {
-        company: { select: { name: true, publicSlug: true } },
+        company: { select: { name: true; publicSlug: true } };
       };
     };
   };
@@ -60,6 +68,22 @@ export function toCanonicalJobPosting(
   const description = (spec.jobDescription ?? spec.mustHaveRequirements ?? "").trim();
   if (!description) return null;
 
+  const narrative = parseJobPostingNarrative(spec.structuredPayload);
+  const employmentType =
+    narrative?.employmentType ??
+    inferEmploymentType({
+      title: spec.title,
+      companyName: row.job.company.name,
+      location: spec.location,
+      jobDescription: spec.jobDescription,
+      experienceRange: null,
+      numberOfPositions: null,
+      compensationRange: null,
+      mustHaveRequirements: spec.mustHaveRequirements,
+      niceToHaveRequirements: null,
+      primarySkills: null,
+    });
+
   return {
     externalRef: `dist-${row.id}`,
     distributionId: row.id,
@@ -67,6 +91,7 @@ export function toCanonicalJobPosting(
     companyName: row.job.company.name,
     companyPublicSlug: row.job.company.publicSlug,
     location: spec.location?.trim() || null,
+    employmentType,
     description,
     applyUrl,
     datePosted: spec.publishedAt ?? row.createdAt,

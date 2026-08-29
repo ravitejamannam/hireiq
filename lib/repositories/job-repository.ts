@@ -32,6 +32,7 @@ const jobSelect = {
   sourcingAccessReceivedAt: true,
   shortlistingDueAt: true,
   shortlistingCompletedAt: true,
+  interviewRoundPlan: true,
   createdAt: true,
   updatedAt: true,
   currentPublishedSpecificationVersion: {

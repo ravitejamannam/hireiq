@@ -14,6 +14,7 @@ import { requireClientPortal } from "@/lib/auth/authorization";
 import { getClientApplicationsForRequirement } from "@/lib/repositories/application-repository";
 import { getJobById } from "@/lib/repositories/job-repository";
 import { getAssessmentLeaderboardForJob } from "@/lib/assessments/assessment-service";
+import { getRequirementHiringDesk } from "@/lib/hiring/requirement-desk";
 
 type ClientRequirementDetailPageProps = {
   params: Promise<{
@@ -47,7 +48,7 @@ export default async function ClientRequirementDetailPage({
     notFound();
   }
 
-  const [applications, connections, distributions, assessmentLeaderboard] =
+  const [applications, connections, distributions, assessmentLeaderboard, hiringDesk] =
     await Promise.all([
       getClientApplicationsForRequirement(requirementId),
       listProviderConnectionsForCompany(client.companyId),
@@ -58,6 +59,7 @@ export default async function ClientRequirementDetailPage({
       getAssessmentLeaderboardForJob(requirementId, {
         audience: "hiring",
       }).catch(() => null),
+      getRequirementHiringDesk(requirementId),
     ]);
 
   const pipelineCounts = countPipelineStatuses(
@@ -161,6 +163,7 @@ export default async function ClientRequirementDetailPage({
         connections={connections}
         distributions={distributions}
         assessmentLeaderboard={assessmentLeaderboard}
+        hiringDesk={hiringDesk}
       />
     </div>
   );

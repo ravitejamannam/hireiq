@@ -12,15 +12,18 @@ export default function Footer() {
           <span className="text-xs text-zinc-400">· Hiring you can prove.</span>
         </div>
         <nav className="flex items-center gap-6 text-xs font-medium text-zinc-500">
+          <Link href="/careers" className="transition hover:text-zinc-900">
+            Careers
+          </Link>
           <Link href="/login" className="transition hover:text-zinc-900">
             Log in
           </Link>
           <Link href="/signup" className="transition hover:text-zinc-900">
             Sign up
           </Link>
-          <a href="#faq" className="transition hover:text-zinc-900">
+          <Link href="/#faq" className="transition hover:text-zinc-900">
             FAQ
-          </a>
+          </Link>
         </nav>
       </div>
     </footer>

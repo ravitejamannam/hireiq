@@ -62,12 +62,12 @@ export default function Hero() {
                   className="transition-transform group-hover:translate-x-0.5"
                 />
               </Link>
-              <a
-                href="#workflow"
+              <Link
+                href="/careers"
                 className="inline-flex items-center justify-center gap-2 rounded-full border border-stone-300 bg-white px-7 py-3.5 text-sm font-bold text-stone-800 transition hover:border-stone-400"
               >
-                See how it works
-              </a>
+                Browse open roles
+              </Link>
             </div>
 
             <p className="mt-6 flex items-center gap-2 text-xs font-medium text-stone-500">

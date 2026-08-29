@@ -8,6 +8,7 @@ import {
 import { getJobEvidenceCapture } from "@/lib/candidates/evidence-capture/evidence-capture-service";
 import { getJobRanking } from "@/lib/candidates/ranking/ranking-service";
 import { getAssessmentLeaderboardForJob } from "@/lib/assessments/assessment-service";
+import { getRequirementHiringDesk } from "@/lib/hiring/requirement-desk";
 import { getApplicationsByJobId } from "@/lib/repositories/application-repository";
 import { getBillingForRequirement } from "@/lib/repositories/billing-repository";
 import { getEvaluationsByJobId } from "@/lib/repositories/evaluation-repository";
@@ -39,6 +40,7 @@ export default async function RequirementWorkspacePage({
     interviews,
     interviewers,
     billingRecords,
+    hiringDesk,
   ] = await Promise.all([
     getJobById(requirementId),
     getApplicationsByJobId(requirementId),
@@ -46,6 +48,7 @@ export default async function RequirementWorkspacePage({
     getInterviewsByJobId(requirementId),
     getInterviewers(),
     getBillingForRequirement(requirementId),
+    getRequirementHiringDesk(requirementId),
   ]);
 
   if (!requirement) {
@@ -112,6 +115,7 @@ export default async function RequirementWorkspacePage({
       ranking={ranking}
       evidenceCapture={evidenceCapture}
       assessmentLeaderboard={assessmentLeaderboard}
+      hiringDesk={hiringDesk}
       applyUrl={applyUrl}
       distributionId={distributionRow?.id ?? null}
       companyId={requirement.companyId}

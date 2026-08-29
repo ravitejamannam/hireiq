@@ -6,6 +6,7 @@ type CompanyFormData = {
   name: string;
   industry: string;
   employees: number;
+  publishApplicationCount?: boolean;
 };
 
 

@@ -7,10 +7,16 @@ import {
   requireClientPortal,
   requireUser,
 } from "@/lib/auth/authorization";
-import { PortalRole, Prisma } from "@prisma/client";
+import {
+  InterviewType,
+  JobStatus,
+  PortalRole,
+  Prisma,
+  RequirementLifecycle,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import type { JobStatus, RequirementLifecycle } from "@prisma/client";
+import { parseInterviewRoundPlanInput } from "@/lib/hiring/interview-rounds";
 import {
   validateJobId,
   validateJobInput,
@@ -708,4 +714,24 @@ export async function completeJobShortlisting(jobId: number) {
     }),
     email: null,
   };
+}
+
+export async function setInterviewRoundPlan(
+  jobId: number,
+  types: InterviewType[],
+) {
+  await requireAdmin();
+  const validatedJobId = validateJobId(jobId);
+  const plan = parseInterviewRoundPlanInput(types);
+  if (plan === null) {
+    throw new JobValidationError("Interview round plan is invalid.");
+  }
+
+  await prisma.job.update({
+    where: { id: validatedJobId },
+    data: { interviewRoundPlan: plan },
+  });
+
+  revalidatePath(`/dashboard/requirements/${validatedJobId}`);
+  return plan;
 }

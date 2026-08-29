@@ -36,9 +36,13 @@ import MintOfferLinkButton from "@/components/offers/MintOfferLinkButton";
 import JobEvidenceCapturePanel from "@/components/requirements/JobEvidenceCapturePanel";
 import JobRankingPanel from "@/components/requirements/JobRankingPanel";
 import AssessmentLeaderboardPanel from "@/components/assess/AssessmentLeaderboardPanel";
+import HiringFunnelPanel from "@/components/hiring/HiringFunnelPanel";
+import ApplicationTimeline from "@/components/hiring/ApplicationTimeline";
+import InterviewRoundPlanForm from "@/components/hiring/InterviewRoundPlanForm";
 import type { JobEvidenceCapturePageData } from "@/lib/candidates/evidence-capture/evidence-capture-types";
 import type { JobRankingPageData } from "@/lib/candidates/ranking/ranking-types";
 import type { AssessmentLeaderboardPage } from "@/lib/assessments/assessment-service";
+import type { RequirementHiringDesk } from "@/lib/hiring/requirement-desk";
 import type { getApplicationsByJobId } from "@/lib/repositories/application-repository";
 import type { getEvaluationsByJobId } from "@/lib/repositories/evaluation-repository";
 import type { getInterviewsByJobId } from "@/lib/repositories/interview-repository";
@@ -74,6 +78,7 @@ type RequirementWorkspaceClientProps = {
   ranking?: JobRankingPageData | null;
   evidenceCapture?: JobEvidenceCapturePageData | null;
   assessmentLeaderboard?: AssessmentLeaderboardPage | null;
+  hiringDesk?: RequirementHiringDesk | null;
   applyUrl?: string | null;
   distributionId?: number | null;
   companyId?: number;
@@ -137,6 +142,7 @@ export default function RequirementWorkspaceClient({
   ranking,
   evidenceCapture,
   assessmentLeaderboard,
+  hiringDesk,
   applyUrl,
   distributionId,
   companyId,
@@ -604,7 +610,11 @@ export default function RequirementWorkspaceClient({
                   >
                     <p className="text-xs font-semibold text-zinc-800">
                       {a.candidate.name}
-                      {a.offerAcceptedAt ? " · ✓ accepted" : ""}
+                      {a.offerAcceptedAt
+                        ? " · ✓ accepted"
+                        : a.offerDeclinedAt
+                          ? " · declined"
+                          : ""}
                     </p>
                     <MintOfferLinkButton applicationId={a.id} />
                   </div>
@@ -773,6 +783,14 @@ export default function RequirementWorkspaceClient({
             </p>
           </div>
 
+          <div className="mt-6">
+            <InterviewRoundPlanForm
+              jobId={requirement.id}
+              storedPlan={requirement.interviewRoundPlan ?? []}
+              progress={hiringDesk?.interviewRounds ?? []}
+            />
+          </div>
+
           {interviews.length === 0 ? (
             <div className="mt-8 rounded-2xl border border-dashed border-zinc-300 bg-white py-16 text-center">
               <p className="text-lg font-medium text-black">
@@ -819,12 +837,28 @@ export default function RequirementWorkspaceClient({
       )}
 
       {activeTab === "activity" && (
-        <div className="mt-8 rounded-2xl border border-dashed border-zinc-300 bg-white py-16 text-center">
-          <h2 className="text-xl font-bold text-black">Activity</h2>
-          <p className="mt-3 text-sm text-zinc-600">
-            Activity history is not available yet. This section is deferred
-            until an audit trail exists.
-          </p>
+        <div className="mt-8 space-y-8">
+          {hiringDesk ? (
+            <HiringFunnelPanel
+              report={hiringDesk}
+              title="Requirement funnel"
+            />
+          ) : (
+            <p className="text-sm text-zinc-500">Funnel is not available.</p>
+          )}
+          <section className="rounded-xl border border-zinc-200 bg-white p-6">
+            <h2 className="text-lg font-bold text-black">Applicant timeline</h2>
+            <p className="mt-1 text-sm text-zinc-600">
+              Apply, assessment, evaluations, interviews, ranking, and offer
+              events. These stay separate — there is no combined HireIQ score.
+            </p>
+            <div className="mt-6">
+              <ApplicationTimeline
+                events={hiringDesk?.events ?? []}
+                showCandidate
+              />
+            </div>
+          </section>
         </div>
       )}
 

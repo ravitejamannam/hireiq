@@ -36,6 +36,7 @@ import {
   type SourcedCandidateInput,
 } from "@/lib/validation/application-validation";
 import { BillingValidationError } from "@/lib/validation/billing-validation";
+import { shortlistedAtPatch } from "@/lib/hiring/pipeline-timestamps";
 import { revalidatePath } from "next/cache";
 import {
   ApplicationPipelineStatus,
@@ -91,7 +92,7 @@ export async function updateApplication(
 
   const existingApplication = await prisma.application.findUnique({
     where: { id: applicationId },
-    select: { status: true },
+    select: { status: true, shortlistedAt: true },
   });
 
   if (!existingApplication) {
@@ -117,7 +118,13 @@ export async function updateApplication(
       where: {
         id: applicationId,
       },
-      data: applicationInput,
+      data: {
+        ...applicationInput,
+        ...shortlistedAtPatch(
+          applicationInput.status,
+          existingApplication.shortlistedAt,
+        ),
+      },
     });
 
     revalidatePath("/dashboard/applications");
@@ -402,11 +409,12 @@ export async function transitionApplicationStatus(
     where: {
       id: applicationId,
     },
-    select: {
+      select: {
       id: true,
       status: true,
       jobId: true,
       companyId: true,
+      shortlistedAt: true,
     },
   });
 
@@ -429,6 +437,7 @@ export async function transitionApplicationStatus(
       data: {
         status: nextStatus,
         ...(rejectionReason && { rejectionReason }),
+        ...shortlistedAtPatch(nextStatus, application.shortlistedAt),
       },
     });
   } catch (error) {
@@ -504,6 +513,7 @@ export async function transitionInterviewerApplicationStatus(
       status: true,
       jobId: true,
       companyId: true,
+      shortlistedAt: true,
       job: {
         select: {
           assignedInterviewerId: true,
@@ -539,6 +549,7 @@ export async function transitionInterviewerApplicationStatus(
       },
       data: {
         status: nextStatus,
+        ...shortlistedAtPatch(nextStatus, application.shortlistedAt),
       },
     });
 

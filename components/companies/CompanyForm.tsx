@@ -6,6 +6,7 @@ type CompanyFormData = {
   name: string;
   industry: string;
   employees: number;
+  publishApplicationCount?: boolean;
 };
 
 type CompanyFormProps = {
@@ -19,6 +20,9 @@ export default function CompanyForm({ onCreate, onCancel, initialValues }: Compa
 const [industry, setIndustry] = useState(initialValues?.industry ?? "");
 const [employees, setEmployees] = useState(
   initialValues?.employees.toString() ?? ""
+);
+const [publishApplicationCount, setPublishApplicationCount] = useState(
+  initialValues?.publishApplicationCount ?? false,
 );
 
   const [nameError, setNameError] = useState("");
@@ -55,6 +59,7 @@ const [employees, setEmployees] = useState(
       name: name.trim(),
       industry: industry.trim(),
       employees: Number(employees),
+      publishApplicationCount,
     });
     setName("");
     setIndustry("");
@@ -152,6 +157,23 @@ const [employees, setEmployees] = useState(
           <p className="mt-2 text-sm text-red-600">{employeesError}</p>
         )}
       </div>
+
+      <label className="flex items-start gap-3 rounded-lg border border-zinc-200 px-4 py-3">
+        <input
+          type="checkbox"
+          checked={publishApplicationCount}
+          onChange={(event) => setPublishApplicationCount(event.target.checked)}
+          className="mt-1"
+        />
+        <span>
+          <span className="block text-sm font-medium text-black">
+            Show application counts on the public careers page
+          </span>
+          <span className="mt-1 block text-xs text-zinc-500">
+            Off by default. Counts are totals, not a quality signal.
+          </span>
+        </span>
+      </label>
 
       <div className="flex justify-end gap-3">
         <button

@@ -45,6 +45,7 @@ export async function GET(request: Request) {
       <title>${escapeXml(job.title)}</title>
       <company>${escapeXml(job.companyName)}</company>
       ${job.location ? `<location>${escapeXml(job.location)}</location>` : ""}
+      ${job.employmentType ? `<employmentType>${escapeXml(job.employmentType)}</employmentType>` : ""}
       <description>${escapeXml(job.description)}</description>
       <url>${escapeXml(job.applyUrl)}</url>
       <reference>${escapeXml(job.externalRef)}</reference>

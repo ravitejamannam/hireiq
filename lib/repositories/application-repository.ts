@@ -18,6 +18,11 @@ const applicationSelect = {
   expertScore: true,
   rejectionReason: true,
   offerAcceptedAt: true,
+  offerMintedAt: true,
+  offerDeclinedAt: true,
+  offerTerms: true,
+  offerCompensation: true,
+  proposedStartDate: true,
   candidate: {
     select: {
       id: true,

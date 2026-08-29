@@ -79,54 +79,54 @@ export default async function PublicJobPage({ params }: PageProps) {
     hostedApplyPathFromSnapshot(job.applyUrl) ?? job.applyUrl;
 
   return (
-    <main className="min-h-screen bg-[#F7F4EE]">
+    <main className="min-h-screen bg-[#F7F4EE] text-zinc-900">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <article className="mx-auto max-w-3xl px-6 py-12">
-        <header className="rounded-2xl border border-stone-200 bg-white p-8 shadow-sm">
-          <p className="text-sm font-medium text-stone-500">{job.companyName}</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-stone-900">
+        <header className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <p className="text-sm font-medium text-zinc-500">{job.companyName}</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-900">
             {title}
           </h1>
           {job.location ? (
-            <p className="mt-2 text-stone-600">{job.location}</p>
+            <p className="mt-2 text-zinc-600">{job.location}</p>
           ) : null}
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <Link
               href={applyHref}
-              className="inline-flex items-center rounded-full bg-stone-900 px-5 py-2.5 text-sm font-semibold text-[#FBF9F4] transition hover:bg-stone-700"
+              className="inline-flex items-center rounded-full bg-[#211d19] px-5 py-2.5 text-sm font-semibold text-[#FBF9F4] transition hover:bg-zinc-800"
             >
               Apply now
             </Link>
-            <span className="text-xs text-stone-500">
+            <span className="text-xs text-zinc-500">
               Apply, take the role assessment, see the public board. Assessment
               is not a hire score.
             </span>
           </div>
         </header>
 
-        <section className="mt-8 rounded-2xl border border-stone-200 bg-white p-8 shadow-sm">
-          <h2 className="text-lg font-semibold text-stone-900">About the role</h2>
-          <div className="prose prose-stone mt-4 max-w-none whitespace-pre-line text-stone-700">
+        <section className="mt-8 rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <h2 className="text-lg font-semibold text-zinc-900">About the role</h2>
+          <div className="prose mt-4 max-w-none whitespace-pre-line text-zinc-700">
             {job.description}
           </div>
         </section>
 
-        <footer className="mt-8 text-center text-sm text-stone-500">
+        <footer className="mt-8 text-center text-sm text-zinc-500">
           {job.companyPublicSlug ? (
             <p>
               <Link
                 href={`/careers/${encodeURIComponent(job.companyPublicSlug)}`}
-                className="font-semibold underline underline-offset-2 hover:text-stone-800"
+                className="font-semibold underline underline-offset-2 hover:text-zinc-800"
               >
                 More open roles at {job.companyName}
               </Link>
             </p>
           ) : null}
-          <p className="mt-4 text-xs text-stone-400">
-            <Link href="/" className="hover:text-stone-600">
+          <p className="mt-4 text-xs text-zinc-400">
+            <Link href="/" className="hover:text-zinc-600">
               Powered by HireIQ
             </Link>
           </p>

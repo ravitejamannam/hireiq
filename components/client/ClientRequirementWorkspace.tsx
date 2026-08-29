@@ -24,7 +24,9 @@ import JobPostingDetail from "@/components/jobs/JobPostingDetail";
 import type { SafeProviderConnection } from "@/lib/jobs/distribution/connection-service";
 import type { SafeJobDistribution } from "@/lib/jobs/distribution/distribution-service";
 import type { AssessmentLeaderboardPage } from "@/lib/assessments/assessment-service";
+import type { RequirementHiringDesk } from "@/lib/hiring/requirement-desk";
 import AssessmentLeaderboardPanel from "@/components/assess/AssessmentLeaderboardPanel";
+import HiringFunnelPanel from "@/components/hiring/HiringFunnelPanel";
 import { resolveJobPostingView } from "@/lib/jobs/job-posting-view";
 
 const roleCategoryLabels: Record<RoleCategory, string> = {
@@ -79,6 +81,7 @@ type ClientRequirementWorkspaceProps = {
   connections: SafeProviderConnection[];
   distributions: SafeJobDistribution[];
   assessmentLeaderboard?: AssessmentLeaderboardPage | null;
+  hiringDesk?: RequirementHiringDesk | null;
 };
 
 function lifecycleGuidance(lifecycle: RequirementLifecycle) {
@@ -134,6 +137,7 @@ export default function ClientRequirementWorkspace({
   connections,
   distributions,
   assessmentLeaderboard,
+  hiringDesk,
 }: ClientRequirementWorkspaceProps) {
   const [section, setSection] = useState<"overview" | "candidates">(
     initialSection,
@@ -190,6 +194,15 @@ export default function ClientRequirementWorkspace({
         />
       ) : (
         <>
+          {hiringDesk ? (
+            <div className="mt-8">
+              <HiringFunnelPanel
+                report={hiringDesk}
+                title="Requirement funnel"
+              />
+            </div>
+          ) : null}
+
           <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
             <JobPostingDetail
               view={postingView(requirement)}

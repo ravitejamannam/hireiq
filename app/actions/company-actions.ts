@@ -9,6 +9,7 @@ export async function createCompany(
   name: string,
   industry: string,
   employees: number,
+  publishApplicationCount = false,
 ) {
   await requireAdmin();
   const publicSlug = await allocateCompanyPublicSlug(name);
@@ -18,6 +19,7 @@ export async function createCompany(
       industry,
       employees,
       publicSlug,
+      publishApplicationCount,
     },
   });
 
@@ -42,6 +44,7 @@ export async function updateCompany(
   name: string,
   industry: string,
   employees: number,
+  publishApplicationCount?: boolean,
 ) {
   await requireAdmin();
   const company = await prisma.company.update({
@@ -53,6 +56,9 @@ export async function updateCompany(
       name,
       industry,
       employees,
+      ...(typeof publishApplicationCount === "boolean"
+        ? { publishApplicationCount }
+        : {}),
     },
   });
 
