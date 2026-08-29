@@ -10,6 +10,7 @@
     "postinstall": "prisma generate",
     "db:bootstrap-admin": "tsx scripts/bootstrap-admin.ts",
     "db:bootstrap-dev": "tsx scripts/seed-demo-world.ts",
+    "db:bootstrap-dev:full": "DEMO_SEED_MODE=full tsx scripts/seed-demo-world.ts",
     "db:seed-assessment-bank": "tsx scripts/seed-assessment-bank.ts",
     "test": "vitest run"
   },

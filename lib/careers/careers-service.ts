@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { prisma } from "@/lib/prisma";
 import { isValidPublicSlug } from "@/lib/companies/public-slug";
 import {
@@ -12,7 +14,6 @@ import {
   listPublicFeedJobs,
   publicHostedDistributionWhere,
 } from "@/lib/jobs/public-feed/public-feed-service";
-import { toCanonicalJobPosting } from "@/lib/jobs/public-feed/canonical-job";
 
 export type PublicCareersHub = {
   slug: string;
@@ -35,7 +36,7 @@ async function authoredAboutCompany(companyId: number): Promise<string | null> {
       },
     },
     orderBy: { createdAt: "desc" },
-    take: 20,
+    take: 8,
   });
 
   const abouts: string[] = [];
@@ -53,7 +54,7 @@ async function authoredAboutCompany(companyId: number): Promise<string | null> {
   );
 }
 
-export async function getPublicCareersHub(
+async function loadPublicCareersHub(
   companySlug: string,
   query: CareersQuery = {},
 ): Promise<PublicCareersHub | null> {
@@ -133,6 +134,11 @@ export async function getPublicCareersHub(
   };
 }
 
+/**
+ * Request-deduped hub loader — metadata + page share one DB trip.
+ */
+export const getPublicCareersHub = cache(loadPublicCareersHub);
+
 export type PublicCareersDirectoryEntry = {
   slug: string;
   companyName: string;
@@ -142,28 +148,14 @@ export type PublicCareersDirectoryEntry = {
 
 /**
  * Public index of companies that currently have at least one HireIQ-hosted
- * open role. Slug + name only — no tenant ids.
+ * open role. Lightweight count only — no posting payloads.
  */
-export async function listPublicCareersDirectory(): Promise<
+async function loadPublicCareersDirectory(): Promise<
   PublicCareersDirectoryEntry[]
 > {
   const rows = await prisma.jobDistribution.findMany({
     where: publicHostedDistributionWhere(),
     select: {
-      id: true,
-      createdAt: true,
-      applyUrlSnapshot: true,
-      pinnedSpecificationVersion: {
-        select: {
-          title: true,
-          location: true,
-          jobDescription: true,
-          mustHaveRequirements: true,
-          publishedAt: true,
-          targetHireDate: true,
-          structuredPayload: true,
-        },
-      },
       job: {
         select: {
           company: {
@@ -172,14 +164,11 @@ export async function listPublicCareersDirectory(): Promise<
         },
       },
     },
-    orderBy: { createdAt: "desc" },
     take: 500,
   });
 
   const bySlug = new Map<string, PublicCareersDirectoryEntry>();
   for (const row of rows) {
-    const posting = toCanonicalJobPosting(row);
-    if (!posting) continue;
     const company = row.job.company;
     const existing = bySlug.get(company.publicSlug);
     if (existing) {
@@ -198,3 +187,5 @@ export async function listPublicCareersDirectory(): Promise<
     a.companyName.localeCompare(b.companyName),
   );
 }
+
+export const listPublicCareersDirectory = cache(loadPublicCareersDirectory);

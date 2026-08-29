@@ -7,7 +7,7 @@ import { getPublicCareersHub } from "@/lib/careers/careers-service";
 import { getPublicAppUrl } from "@/lib/communication/email-config";
 import { displayJobTitle } from "@/lib/jobs/job-posting-view";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 type PageProps = {
   params: Promise<{ companySlug: string }>;

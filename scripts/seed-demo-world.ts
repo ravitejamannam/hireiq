@@ -4,10 +4,17 @@
  * 8 companies × 6 live openings × 8 pipeline seats, plus Nimbus as the
  * deep path (resume claim, assessment integrity, matching, ranking, rubric).
  *
- * Built through real service functions wherever the codebase allows.
+ * Speed modes (DEMO_SEED_MODE):
+ *   fast (default) — roster seats are DB fixtures (~1–2 min). Nimbus
+ *                    showcase candidates still use real services.
+ *   full           — every apply/assessment goes through real services
+ *                    (~30 min on Neon). Use only when proving the path.
+ *
  * Idempotent: safe to re-run; existing rows are skipped.
  *
- * Usage: pnpm db:bootstrap-dev   (BOOTSTRAP_PASSWORD or ADMIN_PASSWORD)
+ * Usage:
+ *   pnpm db:bootstrap-dev
+ *   DEMO_SEED_MODE=full pnpm db:bootstrap-dev
  */
 
 import "dotenv/config";
@@ -56,6 +63,10 @@ import {
   type RoleSpec,
 } from "./demo-world/catalog";
 
+/** Default fast: fixtures for volume. Set DEMO_SEED_MODE=full to exercise every service call. */
+const SEED_MODE = process.env.DEMO_SEED_MODE === "full" ? "full" : "fast";
+const FAST_CONCURRENCY = 8;
+
 async function main() {
   const passwordRaw =
     process.env.BOOTSTRAP_PASSWORD ?? process.env.ADMIN_PASSWORD;
@@ -76,6 +87,7 @@ async function main() {
 
   await upsertAssessmentBank(prisma);
   console.log("✓ assessment bank");
+  console.log(`✓ seed mode: ${SEED_MODE}${SEED_MODE === "fast" ? " (fixtures for roster; Nimbus deep path stays real)" : " (every apply via real services)"}`);
 
   const interviewerIds: Record<string, number> = {};
   for (const iv of DEMO_INTERVIEWERS) {
@@ -152,7 +164,7 @@ async function main() {
         );
         if (!(await hostedApplyExists("ananya.demo@example.com"))) {
           await candidateViaRealServices({
-            token: distribution.applyToken!,
+            token: distribution.applyToken,
             name: "Ananya Sharma",
             email: "ananya.demo@example.com",
             resumeText:
@@ -160,35 +172,70 @@ async function main() {
             integrity: { tabSwitches: 1, pastes: 0, copies: 2 },
           });
         }
-        await simpleCandidate({
-          token: distribution.applyToken!,
-          name: "Rohit Verma",
-          email: "rohit.demo@example.com",
-          scoreFraction: 0.6,
-          pipelineStatus: ApplicationPipelineStatus.TECH_EVALUATION,
-        });
-        await simpleCandidate({
-          token: distribution.applyToken!,
-          name: "Meera Joshi",
-          email: "meera.demo@example.com",
-          scoreFraction: null,
-          pipelineStatus: ApplicationPipelineStatus.CV_POOL,
-        });
+        // Named story seats: real path only in full mode; fixtures in fast mode.
+        if (SEED_MODE === "full") {
+          await simpleCandidate({
+            token: distribution.applyToken,
+            name: "Rohit Verma",
+            email: "rohit.demo@example.com",
+            scoreFraction: 0.6,
+            pipelineStatus: ApplicationPipelineStatus.TECH_EVALUATION,
+          });
+          await simpleCandidate({
+            token: distribution.applyToken,
+            name: "Meera Joshi",
+            email: "meera.demo@example.com",
+            scoreFraction: null,
+            pipelineStatus: ApplicationPipelineStatus.CV_POOL,
+          });
+        } else {
+          await fixtureNamedCandidate({
+            distribution,
+            jobTitle: role.title,
+            name: "Rohit Verma",
+            email: "rohit.demo@example.com",
+            scoreFraction: 0.6,
+            seat: PIPELINE_PACK.find((s) => s.status === "TECH_EVALUATION")!,
+            compensation: role.compensationRange,
+          });
+          await fixtureNamedCandidate({
+            distribution,
+            jobTitle: role.title,
+            name: "Meera Joshi",
+            email: "meera.demo@example.com",
+            scoreFraction: null,
+            seat: PIPELINE_PACK.find((s) => s.status === "CV_POOL")!,
+            compensation: role.compensationRange,
+          });
+        }
       }
 
       if (def.slug === "nimbus" && role.key === "finance") {
-        await simpleCandidate({
-          token: distribution.applyToken!,
-          name: "Devika Rao",
-          email: "devika.demo@example.com",
-          scoreFraction: 0.9,
-          pipelineStatus: ApplicationPipelineStatus.HIRED,
-          withInterviewPacket: true,
-        });
+        if (SEED_MODE === "full") {
+          await simpleCandidate({
+            token: distribution.applyToken,
+            name: "Devika Rao",
+            email: "devika.demo@example.com",
+            scoreFraction: 0.9,
+            pipelineStatus: ApplicationPipelineStatus.HIRED,
+            withInterviewPacket: true,
+          });
+        } else {
+          await fixtureNamedCandidate({
+            distribution,
+            jobTitle: role.title,
+            name: "Devika Rao",
+            email: "devika.demo@example.com",
+            scoreFraction: 0.9,
+            seat: PIPELINE_PACK.find((s) => s.status === "HIRED" && s.bill)!,
+            compensation: role.compensationRange,
+          });
+        }
       }
 
       await seedPipelineRoster({
-        token: distribution.applyToken!,
+        distribution,
+        jobTitle: role.title,
         slug: def.slug,
         jobKey: role.key,
         city: def.city,
@@ -536,22 +583,42 @@ async function ensureHostedDistribution(jobId: number, specVersionId: number) {
   const existing = await prisma.jobDistribution.findFirst({
     where: { jobId, applyUrlSnapshot: { not: null } },
     orderBy: { id: "desc" },
+    select: {
+      id: true,
+      companyId: true,
+      jobId: true,
+      jobSpecificationVersionId: true,
+      applyUrlSnapshot: true,
+    },
   });
   if (existing) {
-    const raw = extractRawFromSnapshot(existing.applyUrlSnapshot!);
-    return { applyToken: raw };
+    const applyTokenRow = await prisma.applyToken.findFirst({
+      where: { distributionId: existing.id, revokedAt: null },
+      orderBy: { id: "desc" },
+      select: { id: true },
+    });
+    if (!applyTokenRow) throw new Error(`No apply token for distribution ${existing.id}`);
+    return {
+      applyToken: extractRawFromSnapshot(existing.applyUrlSnapshot!),
+      distributionId: existing.id,
+      applyTokenId: applyTokenRow.id,
+      companyId: existing.companyId,
+      jobId: existing.jobId,
+      specVersionId: existing.jobSpecificationVersionId,
+    };
   }
 
   const minted = mintHostedApplyTokenMaterial();
+  const companyId = (
+    await prisma.job.findUniqueOrThrow({
+      where: { id: jobId },
+      select: { companyId: true },
+    })
+  ).companyId;
   const distribution = await prisma.jobDistribution.create({
     data: {
       jobId,
-      companyId: (
-        await prisma.job.findUniqueOrThrow({
-          where: { id: jobId },
-          select: { companyId: true },
-        })
-      ).companyId,
+      companyId,
       jobSpecificationVersionId: specVersionId,
       provider: "MANUAL",
       applyMode: "HIREIQ_HOSTED",
@@ -559,14 +626,24 @@ async function ensureHostedDistribution(jobId: number, specVersionId: number) {
       applyUrlSnapshot: minted.applyUrl,
     },
   });
-  await prisma.applyToken.create({
+  const applyTokenRow = await prisma.applyToken.create({
     data: {
       distributionId: distribution.id,
       tokenHash: minted.tokenHash,
     },
+    select: { id: true },
   });
-  return { applyToken: extractRawFromSnapshot(minted.applyUrl) };
+  return {
+    applyToken: extractRawFromSnapshot(minted.applyUrl),
+    distributionId: distribution.id,
+    applyTokenId: applyTokenRow.id,
+    companyId,
+    jobId,
+    specVersionId,
+  };
 }
+
+type HostedDistributionCtx = Awaited<ReturnType<typeof ensureHostedDistribution>>;
 
 function extractRawFromSnapshot(url: string): string {
   return url.split("/apply/")[1] ?? "";
@@ -942,34 +1019,228 @@ async function ensureSlots(
 }
 
 async function seedPipelineRoster(input: {
-  token: string;
+  distribution: HostedDistributionCtx;
+  jobTitle: string;
   slug: string;
   jobKey: string;
   city: string;
   compensation: string;
 }) {
-  for (let i = 0; i < PIPELINE_PACK.length; i += 1) {
-    const seat = PIPELINE_PACK[i]!;
+  const seats = PIPELINE_PACK.map((seat, i) => ({ seat, i }));
+
+  if (SEED_MODE === "full") {
+    for (const { seat, i } of seats) {
+      const person = demoApplicant({
+        slug: input.slug,
+        jobKey: input.jobKey,
+        seatIndex: i,
+        city: input.city,
+      });
+      const already = await hostedApplyExists(person.email);
+      await simpleCandidate({
+        token: input.distribution.applyToken,
+        name: person.name,
+        email: person.email,
+        scoreFraction: seat.scoreFraction,
+        pipelineStatus: seat.status as ApplicationPipelineStatus,
+        location: person.location,
+      });
+      if (already) continue;
+      const app = await applicationByEmail(person.email);
+      await stampSource(app.id, seat.source);
+      await attachSeatArtifacts(app.id, seat, input.compensation);
+    }
+    return;
+  }
+
+  await mapPool(seats, FAST_CONCURRENCY, async ({ seat, i }) => {
     const person = demoApplicant({
       slug: input.slug,
       jobKey: input.jobKey,
       seatIndex: i,
       city: input.city,
     });
-    const already = await hostedApplyExists(person.email);
-    await simpleCandidate({
-      token: input.token,
+    await fixtureSeatCandidate({
+      distribution: input.distribution,
+      jobTitle: input.jobTitle,
       name: person.name,
       email: person.email,
-      scoreFraction: seat.scoreFraction,
-      pipelineStatus: seat.status as ApplicationPipelineStatus,
       location: person.location,
+      scoreFraction: seat.scoreFraction,
+      seat,
+      compensation: input.compensation,
     });
-    if (already) continue;
-    const app = await applicationByEmail(person.email);
-    await stampSource(app.id, seat.source);
-    await attachSeatArtifacts(app.id, seat, input.compensation);
-  }
+  });
+}
+
+async function mapPool<T>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<void>,
+) {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (true) {
+        const index = next;
+        next += 1;
+        if (index >= items.length) return;
+        await fn(items[index]!);
+      }
+    }),
+  );
+}
+
+/**
+ * Fast demo fixture: one transaction writes submission + candidate +
+ * application + ingestion + optional assessment. Skips hosted-apply and
+ * public assessment HTTP paths (~50–100× faster than full mode).
+ */
+async function fixtureSeatCandidate(input: {
+  distribution: HostedDistributionCtx;
+  jobTitle: string;
+  name: string;
+  email: string;
+  location: string;
+  scoreFraction: number | null;
+  seat: PipelineSeat;
+  compensation: string;
+}) {
+  if (await hostedApplyExists(input.email)) return;
+
+  const emailNormalized = input.email.trim().toLowerCase();
+  const status = input.seat.status as ApplicationPipelineStatus;
+  const shortlistedAt =
+    status === ApplicationPipelineStatus.SHORTLISTED ||
+    status === ApplicationPipelineStatus.SELECTED ||
+    status === ApplicationPipelineStatus.HIRED
+      ? new Date()
+      : null;
+
+  const roleCategory =
+    (
+      await prisma.jobSpecificationVersion.findUnique({
+        where: { id: input.distribution.specVersionId },
+        select: { roleCategory: true },
+      })
+    )?.roleCategory ?? "ENGINEERING";
+
+  const applicationId = await prisma.$transaction(async (tx) => {
+    const candidate = await tx.candidate.create({
+      data: {
+        name: input.name,
+        role: input.jobTitle.split(": ").slice(1).join(": ") || input.jobTitle,
+        experienceYears: 4,
+        status: "APPLIED",
+        location: input.location,
+        companyId: input.distribution.companyId,
+      },
+      select: { id: true },
+    });
+
+    const application = await tx.application.create({
+      data: {
+        candidateId: candidate.id,
+        jobId: input.distribution.jobId,
+        companyId: input.distribution.companyId,
+        status,
+        shortlistedAt,
+        source: null,
+      },
+      select: { id: true },
+    });
+
+    const submission = await tx.hostedApplySubmission.create({
+      data: {
+        applyTokenId: input.distribution.applyTokenId,
+        distributionId: input.distribution.distributionId,
+        companyId: input.distribution.companyId,
+        jobId: input.distribution.jobId,
+        jobSpecificationVersionId: input.distribution.specVersionId,
+        idempotencyKey: `demo-fast:${emailNormalized}`,
+        emailNormalized,
+        name: input.name,
+        location: input.location,
+        experienceYears: 4,
+        consentAcceptedAt: new Date(),
+        status: "RECEIVED",
+      },
+      select: { id: true },
+    });
+
+    await tx.applicationIngestionEvent.create({
+      data: {
+        companyId: input.distribution.companyId,
+        jobId: input.distribution.jobId,
+        applicationId: application.id,
+        candidateId: candidate.id,
+        sourceChannel: input.seat.source as ApplicationIngestionChannel,
+        distributionId: input.distribution.distributionId,
+        hostedApplySubmissionId: submission.id,
+        jobSpecificationVersionId: input.distribution.specVersionId,
+        status: "PROCESSED",
+        applicantName: input.name,
+        applicantEmailNormalized: emailNormalized,
+        applicantLocation: input.location,
+        applicantExperienceYears: 4,
+        processedAt: new Date(),
+      },
+    });
+
+    if (input.scoreFraction !== null) {
+      const maxScore = 10;
+      const score = Math.round(maxScore * input.scoreFraction);
+      const submittedAt = new Date(Date.now() - 2 * 86400000);
+      const invite = await tx.assessmentInvite.create({
+        data: {
+          applicationId: application.id,
+          tokenHash: sha256Hex(`assess_demo_${application.id}_${emailNormalized}`),
+          roleCategory,
+          questionIds: [],
+          scoringKey: {},
+          expiresAt: new Date(Date.now() + 7 * 86400000),
+          startedAt: submittedAt,
+          submittedAt,
+        },
+        select: { id: true },
+      });
+      await tx.assessmentAttempt.create({
+        data: {
+          inviteId: invite.id,
+          status: "COMPLETED",
+          score,
+          maxScore,
+          startedAt: submittedAt,
+          submittedAt,
+        },
+      });
+    }
+
+    return application.id;
+  });
+
+  await attachSeatArtifacts(applicationId, input.seat, input.compensation);
+}
+
+async function fixtureNamedCandidate(input: {
+  distribution: HostedDistributionCtx;
+  jobTitle: string;
+  name: string;
+  email: string;
+  scoreFraction: number | null;
+  seat: PipelineSeat;
+  compensation: string;
+}) {
+  await fixtureSeatCandidate({
+    distribution: input.distribution,
+    jobTitle: input.jobTitle,
+    name: input.name,
+    email: input.email,
+    location: "India",
+    scoreFraction: input.scoreFraction,
+    seat: input.seat,
+    compensation: input.compensation,
+  });
 }
 
 async function stampSource(applicationId: number, source: PipelineSeat["source"]) {

@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { listPublicCareersDirectory } from "@/lib/careers/careers-service";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Open roles — HireIQ",
