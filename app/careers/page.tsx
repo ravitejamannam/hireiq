@@ -6,7 +6,7 @@ import { listPublicCareersDirectory } from "@/lib/careers/careers-service";
 export const revalidate = 60;
 
 export const metadata: Metadata = {
-  title: "Open roles — HireIQ",
+  title: "Open roles",
   description: "Companies hiring on HireIQ. Pick a company, open a role, apply on a hosted form.",
   robots: { index: true, follow: true },
 };

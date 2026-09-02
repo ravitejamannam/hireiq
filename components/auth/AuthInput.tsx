@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 
 type AuthInputProps = {
   label: string;
@@ -26,14 +26,16 @@ export default function AuthInput({
   readOnly,
 }: AuthInputProps) {
   const [showPassword, setShowPassword] = useState(false);
+  const inputId = useId();
   return (
   <div className="space-y-2">
-    <label className="block text-sm font-medium text-black">
+    <label htmlFor={inputId} className="block text-sm font-medium text-black">
       {label}
     </label>
 
     <div className="relative">
       <input
+        id={inputId}
         type={showToggle ? (showPassword ? "text" : "password") : type}
         placeholder={placeholder}
         value={value}
