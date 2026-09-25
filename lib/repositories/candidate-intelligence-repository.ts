@@ -260,6 +260,9 @@ export async function createClaimsForRun(
       claimType: claim.claimType,
       value: claim.value,
       normalizedValue: claim.normalizedValue,
+      sourceSpanStart: claim.sourceSpanStart ?? null,
+      sourceSpanEnd: claim.sourceSpanEnd ?? null,
+      polarity: claim.polarity,
     })),
   });
 }

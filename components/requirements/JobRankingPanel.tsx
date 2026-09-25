@@ -90,12 +90,12 @@ export default function JobRankingPanel({
 
   return (
     <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
-      <h2 className="text-lg font-bold text-black">Evidence Coverage</h2>
+      <h2 className="text-lg font-bold text-black">T94 evidence-coverage ranking</h2>
       <p className="mt-2 text-sm text-zinc-600">
-        This ordering reflects exact primary-skill evidence matches available
-        through the matching pipeline. It is not a measure of candidate quality
-        or hiring suitability. Select an explicit published specification
-        version. Ranking does not run automatically.
+        T94 coverage ordering from Matcher V1 SATISFIED primary-skill counts.
+        It is not Matcher V2, not M8 lexical retrieval, not M9 semantic
+        retrieval, and not candidate quality. Select an explicit published
+        specification version. Ranking does not run automatically.
       </p>
 
       {error ? (

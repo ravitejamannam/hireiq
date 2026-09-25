@@ -1,0 +1,24 @@
+export const SEMANTIC_RETRIEVAL_NOT_FOUND = "SEMANTIC_RETRIEVAL_NOT_FOUND";
+export const SEMANTIC_RETRIEVAL_IN_PROGRESS = "SEMANTIC_RETRIEVAL_IN_PROGRESS";
+export const SEMANTIC_RETRIEVAL_INTERNAL_ERROR = "SEMANTIC_RETRIEVAL_INTERNAL_ERROR";
+export const SEMANTIC_RETRIEVAL_SPEC_NOT_PUBLISHED =
+  "SEMANTIC_RETRIEVAL_SPEC_NOT_PUBLISHED";
+export const SEMANTIC_RETRIEVAL_SPEC_JOB_MISMATCH =
+  "SEMANTIC_RETRIEVAL_SPEC_JOB_MISMATCH";
+export const SEMANTIC_EMBEDDINGS_NOT_CONFIGURED =
+  "SEMANTIC_EMBEDDINGS_NOT_CONFIGURED";
+export const SEMANTIC_EMBEDDING_PROVIDER_ERROR =
+  "SEMANTIC_EMBEDDING_PROVIDER_ERROR";
+export const SEMANTIC_EMBEDDING_INVALID = "SEMANTIC_EMBEDDING_INVALID";
+export const SEMANTIC_RETRIEVAL_GENERIC_ERROR =
+  "Unable to run semantic retrieval.";
+
+export class SemanticRetrievalError extends Error {
+  readonly code: string;
+
+  constructor(message: string, code: string) {
+    super(message);
+    this.name = "SemanticRetrievalError";
+    this.code = code;
+  }
+}

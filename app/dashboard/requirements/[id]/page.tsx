@@ -6,6 +6,14 @@ import {
   AuthorizationError,
 } from "@/lib/auth/authorization";
 import { getJobEvidenceCapture } from "@/lib/candidates/evidence-capture/evidence-capture-service";
+import { MatcherV2Error } from "@/lib/candidates/matching/matching-v2-errors";
+import { getRequirementExplanation } from "@/lib/candidates/matching/matching-v2-service";
+import { LexicalRetrievalError } from "@/lib/retrieval/lexical-retrieval-errors";
+import { getLexicalRetrieval } from "@/lib/retrieval/lexical-retrieval-service";
+import { EvidenceGraphError } from "@/lib/evidence-graph/evidence-graph-errors";
+import { getEvidenceGraph } from "@/lib/evidence-graph/evidence-graph-service";
+import { SemanticRetrievalError } from "@/lib/retrieval/semantic-retrieval-errors";
+import { getSemanticRetrieval } from "@/lib/retrieval/semantic-retrieval-service";
 import { getJobRanking } from "@/lib/candidates/ranking/ranking-service";
 import { getAssessmentLeaderboardForJob } from "@/lib/assessments/assessment-service";
 import { getRequirementHiringDesk } from "@/lib/hiring/requirement-desk";
@@ -69,6 +77,51 @@ export default async function RequirementWorkspacePage({
     }
   }
 
+  let explanation = null;
+  try {
+    explanation = await getRequirementExplanation(requirementId);
+  } catch (error) {
+    if (
+      error instanceof AuthenticationError ||
+      error instanceof AuthorizationError ||
+      error instanceof MatcherV2Error
+    ) {
+      explanation = null;
+    } else {
+      throw error;
+    }
+  }
+
+  let retrieval = null;
+  try {
+    retrieval = await getLexicalRetrieval(requirementId);
+  } catch (error) {
+    if (
+      error instanceof AuthenticationError ||
+      error instanceof AuthorizationError ||
+      error instanceof LexicalRetrievalError
+    ) {
+      retrieval = null;
+    } else {
+      throw error;
+    }
+  }
+
+  let semanticRetrieval = null;
+  try {
+    semanticRetrieval = await getSemanticRetrieval(requirementId);
+  } catch (error) {
+    if (
+      error instanceof AuthenticationError ||
+      error instanceof AuthorizationError ||
+      error instanceof SemanticRetrievalError
+    ) {
+      semanticRetrieval = null;
+    } else {
+      throw error;
+    }
+  }
+
   let evidenceCapture = null;
   try {
     evidenceCapture = await getJobEvidenceCapture(requirementId);
@@ -78,6 +131,21 @@ export default async function RequirementWorkspacePage({
       error instanceof AuthorizationError
     ) {
       evidenceCapture = null;
+    } else {
+      throw error;
+    }
+  }
+
+  let evidenceGraph = null;
+  try {
+    evidenceGraph = await getEvidenceGraph(requirementId);
+  } catch (error) {
+    if (
+      error instanceof AuthenticationError ||
+      error instanceof AuthorizationError ||
+      error instanceof EvidenceGraphError
+    ) {
+      evidenceGraph = null;
     } else {
       throw error;
     }
@@ -113,6 +181,10 @@ export default async function RequirementWorkspacePage({
       interviewers={interviewers}
       billingRecords={billingRecords}
       ranking={ranking}
+      explanation={explanation}
+      retrieval={retrieval}
+      semanticRetrieval={semanticRetrieval}
+      evidenceGraph={evidenceGraph}
       evidenceCapture={evidenceCapture}
       assessmentLeaderboard={assessmentLeaderboard}
       hiringDesk={hiringDesk}

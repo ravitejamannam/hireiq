@@ -1,3 +1,5 @@
+import { PortalRole } from "@prisma/client";
+
 export class CandidateRankingValidationError extends Error {
   readonly code: string;
 
@@ -15,6 +17,10 @@ function parsePositiveInt(value: unknown, label: string) {
     throw new CandidateRankingValidationError(`${label} is invalid.`);
   }
   return parsed;
+}
+
+export function isAdminRankingRole(role: PortalRole) {
+  return role === PortalRole.ADMIN;
 }
 
 export function validateRankingJobId(value: unknown) {

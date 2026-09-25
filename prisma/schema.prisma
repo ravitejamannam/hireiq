@@ -272,6 +272,7 @@ enum CandidateIntelligenceRunStatus {
 /// T92 V1 extractor. Cover-letter / inlineText claims only.
 enum CandidateIntelligenceExtractorType {
   COVER_LETTER_CLAIMS
+  DETERMINISTIC_TEXT_V1
 }
 
 /// T92 V1 claim types. Education, certification, periods, years, and summaries are deferred.
@@ -302,6 +303,104 @@ enum CandidateMatchRequirementCategory {
   LOCATION
   MUST_HAVE
   NICE_TO_HAVE
+}
+
+/// Job Intelligence V1 run status. Not matching or ranking.
+enum JobIntelligenceRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+/// Deterministic published-spec extractor. OpenAI is not required.
+enum JobIntelligenceExtractorType {
+  DETERMINISTIC_SPEC_V1
+}
+
+/// Requirement Graph V1 node category. Ambiguous is not a hard requirement.
+enum JobRequirementCategory {
+  HARD_CONSTRAINT
+  REQUIRED
+  PREFERRED
+  RESPONSIBILITY
+  CONSTRAINT
+  AMBIGUOUS
+}
+
+enum JobRequirementUncertainty {
+  CERTAIN
+  AMBIGUOUS
+}
+
+/// V1 ontology relationship. ALIAS only — related skills are not equivalent.
+enum SkillAliasRelationshipType {
+  ALIAS
+}
+
+/// Claim polarity. Existing T92 rows default to POSITIVE.
+enum CandidateClaimPolarity {
+  POSITIVE
+  NEGATED
+  UNCERTAIN
+}
+
+/// Matcher V2 support states. Do not reuse or rename CandidateMatchResult.
+enum RequirementSupportState {
+  SUPPORTED
+  PARTIALLY_SUPPORTED
+  UNKNOWN
+  CONTRADICTED
+  UNSUPPORTED
+}
+
+enum RequirementAssessmentRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+/// M8 lexical retrieval run. Not matching, ranking, or a hire decision.
+enum LexicalRetrievalRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+/// M9 semantic retrieval run. Independent of M8. Not matching or ranking.
+enum SemanticRetrievalRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum RetrievalEmbeddingSourceType {
+  JOB_QUERY
+  EVIDENCE
+}
+
+/// Phase 5 evidence graph snapshot. Not ranking, retrieval, or candidate quality.
+enum EvidenceGraphRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum EvidenceGraphNodeType {
+  EVIDENCE
+  CLAIM
+  REQUIREMENT
+  SKILL
+  ASSESSMENT
+}
+
+/// Derived projection of existing FKs. Does not invent facts.
+enum EvidenceGraphEdgeType {
+  EVIDENCE_SUPPORTS_CLAIM
+  CLAIM_MAPS_TO_SKILL
+  REQUIREMENT_REQUIRES_SKILL
+  CLAIM_CITED_FOR_REQUIREMENT
+  ASSESSMENT_CITES_EVIDENCE
+  ASSESSMENT_CITES_CLAIM
 }
 
 /// T94 synchronous Admin evidence-coverage ranking. No PENDING. No quality score.
@@ -355,6 +454,17 @@ model Company {
   requirementMatches        RequirementMatch[]
   jobRankingRuns            JobRankingRun[]
   jobRankingResults         JobRankingResult[]
+  jobIntelligenceRuns       JobIntelligenceRun[]
+  jobRequirements           JobRequirement[]
+  requirementAssessmentRuns RequirementAssessmentRun[]
+  requirementAssessments    RequirementAssessment[]
+  lexicalRetrievalRuns      LexicalRetrievalRun[]
+  lexicalRetrievalResults   LexicalRetrievalResult[]
+  semanticRetrievalRuns     SemanticRetrievalRun[]
+  semanticRetrievalResults  SemanticRetrievalResult[]
+  retrievalEmbeddings       RetrievalEmbedding[]
+  evidenceGraphRuns         EvidenceGraphRun[]
+  evidenceGraphEdges        EvidenceGraphEdge[]
   resumeDocuments CandidateResumeDocument[]
   apiTokens ApiToken[]
   webhookSubscriptions PartnerWebhookSubscription[]
@@ -412,6 +522,12 @@ model Job {
   ingestionEvents ApplicationIngestionEvent[]
   matchRuns CandidateMatchRun[]
   rankingRuns JobRankingRun[]
+  intelligenceRuns JobIntelligenceRun[]
+  jobRequirements JobRequirement[]
+  requirementAssessmentRuns RequirementAssessmentRun[]
+  lexicalRetrievalRuns LexicalRetrievalRun[]
+  semanticRetrievalRuns SemanticRetrievalRun[]
+  evidenceGraphRuns     EvidenceGraphRun[]
 
   @@unique([id, companyId])
   @@index([companyId, status])
@@ -461,6 +577,12 @@ model JobSpecificationVersion {
   ingestionEvents ApplicationIngestionEvent[]
   matchRuns CandidateMatchRun[]
   rankingRuns JobRankingRun[]
+  intelligenceRuns JobIntelligenceRun[]
+  jobRequirements JobRequirement[]
+  requirementAssessmentRuns RequirementAssessmentRun[]
+  lexicalRetrievalRuns LexicalRetrievalRun[]
+  semanticRetrievalRuns SemanticRetrievalRun[]
+  evidenceGraphRuns     EvidenceGraphRun[]
 
   @@unique([jobId, versionNumber])
   @@index([jobId, status])
@@ -588,6 +710,11 @@ model Candidate {
   intelligenceClaims     CandidateClaim[]
   matchRuns              CandidateMatchRun[]
   rankingResults         JobRankingResult[]
+  requirementAssessmentRuns RequirementAssessmentRun[]
+  requirementAssessments    RequirementAssessment[]
+  lexicalRetrievalResults   LexicalRetrievalResult[]
+  semanticRetrievalResults  SemanticRetrievalResult[]
+  evidenceGraphRuns         EvidenceGraphRun[]
 
   @@unique([id, companyId])
   @@index([companyId])
@@ -785,6 +912,8 @@ model CandidateEvidence {
   intelligenceRuns      CandidateIntelligenceRun[]
   intelligenceClaims    CandidateClaim[]
   requirementMatches    RequirementMatch[]
+  requirementAssessments RequirementAssessment[]
+  semanticRetrievalResults SemanticRetrievalResult[]
 
   @@unique([id, companyId])
   @@index([companyId, candidateId, createdAt])
@@ -831,6 +960,9 @@ model CandidateClaim {
   claimType        CandidateClaimType
   value            String
   normalizedValue  String?
+  sourceSpanStart  Int?
+  sourceSpanEnd    Int?
+  polarity         CandidateClaimPolarity @default(POSITIVE)
   createdAt        DateTime           @default(now())
 
   company   Company                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
@@ -838,6 +970,7 @@ model CandidateClaim {
   run       CandidateIntelligenceRun  @relation(fields: [runId, companyId], references: [id, companyId], onDelete: Restrict)
   evidence  CandidateEvidence         @relation(fields: [evidenceId, companyId], references: [id, companyId], onDelete: Restrict)
   requirementMatches RequirementMatch[]
+  requirementAssessments RequirementAssessment[]
 
   @@unique([id, companyId])
   @@index([companyId, candidateId, claimType])
@@ -957,6 +1090,358 @@ model JobRankingResult {
   @@index([companyId, candidateMatchRunId])
 }
 
+/// Global skill concept. Not tenant data. Not candidate evidence.
+model SkillConcept {
+  id              Int      @id @default(autoincrement())
+  canonicalKey    String
+  displayName     String
+  ontologyVersion String
+  provenance      String
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  aliases      SkillAlias[]
+  requirements JobRequirement[]
+
+  @@unique([ontologyVersion, canonicalKey])
+  @@index([active])
+}
+
+/// Versioned alias. ALIAS only — related technologies are not equivalent.
+model SkillAlias {
+  id               Int                         @id @default(autoincrement())
+  conceptId        Int
+  alias            String
+  normalizedAlias  String
+  relationshipType SkillAliasRelationshipType
+  ontologyVersion  String
+  provenance       String
+  active           Boolean                     @default(true)
+  createdAt        DateTime                    @default(now())
+
+  concept SkillConcept @relation(fields: [conceptId], references: [id], onDelete: Restrict)
+
+  @@unique([ontologyVersion, normalizedAlias])
+  @@index([conceptId])
+  @@index([active])
+}
+
+/// Deterministic Job Intelligence run pinned to a published specification.
+model JobIntelligenceRun {
+  id                        Int                         @id @default(autoincrement())
+  companyId                 Int
+  jobId                     Int
+  jobSpecificationVersionId Int
+  status                    JobIntelligenceRunStatus
+  extractorType             JobIntelligenceExtractorType
+  extractorVersion          String
+  inputHash                 String
+  createdAt                 DateTime                    @default(now())
+  completedAt               DateTime?
+  errorCode                 String?
+
+  company                 Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job                     Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  jobSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  requirements            JobRequirement[]
+  assessmentRuns          RequirementAssessmentRun[]
+  lexicalRetrievalRuns    LexicalRetrievalRun[]
+  semanticRetrievalRuns   SemanticRetrievalRun[]
+  @@unique([id, companyId])
+  @@index([companyId, jobId, createdAt])
+  @@index([companyId, jobSpecificationVersionId, createdAt])
+}
+
+/// Requirement Graph V1 node. Historically pinned to a specification version.
+model JobRequirement {
+  id                        Int                       @id @default(autoincrement())
+  companyId                 Int
+  runId                     Int
+  jobId                     Int
+  jobSpecificationVersionId Int
+  stableKey                 String
+  sourceField               String
+  sourceText                String
+  sourceSpanStart           Int?
+  sourceSpanEnd             Int?
+  category                  JobRequirementCategory
+  normalizedValue           String?
+  skillConceptId            Int?
+  provenance                String
+  uncertainty               JobRequirementUncertainty
+  createdAt                 DateTime                  @default(now())
+
+  company                 Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  run                     JobIntelligenceRun      @relation(fields: [runId, companyId], references: [id, companyId], onDelete: Restrict)
+  job                     Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  jobSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  skillConcept            SkillConcept?           @relation(fields: [skillConceptId], references: [id], onDelete: Restrict)
+  assessments             RequirementAssessment[]
+
+  @@unique([id, companyId])
+  @@unique([runId, stableKey])
+  @@index([companyId, jobSpecificationVersionId])
+  @@index([companyId, runId])
+  @@index([skillConceptId])
+}
+
+/// Matcher V2 run. Does not write Application.status. Does not reuse V1 enums.
+model RequirementAssessmentRun {
+  id                        Int                             @id @default(autoincrement())
+  companyId                 Int
+  applicationId             Int
+  candidateId               Int
+  jobId                     Int
+  jobSpecificationVersionId Int
+  jobIntelligenceRunId      Int
+  status                    RequirementAssessmentRunStatus
+  matcherVersion            String
+  ontologyVersion           String
+  intelligenceSnapshotHash  String
+  createdAt                 DateTime                        @default(now())
+  completedAt               DateTime?
+  errorCode                 String?
+
+  company                 Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  application             Application             @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+  candidate               Candidate               @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  job                     Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  jobSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  jobIntelligenceRun      JobIntelligenceRun      @relation(fields: [jobIntelligenceRunId, companyId], references: [id, companyId], onDelete: Restrict)
+  assessments             RequirementAssessment[]
+
+  @@unique([id, companyId])
+  @@index([companyId, applicationId, createdAt])
+  @@index([companyId, jobSpecificationVersionId, createdAt])
+}
+
+/// Matcher V2 requirement-level result. Citations required for SUPPORTED/CONTRADICTED.
+model RequirementAssessment {
+  id               Int                     @id @default(autoincrement())
+  companyId        Int
+  runId            Int
+  applicationId    Int
+  candidateId      Int
+  jobRequirementId Int
+  supportState     RequirementSupportState
+  method           String
+  reasonCode       String
+  claimId          Int?
+  evidenceId       Int?
+  createdAt        DateTime                @default(now())
+
+  company        Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  run            RequirementAssessmentRun @relation(fields: [runId, companyId], references: [id, companyId], onDelete: Restrict)
+  application    Application             @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+  candidate      Candidate               @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  jobRequirement JobRequirement          @relation(fields: [jobRequirementId, companyId], references: [id, companyId], onDelete: Restrict)
+  claim          CandidateClaim?         @relation(fields: [claimId, companyId], references: [id, companyId], onDelete: Restrict)
+  evidence       CandidateEvidence?      @relation(fields: [evidenceId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@index([companyId, runId])
+  @@index([companyId, applicationId])
+  @@index([companyId, jobRequirementId])
+  @@index([companyId, claimId])
+  @@index([companyId, evidenceId])
+}
+
+/// M8 lexical retrieval snapshot. Not matching, ranking, or candidate quality.
+model LexicalRetrievalRun {
+  id                        Int                       @id @default(autoincrement())
+  companyId                 Int
+  jobId                     Int
+  jobSpecificationVersionId Int
+  jobIntelligenceRunId      Int
+  status                    LexicalRetrievalRunStatus
+  retrievalVersion          String
+  queryConstructionVersion  String
+  normalizationVersion      String
+  ontologyVersion           String
+  resultLimit               Int
+  searchedCount             Int                       @default(0)
+  retrievedCount            Int                       @default(0)
+  queryHash                 String
+  evidenceSnapshotHash      String
+  createdAt                 DateTime                  @default(now())
+  completedAt               DateTime?
+  errorCode                 String?
+
+  company                 Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job                     Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  jobSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  jobIntelligenceRun      JobIntelligenceRun      @relation(fields: [jobIntelligenceRunId, companyId], references: [id, companyId], onDelete: Restrict)
+  results                 LexicalRetrievalResult[]
+
+  @@unique([id, companyId])
+  @@index([companyId, jobId, createdAt])
+  @@index([companyId, jobSpecificationVersionId, createdAt])
+}
+
+/// Per-application lexical retrieval row. lexicalScore is term overlap, not quality.
+model LexicalRetrievalResult {
+  id             Int      @id @default(autoincrement())
+  companyId      Int
+  runId          Int
+  applicationId  Int
+  candidateId    Int
+  rank           Int
+  lexicalScore   Int
+  matchedTerms   String[]
+  method         String
+  createdAt      DateTime @default(now())
+
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  run         LexicalRetrievalRun @relation(fields: [runId, companyId], references: [id, companyId], onDelete: Restrict)
+  application Application         @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+  candidate   Candidate           @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@index([companyId, runId])
+  @@index([companyId, applicationId])
+  @@index([companyId, candidateId])
+}
+
+/// Versioned embedding. Not a claim, match, or candidate quality score.
+model RetrievalEmbedding {
+  id                    Int                          @id @default(autoincrement())
+  companyId             Int
+  sourceType            RetrievalEmbeddingSourceType
+  sourceId              Int
+  contentHash           String
+  modelProvider         String
+  modelName             String
+  modelVersion          String
+  dimensions            Int
+  normalizationVersion  String
+  vector                Json
+  createdAt             DateTime                     @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, sourceType, sourceId, modelProvider, modelName, modelVersion, normalizationVersion, contentHash])
+  @@index([companyId, sourceType, sourceId])
+}
+
+/// M9 semantic retrieval snapshot. Independent of LexicalRetrievalRun.
+model SemanticRetrievalRun {
+  id                         Int                        @id @default(autoincrement())
+  companyId                  Int
+  jobId                      Int
+  jobSpecificationVersionId  Int
+  jobIntelligenceRunId       Int
+  status                     SemanticRetrievalRunStatus
+  retrievalVersion           String
+  queryConstructionVersion   String
+  representationVersion      String
+  normalizationVersion       String
+  ontologyVersion            String
+  embeddingProvider          String
+  embeddingModel             String
+  embeddingModelVersion      String
+  embeddingDimensions        Int
+  resultLimit                Int
+  searchedCount              Int                        @default(0)
+  retrievedCount             Int                        @default(0)
+  queryHash                  String
+  evidenceSnapshotHash       String
+  createdAt                  DateTime                   @default(now())
+  completedAt                DateTime?
+  errorCode                  String?
+
+  company                 Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job                     Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  jobSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  jobIntelligenceRun      JobIntelligenceRun      @relation(fields: [jobIntelligenceRunId, companyId], references: [id, companyId], onDelete: Restrict)
+  results                 SemanticRetrievalResult[]
+
+  @@unique([id, companyId])
+  @@index([companyId, jobId, createdAt])
+  @@index([companyId, jobSpecificationVersionId, createdAt])
+}
+
+/// Per-application semantic retrieval row. semanticScore is cosine similarity.
+model SemanticRetrievalResult {
+  id                    Int      @id @default(autoincrement())
+  companyId             Int
+  runId                 Int
+  applicationId         Int
+  candidateId           Int
+  rank                  Int
+  semanticScore         Float
+  supportingEvidenceId  Int?
+  method                String
+  createdAt             DateTime @default(now())
+
+  company     Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  run         SemanticRetrievalRun @relation(fields: [runId, companyId], references: [id, companyId], onDelete: Restrict)
+  application Application          @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+  candidate   Candidate            @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  evidence    CandidateEvidence?   @relation(fields: [supportingEvidenceId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@index([companyId, runId])
+  @@index([companyId, applicationId])
+  @@index([companyId, candidateId])
+  @@index([companyId, supportingEvidenceId])
+}
+
+/// Phase 5 derived evidence-graph snapshot. Not a rank or candidate quality score.
+model EvidenceGraphRun {
+  id                        Int                    @id @default(autoincrement())
+  companyId                 Int
+  jobId                     Int
+  applicationId             Int
+  candidateId               Int
+  jobSpecificationVersionId Int
+  jobIntelligenceRunId      Int?
+  matcherV2RunId            Int?
+  status                    EvidenceGraphRunStatus
+  graphVersion              String
+  ontologyVersion           String
+  matcherVersion            String?
+  sourceSnapshotHash        String
+  createdAt                 DateTime               @default(now())
+  completedAt               DateTime?
+  errorCode                 String?
+
+  company                 Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job                     Job                      @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  application             Application              @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+  candidate               Candidate                @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  jobSpecificationVersion JobSpecificationVersion  @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  edges                   EvidenceGraphEdge[]
+
+  @@unique([id, companyId])
+  @@index([companyId, applicationId, createdAt])
+  @@index([companyId, jobId, createdAt])
+}
+
+/// Immutable historical edge. Validity of evidence is interpreted at read time.
+model EvidenceGraphEdge {
+  id                        Int                   @id @default(autoincrement())
+  companyId                 Int
+  runId                     Int
+  edgeType                  EvidenceGraphEdgeType
+  fromType                  EvidenceGraphNodeType
+  fromId                    Int
+  toType                    EvidenceGraphNodeType
+  toId                      Int
+  provenance                String
+  sourceEvidenceId          Int?
+  sourceClaimId             Int?
+  sourceRequirementId       Int?
+  sourceAssessmentId        Int?
+  ontologyVersion           String?
+  jobSpecificationVersionId Int?
+  createdAt                 DateTime              @default(now())
+
+  company Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  run     EvidenceGraphRun @relation(fields: [runId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@unique([companyId, runId, edgeType, fromType, fromId, toType, toId])
+  @@index([companyId, runId])
+  @@index([companyId, fromType, fromId])
+  @@index([companyId, toType, toId])
+}
+
 model Application {
   id Int @id @default(autoincrement())
 
@@ -998,6 +1483,11 @@ model Application {
   evidence        CandidateEvidence[]
   matchRuns       CandidateMatchRun[]
   rankingResults  JobRankingResult[]
+  requirementAssessmentRuns RequirementAssessmentRun[]
+  requirementAssessments    RequirementAssessment[]
+  lexicalRetrievalResults   LexicalRetrievalResult[]
+  semanticRetrievalResults  SemanticRetrievalResult[]
+  evidenceGraphRuns         EvidenceGraphRun[]
   assessmentInvite AssessmentInvite?
 
   @@unique([id, companyId])

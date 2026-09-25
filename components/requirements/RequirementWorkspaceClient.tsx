@@ -35,11 +35,19 @@ import SourcedCandidateForm from "@/components/requirements/SourcedCandidateForm
 import MintOfferLinkButton from "@/components/offers/MintOfferLinkButton";
 import JobEvidenceCapturePanel from "@/components/requirements/JobEvidenceCapturePanel";
 import JobRankingPanel from "@/components/requirements/JobRankingPanel";
+import RequirementExplanationPanel from "@/components/requirements/RequirementExplanationPanel";
+import LexicalRetrievalPanel from "@/components/requirements/LexicalRetrievalPanel";
+import SemanticRetrievalPanel from "@/components/requirements/SemanticRetrievalPanel";
+import EvidenceGraphPanel from "@/components/requirements/EvidenceGraphPanel";
 import AssessmentLeaderboardPanel from "@/components/assess/AssessmentLeaderboardPanel";
 import HiringFunnelPanel from "@/components/hiring/HiringFunnelPanel";
 import ApplicationTimeline from "@/components/hiring/ApplicationTimeline";
 import InterviewRoundPlanForm from "@/components/hiring/InterviewRoundPlanForm";
 import type { JobEvidenceCapturePageData } from "@/lib/candidates/evidence-capture/evidence-capture-types";
+import type { RequirementExplanationPageData } from "@/lib/candidates/matching/matching-v2-types";
+import type { LexicalRetrievalPageData } from "@/lib/retrieval/lexical-retrieval-types";
+import type { EvidenceGraphPageData } from "@/lib/evidence-graph/evidence-graph-types";
+import type { SemanticRetrievalPageData } from "@/lib/retrieval/semantic-retrieval-types";
 import type { JobRankingPageData } from "@/lib/candidates/ranking/ranking-types";
 import type { AssessmentLeaderboardPage } from "@/lib/assessments/assessment-service";
 import type { RequirementHiringDesk } from "@/lib/hiring/requirement-desk";
@@ -76,6 +84,10 @@ type RequirementWorkspaceClientProps = {
   interviewers: Interviewer[];
   billingRecords: BillingRecordView[];
   ranking?: JobRankingPageData | null;
+  explanation?: RequirementExplanationPageData | null;
+  retrieval?: LexicalRetrievalPageData | null;
+  semanticRetrieval?: SemanticRetrievalPageData | null;
+  evidenceGraph?: EvidenceGraphPageData | null;
   evidenceCapture?: JobEvidenceCapturePageData | null;
   assessmentLeaderboard?: AssessmentLeaderboardPage | null;
   hiringDesk?: RequirementHiringDesk | null;
@@ -140,6 +152,10 @@ export default function RequirementWorkspaceClient({
   interviewers,
   billingRecords,
   ranking,
+  explanation,
+  retrieval,
+  semanticRetrieval,
+  evidenceGraph,
   evidenceCapture,
   assessmentLeaderboard,
   hiringDesk,
@@ -355,6 +371,38 @@ export default function RequirementWorkspaceClient({
       {ranking ? (
         <JobRankingPanel
           ranking={ranking}
+          applicationLabels={applications.map((application) => ({
+            id: application.id,
+            label: `${application.candidate.name} (Application #${application.id})`,
+          }))}
+        />
+      ) : null}
+
+      {explanation ? <RequirementExplanationPanel explanation={explanation} /> : null}
+
+      {retrieval ? (
+        <LexicalRetrievalPanel
+          retrieval={retrieval}
+          applicationLabels={applications.map((application) => ({
+            id: application.id,
+            label: `${application.candidate.name} (Application #${application.id})`,
+          }))}
+        />
+      ) : null}
+
+      {semanticRetrieval ? (
+        <SemanticRetrievalPanel
+          retrieval={semanticRetrieval}
+          applicationLabels={applications.map((application) => ({
+            id: application.id,
+            label: `${application.candidate.name} (Application #${application.id})`,
+          }))}
+        />
+      ) : null}
+
+      {evidenceGraph ? (
+        <EvidenceGraphPanel
+          graph={evidenceGraph}
           applicationLabels={applications.map((application) => ({
             id: application.id,
             label: `${application.candidate.name} (Application #${application.id})`,

@@ -1,5 +1,27 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
+import {
+  LAYER_M8_LEXICAL,
+  LAYER_M9_SEMANTIC,
+  LAYER_MATCHER_V1,
+  LAYER_MATCHER_V2,
+  LAYER_T94_RANKING,
+  lexicalRetrievalDetail,
+  lexicalRetrievalLabel,
+  lexicalRetrievalMeta,
+  matcherV1CoverageDetail,
+  matcherV1CoverageLabel,
+  matcherV1CoverageMeta,
+  matcherV2Detail,
+  matcherV2Label,
+  matcherV2Meta,
+  semanticRetrievalDetail,
+  semanticRetrievalLabel,
+  semanticRetrievalMeta,
+  t94RankingDetail,
+  t94RankingLabel,
+  t94RankingMeta,
+} from "@/lib/candidates/decision-support-layers";
 
 /**
  * Decision-support assembly (T99 Phase 8 / constitution §33).
@@ -22,7 +44,11 @@ export type CandidateSignal = {
   kind:
     | "EXPERT_SCORE"
     | "ASSESSMENT"
-    | "MATCHING"
+    | "MATCHER_V1_COVERAGE"
+    | "MATCHER_V2_ASSESSMENT"
+    | "T94_EVIDENCE_COVERAGE_RANKING"
+    | "M8_LEXICAL_RETRIEVAL"
+    | "M9_SEMANTIC_RETRIEVAL"
     | "EVALUATION"
     | "INTERVIEW"
     | "CODING_TEST"
@@ -117,6 +143,7 @@ export async function getDecisionSupportForCandidate(
 
   const matchRuns = await prisma.candidateMatchRun.findMany({
     where: {
+      companyId: candidate.companyId,
       candidateId,
       status: "COMPLETED",
       applicationId: { in: applications.map((a) => a.id) },
@@ -131,6 +158,96 @@ export async function getDecisionSupportForCandidate(
   for (const run of matchRuns) {
     if (!matchByApp.has(run.applicationId)) {
       matchByApp.set(run.applicationId, run);
+    }
+  }
+
+  const applicationIds = applications.map((app) => app.id);
+  const [v2Runs, rankingRows, lexicalRows, semanticRows] = await Promise.all([
+    applicationIds.length === 0
+      ? Promise.resolve([])
+      : prisma.requirementAssessmentRun.findMany({
+          where: {
+            companyId: candidate.companyId,
+            candidateId,
+            applicationId: { in: applicationIds },
+            status: "COMPLETED",
+          },
+          select: {
+            applicationId: true,
+            assessments: { select: { supportState: true } },
+          },
+          orderBy: { id: "desc" },
+        }),
+    applicationIds.length === 0
+      ? Promise.resolve([])
+      : prisma.jobRankingResult.findMany({
+          where: {
+            companyId: candidate.companyId,
+            candidateId,
+            applicationId: { in: applicationIds },
+          },
+          select: {
+            applicationId: true,
+            rank: true,
+            satisfiedSkillCount: true,
+          },
+          orderBy: { id: "desc" },
+        }),
+    applicationIds.length === 0
+      ? Promise.resolve([])
+      : prisma.lexicalRetrievalResult.findMany({
+          where: {
+            companyId: candidate.companyId,
+            candidateId,
+            applicationId: { in: applicationIds },
+          },
+          select: {
+            applicationId: true,
+            rank: true,
+            lexicalScore: true,
+            matchedTerms: true,
+          },
+          orderBy: { id: "desc" },
+        }),
+    applicationIds.length === 0
+      ? Promise.resolve([])
+      : prisma.semanticRetrievalResult.findMany({
+          where: {
+            companyId: candidate.companyId,
+            candidateId,
+            applicationId: { in: applicationIds },
+          },
+          select: {
+            applicationId: true,
+            rank: true,
+            semanticScore: true,
+            supportingEvidenceId: true,
+          },
+          orderBy: { id: "desc" },
+        }),
+  ]);
+  const v2ByApp = new Map<number, (typeof v2Runs)[number]>();
+  for (const run of v2Runs) {
+    if (!v2ByApp.has(run.applicationId)) {
+      v2ByApp.set(run.applicationId, run);
+    }
+  }
+  const rankingByApp = new Map<number, (typeof rankingRows)[number]>();
+  for (const row of rankingRows) {
+    if (!rankingByApp.has(row.applicationId)) {
+      rankingByApp.set(row.applicationId, row);
+    }
+  }
+  const lexicalByApp = new Map<number, (typeof lexicalRows)[number]>();
+  for (const row of lexicalRows) {
+    if (!lexicalByApp.has(row.applicationId)) {
+      lexicalByApp.set(row.applicationId, row);
+    }
+  }
+  const semanticByApp = new Map<number, (typeof semanticRows)[number]>();
+  for (const row of semanticRows) {
+    if (!semanticByApp.has(row.applicationId)) {
+      semanticByApp.set(row.applicationId, row);
     }
   }
 
@@ -173,10 +290,55 @@ export async function getDecisionSupportForCandidate(
         (row) => row.result === "UNKNOWN",
       ).length;
       signals.push({
-        kind: "MATCHING",
-        label: `Evidence coverage — ${scope}`,
-        detail: `${satisfied} satisfied`,
-        meta: `${unknown} unknown (missing evidence, not a fail) · ${matchRun.requirementMatches.length} requirements`,
+        kind: LAYER_MATCHER_V1,
+        label: matcherV1CoverageLabel(scope),
+        detail: matcherV1CoverageDetail(satisfied),
+        meta: matcherV1CoverageMeta(unknown, matchRun.requirementMatches.length),
+      });
+    }
+
+    const v2 = v2ByApp.get(app.id);
+    if (v2) {
+      const supported = v2.assessments.filter((row) => row.supportState === "SUPPORTED").length;
+      const contradicted = v2.assessments.filter(
+        (row) => row.supportState === "CONTRADICTED",
+      ).length;
+      const unknownV2 = v2.assessments.filter((row) => row.supportState === "UNKNOWN").length;
+      signals.push({
+        kind: LAYER_MATCHER_V2,
+        label: matcherV2Label(scope),
+        detail: matcherV2Detail(supported, contradicted),
+        meta: matcherV2Meta(unknownV2),
+      });
+    }
+
+    const ranking = rankingByApp.get(app.id);
+    if (ranking) {
+      signals.push({
+        kind: LAYER_T94_RANKING,
+        label: t94RankingLabel(scope),
+        detail: t94RankingDetail(ranking.rank, ranking.satisfiedSkillCount),
+        meta: t94RankingMeta(),
+      });
+    }
+
+    const lexical = lexicalByApp.get(app.id);
+    if (lexical) {
+      signals.push({
+        kind: LAYER_M8_LEXICAL,
+        label: lexicalRetrievalLabel(scope),
+        detail: lexicalRetrievalDetail(lexical.rank, lexical.lexicalScore),
+        meta: lexicalRetrievalMeta(lexical.matchedTerms),
+      });
+    }
+
+    const semantic = semanticByApp.get(app.id);
+    if (semantic) {
+      signals.push({
+        kind: LAYER_M9_SEMANTIC,
+        label: semanticRetrievalLabel(scope),
+        detail: semanticRetrievalDetail(semantic.rank, semantic.semanticScore),
+        meta: semanticRetrievalMeta(semantic.supportingEvidenceId),
       });
     }
 

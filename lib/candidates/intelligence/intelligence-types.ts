@@ -1,4 +1,5 @@
 import type {
+  CandidateClaimPolarity,
   CandidateClaimType,
   CandidateIntelligenceExtractorType,
   CandidateIntelligenceRunStatus,
@@ -43,4 +44,7 @@ export type ExtractedClaimDraft = {
   claimType: CandidateClaimType;
   value: string;
   normalizedValue: string;
+  sourceSpanStart?: number | null;
+  sourceSpanEnd?: number | null;
+  polarity?: CandidateClaimPolarity;
 };

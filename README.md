@@ -2,6 +2,8 @@
 
 Evidence-first hiring OS for companies that run recruiting as an operation, not a spreadsheet plus a job board.
 
+Engineering rules: [docs/architecture/hireiq-engineering-constitution.md](docs/architecture/hireiq-engineering-constitution.md). Build sequence: [docs/architecture/hireiq-build-roadmap.md](docs/architecture/hireiq-build-roadmap.md).
+
 HireIQ is not a résumé wrapper. Every applicant fact traces to a source. Rankings are explained. Interviewers, clients, and admin share the same pipeline with role-specific authority.
 
 ## Who uses it
