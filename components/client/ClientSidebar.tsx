@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+
+import HireIqLogo from "@/components/brand/HireIqLogo";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Bell, Briefcase, CreditCard, LayoutDashboard, Users } from "lucide-react";
@@ -45,7 +47,9 @@ export default function ClientSidebar({
   return (
     <aside className="flex h-screen w-64 flex-col border-r border-zinc-200 bg-white">
       <div className="border-b border-zinc-200 p-6">
-        <h2 className="text-2xl font-bold text-black">HireIQ</h2>
+        <Link href="/client" aria-label="HireIQ">
+          <HireIqLogo markSize={32} />
+        </Link>
         <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
           Client
         </p>

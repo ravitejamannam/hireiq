@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+
+import HireIqLogo from "@/components/brand/HireIqLogo";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
@@ -195,8 +197,8 @@ export default function Sidebar() {
         aria-label="Mobile navigation"
         className="fixed inset-x-0 top-0 z-40 flex items-center gap-2 overflow-x-auto border-b border-stone-200/80 bg-[#FBF9F4]/95 px-3 py-2 backdrop-blur lg:hidden"
       >
-        <Link href="/dashboard" className="mr-2 shrink-0 text-lg font-bold text-black">
-          HireIQ
+        <Link href="/dashboard" aria-label="HireIQ" className="mr-2 shrink-0">
+          <HireIqLogo markSize={28} />
         </Link>
         {primaryLinks.concat(sections.flatMap((s) => s.links))
           .filter((l) => !l.disabled)
@@ -222,20 +224,13 @@ export default function Sidebar() {
       <aside className="hidden h-screen w-64 flex-col border-r border-stone-200/80 bg-[#FBF9F4] lg:flex">
       <div className="border-b border-stone-200/80 px-5 py-5">
         <div className="flex items-start justify-between">
-        <Link href="/dashboard" className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-stone-900 text-sm font-black text-[#FBF9F4]">
-            Hi
-          </span>
-          <div>
-            <p className="text-base font-bold leading-tight tracking-tight text-stone-900">
-              HireIQ
+        <Link href="/dashboard" aria-label="HireIQ" className="block">
+          <HireIqLogo markSize={32} />
+          {roleLabel ? (
+            <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-indigo-600">
+              {roleLabel} portal
             </p>
-            {roleLabel ? (
-              <p className="text-[11px] font-medium uppercase tracking-widest text-indigo-600">
-                {roleLabel} portal
-              </p>
-            ) : null}
-          </div>
+          ) : null}
         </Link>
           <button
             type="button"

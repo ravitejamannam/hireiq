@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import HireIqLogo from "@/components/brand/HireIqLogo";
+
 const links = [
   { label: "Ideology", href: "/#ideology" },
   { label: "How it works", href: "/#workflow" },
@@ -11,13 +13,8 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-stone-200/70 bg-[#FBF9F4]/90 backdrop-blur-xl">
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-stone-900 text-sm font-black text-[#FBF9F4]">
-            Hi
-          </span>
-          <span className="text-xl font-bold tracking-tight text-stone-900">
-            HireIQ
-          </span>
+        <Link href="/" aria-label="HireIQ">
+          <HireIqLogo markSize={32} />
         </Link>
 
         <div className="hidden items-center gap-8 md:flex">

@@ -4,6 +4,8 @@ import { PortalRole } from "@prisma/client";
 import { signOut, useSession } from "next-auth/react";
 import { LogOut } from "lucide-react";
 
+import HireIqLogo from "@/components/brand/HireIqLogo";
+
 const portalRoleLabels: Record<PortalRole, string> = {
   ADMIN: "Admin",
   CLIENT: "Client",
@@ -18,9 +20,9 @@ export default function Topbar() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-end gap-4 border-b border-stone-200/80 bg-[#FBF9F4]/85 px-4 backdrop-blur-xl sm:px-8 lg:justify-between">
       {/* Brand echo for mobile where the sidebar is hidden */}
-      <p className="hidden text-sm font-semibold tracking-tight text-stone-400 lg:block">
-        HireIQ
-      </p>
+      <div className="hidden lg:block">
+        <HireIqLogo markSize={24} />
+      </div>
 
       <div className="flex items-center gap-3">
         {user ? (

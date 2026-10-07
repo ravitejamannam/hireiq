@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import HireIqLogo from "@/components/brand/HireIqLogo";
+
 type AuthLayoutProps = {
   title: string;
   subtitle: string;
@@ -24,13 +26,12 @@ export default function AuthLayout({
       />
 
       <div className="relative w-full max-w-md">
-        <Link href="/" className="mb-8 flex items-center justify-center gap-2.5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-900 text-base font-black text-[#FBF9F4]">
-            Hi
-          </span>
-          <span className="text-2xl font-bold tracking-tight text-stone-900">
-            HireIQ
-          </span>
+        <Link
+          href="/"
+          aria-label="HireIQ"
+          className="mb-8 flex items-center justify-center"
+        >
+          <HireIqLogo markSize={40} />
         </Link>
 
         <div className="rounded-3xl border border-stone-200/80 bg-white p-8 shadow-xl shadow-stone-200/50 sm:p-10">
