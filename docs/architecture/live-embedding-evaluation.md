@@ -7,20 +7,20 @@ M10 hybrid retrieval was not implemented.
 
 ## LIVE EMBEDDING EVALUATION STATUS
 
-**NOT_RUN**
+**COMPLETED**
 
-Status code: `LIVE_PRODUCTION_EMBEDDING_NOT_RUN`
+`productionComplete`: true
 
-Recorded at: `2026-09-25T15:36:59.885Z`
+Recorded at: `2026-10-07T07:32:27.531Z`
 
-`OPENAI_API_KEY` was not configured in the evaluation environment. The gate
-failed closed. `hash-projection-v1` was **not** substituted.
+Command: `pnpm eval:live-embeddings`
 
-Re-run when a key is available:
+Provider: OpenAI. Model: `text-embedding-3-small`. Dimensions: 1536.
+Embedder label: `openai:text-embedding-3-small`.
 
-```bash
-pnpm eval:live-embeddings
-```
+`hash-projection-v1` was **not** used. The earlier missing-key run remains
+historical only (`LIVE_PRODUCTION_EMBEDDING_NOT_RUN` at
+`2026-09-25T15:36:59.885Z`).
 
 ## What this gate measures
 
@@ -61,48 +61,51 @@ That table is **not** evidence about `text-embedding-3-small`.
 
 ## Live comparison table
 
-| Metric | M8 | M9 live | Difference |
+Official metrics only. These are not a claim that M9 is superior to M8.
+
+| Metric | M8 | M9 live `text-embedding-3-small` | Difference |
 | --- | --- | --- | --- |
-| Recall@10 | — | LIVE_PRODUCTION_EMBEDDING_NOT_RUN | — |
-| Recall@25 | — | LIVE_PRODUCTION_EMBEDDING_NOT_RUN | — |
-| Recall@50 | — | LIVE_PRODUCTION_EMBEDDING_NOT_RUN | — |
-| Recall@100 | — | LIVE_PRODUCTION_EMBEDDING_NOT_RUN | — |
-| Precision@K | — | LIVE_PRODUCTION_EMBEDDING_NOT_RUN | — |
-| MRR | — | LIVE_PRODUCTION_EMBEDDING_NOT_RUN | — |
-| NDCG@K | — | LIVE_PRODUCTION_EMBEDDING_NOT_RUN | — |
+| Recall@10 | 0.4 | 0.4 | 0 |
+| Recall@25 | 0.4 | 0.4 | 0 |
+| Recall@50 | 0.4 | 0.4 | 0 |
+| Recall@100 | 0.4 | 0.4 | 0 |
+| Precision@10/25/50/100 | 0.4 | 0.3 | -0.1 |
+| NDCG@10/25/50/100 | 0.4 | 0.4 | 0 |
+| MRR | 0.4 | 0.4 | 0 |
 
-## Failure analysis
+Live similarity scores on official retrieved rows: count 6, min 0.174, max 0.482, mean 0.364, median 0.415. No similarity threshold was chosen.
 
-Not available. Official cases were not embedded by the production model.
+## Complementarity
 
-Requested inspections and whether they exist in the frozen official set:
+Official cases only. `recoveredByM9` was empty on every case. `missedByM9` was empty on every case. M9 introduced labeled-not-relevant applications on `exact-python` (application 2), `false-friend-react-native`, `negation-django`, and `missing-evidence`. `alias-javascript` matched M8.
 
 | Failure mode | In official frozen set | Live result |
 | --- | --- | --- |
-| React vs React Native | yes (`false-friend-react-native`) | NOT_RUN |
-| Negated Django | yes (`negation-django`) | NOT_RUN |
-| Sparse evidence | yes (`missing-evidence`) | NOT_RUN |
-| Related Java vs Python | yes (`exact-python` app 2) | NOT_RUN |
-| JS alias | yes (`alias-javascript`) | NOT_RUN |
-| Python vs Django | diagnostic only | NOT_RUN |
-| Java vs JavaScript | diagnostic only | NOT_RUN |
-| PostgreSQL vs MySQL | diagnostic only | NOT_RUN |
-| Keyword stuffing | diagnostic only | NOT_RUN |
-| Verbose evidence | diagnostic only | NOT_RUN |
-
-No similarity-score distribution is available. No threshold was chosen.
+| React vs React Native | yes (`false-friend-react-native`) | M8 retrieved none. M9 introduced application 1 (score 0.443) |
+| Negated Django | yes (`negation-django`) | M8 retrieved none. M9 introduced application 1 (score 0.387) |
+| Sparse evidence | yes (`missing-evidence`) | M8 retrieved none. M9 introduced application 1 (score 0.174) |
+| Related Java vs Python | yes (`exact-python` app 2) | M8 retrieved relevant application 1 only. M9 also introduced application 2 (score 0.252) |
+| JS alias | yes (`alias-javascript`) | Both retrieved relevant application 1 only (M9 score 0.482) |
+| Python vs Django | diagnostic only | lexical not retrieved; semantic retrieved (score 0.220). Not in official metrics |
+| Java vs JavaScript | diagnostic only | lexical not retrieved; semantic retrieved (score 0.242). Not in official metrics |
+| PostgreSQL vs MySQL | diagnostic only | lexical not retrieved; semantic retrieved (score 0.326). Not in official metrics |
+| Keyword stuffing | diagnostic only | both retrieved (semantic score 0.595). Not in official metrics |
+| Verbose evidence | diagnostic only | both retrieved (semantic score 0.380). Not in official metrics |
 
 ## Latency and usage
 
 | Measure | Value |
 | --- | --- |
-| Embedding API calls | 0 |
-| Retry count | 0 (M9 has no retry) |
-| Prompt / total tokens | unavailable; API was not called |
-| Estimated USD cost | not calculated |
-| Embedding latency | 0 |
-| Retrieval latency | 0 |
-| Provider failures | 0; evaluation did not start |
+| Embedding API calls | 5 |
+| Retry count | 0 |
+| Prompt tokens | 48 |
+| Total tokens | 48 |
+| Text units sent | 11 |
+| Estimated USD cost | UNAVAILABLE. The evaluator records provider token counts and does not price them |
+| Embedding latency | 7386 ms |
+| Retrieval latency | 5 ms |
+| Total runtime | 8914 ms |
+| Provider failures | 0 |
 
 ## Fail-closed tests
 
@@ -120,18 +123,14 @@ A test embedder that happens to return 1536-d vectors is labeled
 
 ## M10 design gate
 
-**Not justified.**
+The evaluator set `sufficientToDesign` true: live `text-embedding-3-small` was measured on the frozen synthetic set. M9 did not recover additional relevant applications. M9 introduced at least one labeled-not-relevant application. M9 did not miss a relevant application M8 found. Recall@10 difference was 0. Precision@10 difference was -0.1.
 
-There is no live `text-embedding-3-small` measurement. Offline hash-projection
-results must not be used to decide hybrid retrieval.
-
-After a `COMPLETED` live run, decide from complementarity and failure modes,
-not from a single metric increase.
+That is a measurement fact. It does not approve M10 implementation. The hybrid design document still requires every GO item before a measurement M10 may be considered, and this run did not implement hybrid retrieval.
 
 ## Limitations
 
-- This record is `NOT_RUN`, not a model-quality conclusion
+- This record is a live measurement, not a claim that M9 beat M8
 - Labels remain synthetic, not recruiter outcomes
 - Dataset is small (5 official cases)
 - No similarity threshold was introduced
-- Cost cannot be estimated without provider usage from a live call
+- USD cost is UNAVAILABLE. Token counts came from the provider. Pricing is not pinned in this repository

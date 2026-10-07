@@ -1,16 +1,16 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
-import DecisionSupportRails from "@/components/candidates/DecisionSupportRails";
 import ClientCandidateProfile from "@/components/client/ClientCandidateProfile";
 import { selectPrimaryClientEvaluation } from "@/components/client/client-labels";
 import { getApplicationAssessmentSummary } from "@/lib/assessments/assessment-service";
 import { requireClientPortal } from "@/lib/auth/authorization";
-import { getDecisionSupportForCandidate } from "@/lib/candidates/decision-support-service";
 import { getOrMaterializeCandidateProfile } from "@/lib/candidates/candidate-profile-service";
 import { getClientApplicationForRequirement } from "@/lib/repositories/application-repository";
 import { getApplicationHiringTimeline } from "@/lib/hiring/requirement-desk";
 import ApplicationTimeline from "@/components/hiring/ApplicationTimeline";
+import HumanRelevancePanel from "@/components/client/HumanRelevancePanel";
+import { loadHumanRelevanceCollection } from "@/lib/relevance/human-relevance-operations";
 
 type ClientCandidateDetailPageProps = {
   params: Promise<{
@@ -52,24 +52,17 @@ export default async function ClientCandidateDetailPage({
   }
 
   const timeline = await getApplicationHiringTimeline(application.id);
+  const relevance = await loadHumanRelevanceCollection({
+    companyId: client.companyId,
+    jobId: requirementId,
+    applicationId: application.id,
+  });
 
   const evaluation = selectPrimaryClientEvaluation(application.evaluations);
   const profile = await getOrMaterializeCandidateProfile(
     application.candidate.id,
   );
   const assessment = await getApplicationAssessmentSummary(application.id);
-  let signals: Awaited<
-    ReturnType<typeof getDecisionSupportForCandidate>
-  >["signals"] = [];
-  try {
-    const view = await getDecisionSupportForCandidate(application.candidate.id, {
-      companyId: client.companyId,
-      skipAdmin: true,
-    });
-    signals = view.signals;
-  } catch {
-    signals = [];
-  }
 
   return (
     <div>
@@ -88,9 +81,16 @@ export default async function ClientCandidateDetailPage({
         </Link>
       </div>
 
-      <div className="mb-8">
-        <DecisionSupportRails signals={signals} />
-      </div>
+      {relevance && relevance.evidence.length > 0 ? (
+        <HumanRelevancePanel
+          applicationId={relevance.applicationId}
+          specificationId={relevance.specificationId}
+          jobTitle={relevance.jobTitle}
+          candidateName={relevance.candidateName}
+          requirements={relevance.requirements}
+          evidence={relevance.evidence}
+        />
+      ) : null}
 
       {timeline && timeline.length > 0 ? (
         <section className="mb-8 rounded-xl border border-zinc-200 bg-white p-6">

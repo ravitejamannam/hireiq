@@ -1,15 +1,25 @@
 # Hybrid retrieval design audit (M10)
 
-STATUS: DESIGN_ONLY  
-M9_LIVE_STATUS: NOT_RUN  
-M10_IMPLEMENTATION: NOT_APPROVED
+STATUS: DESIGN_ONLY
+
+- M9_LIVE_STATUS: COMPLETED
+- M9_LIVE_MODEL: openai:text-embedding-3-small
+- M9_LIVE_EVALUATION: m8-frozen-v1
+- M9_LIVE_COMPLEMENTARITY: NOT DEMONSTRATED
+- M10_RESEARCH_DECISION: CONDITIONAL-GO
+- M10_EXPERIMENT: REGISTERED
+- M10_IMPLEMENTATION: IMPLEMENTED
+- M10_IMPLEMENTATION_AUTHORIZED: YES for the registered RRF experiment only
+- M10_EVALUATION: COMPLETED on m8-frozen-v1 (see Official frozen experiment result)
 
 This document is an evidence-based design audit. It does not authorize
-implementation. It does not claim that M9 is better or worse than M8.
+implementation. It does not claim that M9 is better than M8.
 
-The only live-production embedding statement currently supported is:
-
-`LIVE_PRODUCTION_EMBEDDING_NOT_RUN`
+The audit below was written before the live gate ran. At that time the only
+supported live statement was `LIVE_PRODUCTION_EMBEDDING_NOT_RUN`. That
+historical text is preserved. The live record is
+`docs/architecture/live-embedding-evaluation.md`, recorded
+`2026-10-07T07:32:27.531Z`.
 
 Offline `hash-projection-v1` results remain
 
@@ -559,6 +569,232 @@ A GO to *implement a measurement* is not a GO to *ship hybrid as the product ret
 - No `prisma migrate reset`
 
 ---
+
+## Post-M9.1 experiment registration
+
+Recorded after the completed live gate. This section does not implement M10
+and does not run hybrid retrieval.
+
+### Measured facts, not reinterpreted
+
+On `m8-frozen-v1`, labels `SYNTHETIC_NOT_RECRUITER_OUTCOMES`:
+
+| | M8 `v1-lexical-term-overlap` | M9 live `openai:text-embedding-3-small` |
+| --- | --- | --- |
+| Recall@10, @25, @50, @100 | 0.4 | 0.4 |
+| Precision@K | 0.4 | 0.3 |
+| NDCG@K | 0.4 | 0.4 |
+| MRR | 0.4 | 0.4 |
+
+Relevant applications recovered by M9 that M8 missed: none. M9 did not miss a
+relevant application M8 found. M9 introduced labeled-not-relevant applications
+on `exact-python` (application 2), `false-friend-react-native`,
+`negation-django`, and `missing-evidence`. Relevant-recall complementarity is
+**not demonstrated**. M9 precision on this frozen benchmark was lower. That is
+not a claim that M9 is useless, and it is not evidence about recruiter
+outcomes.
+
+### Fusion method
+
+**REGISTERED.** This freezes the first experiment. It does not authorize
+implementation, and it is not an optimized parameter. No hybrid metrics were
+inspected or run before this freeze.
+
+Section 6.2 permits RRF as the strongest first experiment because it does not
+mix integer overlap with cosine and has one constant. No other `k_rrf` value
+is proposed. The only number the design names is the typical value 60, and the
+only ranked version string it names for that first experiment is
+`v1-hybrid-rrf-k60`. Score fusion remains deferred. Sixty is registered for
+that reason, not because a benchmark preferred it.
+
+- FUSION_METHOD: RRF
+- FUSION_VERSION: `v1-hybrid-rrf-k60`
+- RRF_K: 60
+
+60 is a pre-registered first experimental parameter. It is not an optimized
+parameter. It was frozen before hybrid metrics are inspected. No post-hoc
+tuning is permitted for this first experiment. M8 remains frozen. M9 remains
+frozen. Hybrid remains retrieval-only.
+
+Weighted `lexicalScore + semanticScore`, and any other direct mixing of those
+scales, stays prohibited. Those scores do not share a scale.
+
+### What is already frozen, independent of fusion
+
+- Lexical baseline: M8 `v1-lexical-term-overlap`
+- Semantic baseline: the existing frozen M9 implementation
+- Live model, if M9 is used: `openai:text-embedding-3-small`
+- Evaluation: `m8-frozen-v1`
+- Labels: `SYNTHETIC_NOT_RECRUITER_OUTCOMES`
+- K: 10, 25, 50, 100
+- Hybrid input, when an experiment exists: the union of the M8 retrieved
+  application set and the M9 retrieved application set. No extra corpus.
+- Comparison columns, when an experiment exists: M8, M9, and hybrid, reported
+  separately. Hybrid must not replace either baseline.
+- Metrics, when an experiment exists: Recall@10, Recall@25, Recall@50,
+  Recall@100, Precision@K, NDCG@K, MRR
+- Interpretation, with no numeric success bar: exploratory comparative
+  measurement; no pre-registered minimum improvement threshold. Distinguish
+  recall gain, precision gain, a precision/recall trade, a rank change with
+  unchanged recall, no measurable benefit, and additional false positives.
+  A higher hybrid number is not defined as success.
+
+### Future implementation contract
+
+This contract is not an implementation approval.
+`M10_IMPLEMENTATION_AUTHORIZED` remains **NO**.
+
+Future M10 implementation MUST NOT modify M8 or M9 semantics.
+
+It must also be:
+
+- additive only
+- free of destructive migrations
+- free of `candidateScore`
+- free of application status changes
+- retrieval-only: no hiring recommendation, automatic shortlist, automatic
+  rejection, automatic hiring, or replacement of a recruiter decision
+- tenant-scoped, with the same company isolation as M8 and M9, and no global
+  candidate retrieval
+- provenance-preserving for each result: whether M8 retrieved it, its M8 rank,
+  whether M9 retrieved it, its M9 rank, and which fusion method produced the
+  hybrid rank
+- independently runnable for M8 and M9
+- bound to frozen experiment parameters once those parameters exist
+- free of post-hoc tuning
+
+Persistence, if later approved, must be additive, tenant-scoped, versioned,
+immutable for completed runs, provenance-preserving, and idempotent. No hybrid
+tables and no migrations are created by this registration attempt.
+
+No API credentials and no extra raw evidence text belong in hybrid records.
+M9’s privacy boundary stays unchanged.
+
+## Implementation contract and persistence audit
+
+This section is a contract and an audit. It does not implement M10, create tables, or authorize implementation. `M10_IMPLEMENTATION_AUTHORIZED` remains **NO**.
+
+### Registered experiment
+
+- METHOD: RRF
+- VERSION: `v1-hybrid-rrf-k60`
+- RRF_K: 60
+- DATASET: `m8-frozen-v1`
+- LABELS: `SYNTHETIC_NOT_RECRUITER_OUTCOMES`
+- K: 10, 25, 50, 100
+- BASELINES: M8 `v1-lexical-term-overlap`, frozen M9
+- HYBRID INPUT: the union of one completed M8 result set and one completed M9 result set. Hybrid does not retrieve additional applications and does not apply a second evidence-eligibility rule.
+
+`RRF(d) = Σ 1 / (60 + rank_i(d))` over only the lists in which application `d` appears. `rank_i` is the 1-based `rank` already stored on `LexicalRetrievalResult` and `SemanticRetrievalResult` (`index + 1` after each baseline sort). An application missing from a list contributes nothing from that list. No normalization. No `lexicalScore + semanticScore`. No weight. `k` stays 60.
+
+Tie-break, from section 6.2 and from both engines: higher RRF first, then lower `applicationId`. M8 sorts `lexicalScore` descending then `applicationId` ascending. M9 sorts `semanticScore` descending then `applicationId` ascending. That is the repository rule. It is not unresolved.
+
+Revoked and superseded evidence never enters the hybrid universe directly. M8 and M9 already drop it before they rank. A completed baseline run stays a snapshot: later revocation does not rewrite its result rows, and hybrid must not re-filter them.
+
+### Provenance
+
+Each hybrid result row must be able to answer: retrieved by M8 or not, M8 rank or null, retrieved by M9 or not, M9 rank or null, hybrid rank, and fusion version `v1-hybrid-rrf-k60`. Baseline result rows stay in their own tables.
+
+### Tenant and authorization
+
+Follow the M8 and M9 services. `companyId` comes from the job’s company. Loaders already require `application.companyId`, `evidence.companyId`, and the intelligence run to match that company, and they fail closed on a mismatch. Admin stays platform-global through `requireAdmin`. Hybrid must not invent a company-bound Admin and must not search across companies. Execution stays on the server. No API key and no extra raw evidence text in the hybrid record.
+
+### Persistence audit
+
+M8 and M9 already persist a run plus per-application result rows. Hybrid can read those rows. It cannot store its own ranking there without writing into frozen tables.
+
+Recomputing RRF from immutable baseline rows is deterministic only while the fusion code stays the same. The contract says a completed hybrid run must not change when fusion code, `k`, or dataset identity later changes. That requires a stored snapshot. Persistence is required for the experiment record. It is not required to re-rank evidence.
+
+Proposed additive models only, following `LexicalRetrievalRun` / `LexicalRetrievalResult`. Not created.
+
+`HybridRetrievalRun`: `companyId`, `jobId`, `jobSpecificationVersionId`, `lexicalRunId`, `semanticRunId`, `status`, `fusionVersion` (`v1-hybrid-rrf-k60`), `rrfK` (60), `resultLimit`, `datasetVersion` (`m8-frozen-v1` for this experiment), `createdAt`, `completedAt`, `errorCode`. Copy the lexical and semantic retrieval version strings from the cited runs so the snapshot names the exact baselines.
+
+`HybridRetrievalResult`: `companyId`, `runId`, `applicationId`, `candidateId`, `rank`, `rrfScore`, `lexicalRank` nullable, `semanticRank` nullable, `fusionVersion`. `rrfScore` is the fusion sum. It is not `candidateScore`.
+
+No unique database constraint exists today on the full M8 or M9 idempotency key. Completion is an application lookup: `findCompletedLexicalRetrievalRun` / `findCompletedSemanticRetrievalRun` match the key plus `COMPLETED`, latest `id`. A fresh RUNNING row is refused while it is inside the stale window; a stale RUNNING row is failed and retried; the write transaction checks again for a completed row. Hybrid should use that same behavior. Do not invent a new lock.
+
+Idempotency key, from that pattern plus the fusion identity: `companyId`, `lexicalRunId`, `semanticRunId`, `fusionVersion`, `rrfK`, `resultLimit`. Those run ids already carry company, job, specification, intelligence run, baseline versions, query hash, and evidence snapshot hash. Two executions with that same key are the same experiment. A completed row is reused. Concurrent execution follows the M8/M9 running-row rule above.
+
+Completed hybrid rows are not updated in place. A new fusion version or a new `k` is a different key and a different run.
+
+### Evaluation and interpretation
+
+Report M8, M9, and hybrid as separate columns on `m8-frozen-v1` with label `SYNTHETIC_NOT_RECRUITER_OUTCOMES`, at K 10, 25, 50, and 100, for Recall, Precision, NDCG, and MRR. Do not change the benchmark. Do not tune RRF against it.
+
+Exploratory comparative measurement; no pre-registered minimum improvement threshold. Distinguish: relevant-recall gain, precision gain, a precision/recall trade, a rank change without recall gain, no measurable benefit, and additional false positives. A higher hybrid number is not success by itself.
+
+### Future implementation prompt
+
+When implementation is later and separately authorized, that prompt must say:
+
+MUST NOT: modify M8 semantics; modify M9 semantics; change Matcher V2; change the Candidate Evidence Graph; change evidence eligibility; add `candidateScore`; modify application status; implement hiring decisions; tune RRF after seeing metrics; alter the frozen benchmark; bypass tenant isolation; create destructive migrations.
+
+MUST: keep M8 and M9 independently runnable; use RRF `v1-hybrid-rrf-k60` with `k = 60`; use only the M8 ∪ M9 result sets; preserve provenance; stay retrieval-only; preserve tenant isolation; return deterministic ranks; record the experiment metadata above.
+
+This prompt does not exist yet. Writing this contract does not create it and does not authorize implementation.
+
+## Official frozen experiment result
+
+Measured `2026-10-07T08:24:02.150Z`. Command: `pnpm exec tsx` of a one-off metric script. Exit status 0. This did not change M8, M9, or M10 source.
+
+Inputs are the completed M9.1 case lists recorded `2026-10-07T07:32:27.531Z` for `openai:text-embedding-3-small` on `m8-frozen-v1`. Those lists were fused with the implemented `v1-hybrid-rrf-k60` function, `k = 60`, order RRF descending then `applicationId` ascending. No score mixing. No `candidateScore`. No application-status writes. Five official cases. Diagnostic probes were not included. The headline M9.1 table was not copied in; these averages were recomputed from the case lists with the same Recall, Precision, NDCG, and MRR functions.
+
+Because every official list has at most two applications, K 10, 25, 50, and 100 are the same number.
+
+| Metric | M8 | M9 | M10 | M10 − M8 | M10 − M9 |
+| --- | --- | --- | --- | --- | --- |
+| Recall@10/25/50/100 | 0.4 | 0.4 | 0.4 | 0 | 0 |
+| Precision@10/25/50/100 | 0.4 | 0.3 | 0.3 | -0.1 | 0 |
+| NDCG@10/25/50/100 | 0.4 | 0.4 | 0.4 | 0 | 0 |
+| MRR | 0.4 | 0.4 | 0.4 | 0 | 0 |
+
+Labels remain `SYNTHETIC_NOT_RECRUITER_OUTCOMES`. On this set, hybrid did not raise relevant recall above M8 or M9. Precision matches M9 and is lower than M8, because RRF keeps the M9-only labeled-not-relevant rows. NDCG and MRR match both baselines. That is not a claim that hybrid is a better retriever, and it is not evidence about recruiter outcomes or hiring quality.
+
+## M10 post-experiment audit
+
+This section interprets the measured result above. It does not change the registered experiment, the metrics, M8, M9, or M10, and it does not run another experiment. Labels stay `SYNTHETIC_NOT_RECRUITER_OUTCOMES`. Diagnostic probes are excluded.
+
+### Case-level record
+
+Ranks below are the recorded retrieved order. M10 ranks come from `v1-hybrid-rrf-k60`.
+
+| Case | Relevant | M8 | M9 | M10 |
+| --- | --- | --- | --- | --- |
+| `exact-python` | 1 strongly relevant; 2 not relevant | 1 at rank 1 | 1 at rank 1, 2 at rank 2 | 1 at rank 1 (both lists, rank 1 and 1); 2 at rank 2 (M9 only, rank 2) |
+| `alias-javascript` | 1 relevant | 1 at rank 1 | 1 at rank 1 | 1 at rank 1 (both lists, rank 1 and 1) |
+| `false-friend-react-native` | none; 1 is not relevant | none | 1 at rank 1 | 1 at rank 1 (M9 only, rank 1) |
+| `negation-django` | none; 1 is not relevant | none | 1 at rank 1 | 1 at rank 1 (M9 only, rank 1) |
+| `missing-evidence` | none; 1 is not relevant | none | 1 at rank 1 | 1 at rank 1 (M9 only, rank 1) |
+
+No official case has a relevant application missed by M8, by M9, or by M10. M9-only labeled-not-relevant applications are `exact-python` application 2, and application 1 on `false-friend-react-native`, `negation-django`, and `missing-evidence`. M10 keeps all four. M10 removes none of them. There is no M8-only retrieved application. No case has two relevant applications, so M10 does not reorder relevant applications. In `exact-python`, the not-relevant application stays behind the relevant one.
+
+### Complementarity
+
+M9 did not retrieve a relevant application that M8 missed. M8 did not retrieve a relevant application that M9 missed. M10 cannot add an application that neither baseline retrieved, and it did not surface a relevant application that was absent from both lists. Useful complementarity on labeled relevant cases is **not demonstrated**. The lists differ only because M9 adds labeled-not-relevant applications.
+
+### What RRF did
+
+An application in both lists receives both `1/(60+rank)` terms. On `exact-python` and `alias-javascript`, application 1 is rank 1 in both lists, so its score is `1/61 + 1/61`. It was already first in both baselines, so the extra term does not change who is first. An M9-only application receives one term. Application 2 on `exact-python` scores `1/62` and stays second. The three single-application false-positive cases score `1/61` and remain the only retrieved row. No M8-only candidate was elevated. RRF rewarded agreement where both lists already agreed, and it preserved every M9-only false positive. That is not a validated new value of `k`.
+
+### What this benchmark cannot say
+
+There are five official cases. Every official retrieved list has at most two applications, so K 10, 25, 50, and 100 collapse to the same aggregate. The set can show whether a labeled relevant application is retrieved and whether a labeled-not-relevant application is also retrieved. It cannot show K sensitivity, ordering among a long candidate list, recruiter judgments, or hiring outcomes. The supported scope is: RRF did not demonstrate an advantage on this frozen synthetic benchmark. That is not a claim that RRF does not work in general.
+
+### Scientific conclusion
+
+Demonstrated on this benchmark: no relevant-recall gain for M10 over M8 or M9; precision equal to M9 and 0.1 below M8; NDCG and MRR unchanged; no useful relevant-case complementarity; M10 keeps the M9 false positives.
+
+Not demonstrated: that hybrid retrieval is better; that it improves ranking quality; that it would help on a larger pool; that it measures recruiter effectiveness, hiring accuracy, or production candidate quality.
+
+### Engineering conclusion
+
+M10 remains a recorded frozen baseline. The implementation, the `k = 60` formula, persisted run metadata, and per-row M8/M9 ranks were checked by tests and by one admin browser smoke. This audit does not redesign or delete that layer. A negative metric result is not a reason to rewrite the frozen experiment.
+
+### M11 implication
+
+Constitution §66 places reranking after hybrid retrieval. The build roadmap calls M11 evidence-aware reranking and gates it on measurable retrieval. This experiment motivates looking at reranking as a research question. It does not prove that M11 is necessary or that it would succeed.
+
+The problem a later reranking evaluation would have to face, using only these official cases, is the labeled-not-relevant rows M9 retrieved and M10 kept: a React Native mention against a React requirement, a negated Django mention, a sparse “Hello.” against Python, and a Java mention against Python. HireIQ already has Matcher V2 and the Candidate Evidence Graph as separate evidence layers. Whether reranking should use them, and whether it can drop those false positives while keeping the relevant rows, is not answered here. Any such layer would still be decision support, not an automatic hire. M11 is not implemented.
 
 ## Verification of this document
 

@@ -36,11 +36,12 @@ import {
   type SourcedCandidateInput,
 } from "@/lib/validation/application-validation";
 import { BillingValidationError } from "@/lib/validation/billing-validation";
-import { shortlistedAtPatch } from "@/lib/hiring/pipeline-timestamps";
+import { commitApplicationStatusChange } from "@/lib/outcomes/outcome-event-writes";
 import { revalidatePath } from "next/cache";
 import {
   ApplicationPipelineStatus,
   CandidateStatus,
+  OutcomeEventActorType,
   Prisma,
   SourcingDatabaseSource,
 } from "@prisma/client";
@@ -86,7 +87,7 @@ export async function updateApplication(
   expertScore: number | null = null,
   rejectionReason: string | null = null,
 ) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const applicationId = validateApplicationId(id);
   await ensureApplicationExists(applicationId);
 
@@ -114,23 +115,35 @@ export async function updateApplication(
   );
 
   try {
-    const application = await prisma.application.update({
-      where: {
-        id: applicationId,
-      },
-      data: {
-        ...applicationInput,
-        ...shortlistedAtPatch(
-          applicationInput.status,
-          existingApplication.shortlistedAt,
-        ),
-      },
+    const application = await prisma.$transaction(async (tx) => {
+      const updated = await commitApplicationStatusChange(tx, {
+        applicationId,
+        expectedStatus: existingApplication.status,
+        nextStatus: applicationInput.status,
+        actorUserId: admin.id,
+        actorType: OutcomeEventActorType.ADMIN,
+        patch: {
+          candidateId: applicationInput.candidateId,
+          jobId: applicationInput.jobId,
+          companyId: applicationInput.companyId,
+          source: applicationInput.source,
+          expertScore: applicationInput.expertScore,
+          rejectionReason: applicationInput.rejectionReason,
+        },
+      });
+      if (!updated) {
+        throw new ApplicationValidationError(
+          "Candidate is no longer in the expected pipeline state.",
+        );
+      }
+      return updated;
     });
 
     revalidatePath("/dashboard/applications");
 
     return application;
   } catch (error) {
+    if (error instanceof ApplicationValidationError) throw error;
     throw translateApplicationSaveError(error);
   }
 }
@@ -398,7 +411,7 @@ export async function transitionApplicationStatus(
   nextStatus: ApplicationPipelineStatus,
   rejectionReason?: string,
 ) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const applicationId = validateApplicationId(id);
 
   if (!isApplicationPipelineStatus(nextStatus)) {
@@ -430,15 +443,21 @@ export async function transitionApplicationStatus(
   let updatedApplication;
 
   try {
-    updatedApplication = await prisma.application.update({
-      where: {
-        id: applicationId,
-      },
-      data: {
-        status: nextStatus,
-        ...(rejectionReason && { rejectionReason }),
-        ...shortlistedAtPatch(nextStatus, application.shortlistedAt),
-      },
+    updatedApplication = await prisma.$transaction(async (tx) => {
+      const updated = await commitApplicationStatusChange(tx, {
+        applicationId: application.id,
+        expectedStatus: application.status,
+        nextStatus,
+        actorUserId: admin.id,
+        actorType: OutcomeEventActorType.ADMIN,
+        patch: rejectionReason ? { rejectionReason } : {},
+      });
+      if (!updated) {
+        throw new ApplicationValidationError(
+          "Candidate is no longer in the expected pipeline state.",
+        );
+      }
+      return updated;
     });
   } catch (error) {
     if (error instanceof ApplicationValidationError) {
@@ -539,28 +558,33 @@ export async function transitionInterviewerApplicationStatus(
   let updatedApplication;
 
   try {
-    const updateResult = await prisma.application.updateMany({
-      where: {
-        id: application.id,
-        status: application.status,
-        job: {
-          assignedInterviewerId: interviewer.interviewerId,
+    updatedApplication = await prisma.$transaction(async (tx) => {
+      const stillAssigned = await tx.application.findFirst({
+        where: {
+          id: application.id,
+          status: application.status,
+          job: { assignedInterviewerId: interviewer.interviewerId },
         },
-      },
-      data: {
-        status: nextStatus,
-        ...shortlistedAtPatch(nextStatus, application.shortlistedAt),
-      },
-    });
-
-    if (updateResult.count !== 1) {
-      throw new ApplicationValidationError(
-        "Candidate is no longer in the expected pipeline state.",
-      );
-    }
-
-    updatedApplication = await prisma.application.findUniqueOrThrow({
-      where: { id: application.id },
+        select: { id: true },
+      });
+      if (!stillAssigned) {
+        throw new ApplicationValidationError(
+          "Candidate is no longer in the expected pipeline state.",
+        );
+      }
+      const updated = await commitApplicationStatusChange(tx, {
+        applicationId: application.id,
+        expectedStatus: application.status,
+        nextStatus,
+        actorUserId: interviewer.id,
+        actorType: OutcomeEventActorType.INTERVIEWER,
+      });
+      if (!updated) {
+        throw new ApplicationValidationError(
+          "Candidate is no longer in the expected pipeline state.",
+        );
+      }
+      return updated;
     });
   } catch (error) {
     if (error instanceof ApplicationValidationError) {
@@ -646,7 +670,7 @@ export async function selectClientCandidate(applicationId: number) {
   try {
     updatedApplication = await prisma.$transaction(async (tx) => {
       // Conditional update prevents double-submit races from selecting twice.
-      const updateResult = await tx.application.updateMany({
+      const stillShortlisted = await tx.application.findFirst({
         where: {
           id: application.id,
           status: ApplicationPipelineStatus.SHORTLISTED,
@@ -658,20 +682,26 @@ export async function selectClientCandidate(applicationId: number) {
             },
           },
         },
-        data: {
-          status: ApplicationPipelineStatus.SELECTED,
-        },
+        select: { id: true },
       });
-
-      if (updateResult.count !== 1) {
+      if (!stillShortlisted) {
         throw new ApplicationValidationError(
           "Candidate is no longer shortlisted.",
         );
       }
-
-      return tx.application.findUniqueOrThrow({
-        where: { id: application.id },
+      const updated = await commitApplicationStatusChange(tx, {
+        applicationId: application.id,
+        expectedStatus: ApplicationPipelineStatus.SHORTLISTED,
+        nextStatus: ApplicationPipelineStatus.SELECTED,
+        actorUserId: client.id,
+        actorType: OutcomeEventActorType.CLIENT,
       });
+      if (!updated) {
+        throw new ApplicationValidationError(
+          "Candidate is no longer shortlisted.",
+        );
+      }
+      return updated;
     });
   } catch (error) {
     if (error instanceof ApplicationValidationError) {
@@ -755,7 +785,7 @@ export async function confirmClientCandidateHire(applicationId: number) {
 
   try {
     updatedApplication = await prisma.$transaction(async (tx) => {
-      const updateResult = await tx.application.updateMany({
+      const stillSelected = await tx.application.findFirst({
         where: {
           id: application.id,
           status: ApplicationPipelineStatus.SELECTED,
@@ -767,12 +797,21 @@ export async function confirmClientCandidateHire(applicationId: number) {
             },
           },
         },
-        data: {
-          status: ApplicationPipelineStatus.HIRED,
-        },
+        select: { id: true },
       });
-
-      if (updateResult.count !== 1) {
+      if (!stillSelected) {
+        throw new ApplicationValidationError(
+          "Candidate is no longer selected.",
+        );
+      }
+      const updated = await commitApplicationStatusChange(tx, {
+        applicationId: application.id,
+        expectedStatus: ApplicationPipelineStatus.SELECTED,
+        nextStatus: ApplicationPipelineStatus.HIRED,
+        actorUserId: client.id,
+        actorType: OutcomeEventActorType.CLIENT,
+      });
+      if (!updated) {
         throw new ApplicationValidationError(
           "Candidate is no longer selected.",
         );
@@ -780,9 +819,7 @@ export async function confirmClientCandidateHire(applicationId: number) {
 
       await generateBillingForHiredApplication(tx, application.id);
 
-      return tx.application.findUniqueOrThrow({
-        where: { id: application.id },
-      });
+      return updated;
     });
   } catch (error) {
     if (error instanceof ApplicationValidationError) {

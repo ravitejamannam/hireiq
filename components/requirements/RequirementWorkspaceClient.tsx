@@ -36,6 +36,8 @@ import MintOfferLinkButton from "@/components/offers/MintOfferLinkButton";
 import JobEvidenceCapturePanel from "@/components/requirements/JobEvidenceCapturePanel";
 import JobRankingPanel from "@/components/requirements/JobRankingPanel";
 import RequirementExplanationPanel from "@/components/requirements/RequirementExplanationPanel";
+import EvidenceRerankPanel from "@/components/requirements/EvidenceRerankPanel";
+import HybridRetrievalPanel from "@/components/requirements/HybridRetrievalPanel";
 import LexicalRetrievalPanel from "@/components/requirements/LexicalRetrievalPanel";
 import SemanticRetrievalPanel from "@/components/requirements/SemanticRetrievalPanel";
 import EvidenceGraphPanel from "@/components/requirements/EvidenceGraphPanel";
@@ -87,6 +89,7 @@ type RequirementWorkspaceClientProps = {
   explanation?: RequirementExplanationPageData | null;
   retrieval?: LexicalRetrievalPageData | null;
   semanticRetrieval?: SemanticRetrievalPageData | null;
+  hybridRetrieval?: import("@/lib/retrieval/hybrid-retrieval-types").HybridRetrievalPageData | null;
   evidenceGraph?: EvidenceGraphPageData | null;
   evidenceCapture?: JobEvidenceCapturePageData | null;
   assessmentLeaderboard?: AssessmentLeaderboardPage | null;
@@ -155,6 +158,7 @@ export default function RequirementWorkspaceClient({
   explanation,
   retrieval,
   semanticRetrieval,
+  hybridRetrieval,
   evidenceGraph,
   evidenceCapture,
   assessmentLeaderboard,
@@ -393,6 +397,30 @@ export default function RequirementWorkspaceClient({
       {semanticRetrieval ? (
         <SemanticRetrievalPanel
           retrieval={semanticRetrieval}
+          applicationLabels={applications.map((application) => ({
+            id: application.id,
+            label: `${application.candidate.name} (Application #${application.id})`,
+          }))}
+        />
+      ) : null}
+
+      {hybridRetrieval ? (
+        <HybridRetrievalPanel
+          retrieval={hybridRetrieval}
+          applicationLabels={applications.map((application) => ({
+            id: application.id,
+            label: `${application.candidate.name} (Application #${application.id})`,
+          }))}
+        />
+      ) : null}
+
+      {hybridRetrieval ? (
+        <EvidenceRerankPanel
+          jobId={hybridRetrieval.jobId}
+          hybridRuns={hybridRetrieval.runs.map((run) => ({
+            id: run.id,
+            retrievedCount: run.retrievedCount,
+          }))}
           applicationLabels={applications.map((application) => ({
             id: application.id,
             label: `${application.candidate.name} (Application #${application.id})`,

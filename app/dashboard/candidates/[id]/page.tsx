@@ -26,6 +26,7 @@ import { getCandidateMatching } from "@/lib/candidates/matching/matching-service
 import { getCandidateProfilePageData } from "@/lib/candidates/candidate-profile-service";
 import { getCandidateHiringTimelines } from "@/lib/hiring/requirement-desk";
 import ApplicationTimeline from "@/components/hiring/ApplicationTimeline";
+import { listHumanRelevanceJudgmentsForAdminCandidate } from "@/lib/relevance/human-relevance-service";
 
 type CandidateProfilePageProps = {
   params: Promise<{
@@ -131,6 +132,15 @@ export default async function CandidateProfilePage({
     }
   }
 
+  const relevanceJudgments = await listHumanRelevanceJudgmentsForAdminCandidate(
+    candidateId,
+  ).catch((error) => {
+    if (error instanceof AuthenticationError || error instanceof AuthorizationError) {
+      return [];
+    }
+    throw error;
+  });
+
   return (
     <DashboardLayout>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -140,6 +150,22 @@ export default async function CandidateProfilePage({
         >
           ← Back to Candidates
         </Link>
+        {relevanceJudgments.length > 0 ? (
+          <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700">
+            <h2 className="font-bold text-black">Relevance judgments</h2>
+            <p className="mt-1 text-zinc-600">
+              Audit only. These are human relevance labels, not hiring decisions.
+            </p>
+            <ul className="mt-3 space-y-1">
+              {relevanceJudgments.map((row) => (
+                <li key={row.id}>
+                  Application #{row.applicationId}: {row.label}
+                  {row.supersededById ? " (superseded)" : ""}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         {candidateId ? (
           <div className="flex items-center gap-4">
             <a

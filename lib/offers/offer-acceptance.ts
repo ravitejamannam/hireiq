@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 
 import { requireAdmin, AuthorizationError } from "@/lib/auth/authorization";
+import { commitOfferDecision } from "@/lib/outcomes/outcome-event-writes";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -181,16 +182,15 @@ export async function acceptOffer(
   }
 
   const now = new Date();
-  const updated = await prisma.application.updateMany({
-    where: {
-      id: application.id,
-      offerAcceptedAt: null,
-      offerDeclinedAt: null,
-    },
-    data: { offerAcceptedAt: now },
-  });
+  const updated = await prisma.$transaction((tx) =>
+    commitOfferDecision(tx, {
+      applicationId: application.id,
+      decision: "ACCEPTED",
+      occurredAt: now,
+    }),
+  );
 
-  if (updated.count === 0) {
+  if (updated === 0) {
     const latest = await prisma.application.findUnique({
       where: { id: application.id },
       select: { offerAcceptedAt: true, offerDeclinedAt: true },
@@ -252,16 +252,15 @@ export async function declineOffer(
   }
 
   const now = new Date();
-  const updated = await prisma.application.updateMany({
-    where: {
-      id: application.id,
-      offerAcceptedAt: null,
-      offerDeclinedAt: null,
-    },
-    data: { offerDeclinedAt: now },
-  });
+  const updated = await prisma.$transaction((tx) =>
+    commitOfferDecision(tx, {
+      applicationId: application.id,
+      decision: "DECLINED",
+      occurredAt: now,
+    }),
+  );
 
-  if (updated.count === 0) {
+  if (updated === 0) {
     const latest = await prisma.application.findUnique({
       where: { id: application.id },
       select: { offerAcceptedAt: true, offerDeclinedAt: true },

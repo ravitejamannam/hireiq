@@ -385,6 +385,107 @@ enum EvidenceGraphRunStatus {
   FAILED
 }
 
+/// M10 hybrid retrieval run. Rank fusion only. Not a hire score.
+enum HybridRetrievalRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+/// M12 explicit human relevance. Not a pipeline status or a hire score.
+enum HumanRelevanceLabel {
+  RELEVANT
+  NOT_RELEVANT
+}
+
+/// One human answer. A correction is a new row. The older row points at it.
+model HumanRelevanceJudgment {
+  id                        Int                  @id @default(autoincrement())
+  companyId                 Int
+  jobId                     Int
+  applicationId             Int
+  candidateId               Int
+  jobSpecificationVersionId Int
+  reviewerUserId            Int
+  protocolVersion           String
+  label                     HumanRelevanceLabel
+  idempotencyKey            String               @unique
+  supersededById            Int?
+  createdAt                 DateTime             @default(now())
+
+  company                 Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job                     Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  application             Application             @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+  candidate               Candidate               @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  jobSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  reviewer                User                    @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
+  supersededBy            HumanRelevanceJudgment? @relation("HumanRelevanceSupersession", fields: [supersededById], references: [id], onDelete: Restrict)
+  supersedes              HumanRelevanceJudgment[] @relation("HumanRelevanceSupersession")
+  evidenceRefs            HumanRelevanceJudgmentEvidence[]
+
+  @@unique([id, companyId])
+  @@index([companyId, applicationId, createdAt])
+  @@index([companyId, jobId, createdAt])
+  @@index([supersededById])
+}
+
+/// Evidence ids the reviewer saw. Hash only; not a copy of the text.
+model HumanRelevanceJudgmentEvidence {
+  id           Int      @id @default(autoincrement())
+  companyId    Int
+  judgmentId   Int
+  evidenceId   Int
+  contentSha256 String?
+  createdAt    DateTime @default(now())
+
+  company  Company                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  judgment HumanRelevanceJudgment @relation(fields: [judgmentId, companyId], references: [id, companyId], onDelete: Restrict)
+  evidence CandidateEvidence      @relation(fields: [evidenceId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@index([companyId, judgmentId])
+  @@index([companyId, evidenceId])
+}
+
+enum OutcomeEventType {
+  SHORTLISTED
+  SELECTED
+  HIRED
+  REJECTED
+  OFFER_ACCEPTED
+  OFFER_DECLINED
+}
+
+enum OutcomeEventActorType {
+  ADMIN
+  CLIENT
+  INTERVIEWER
+  PUBLIC_TOKEN
+}
+
+/// Append-only hiring-process events. No backfill. No sensitive payload.
+model OutcomeEvent {
+  id              Int                    @id @default(autoincrement())
+  companyId       Int
+  jobId           Int
+  applicationId   Int
+  eventType       OutcomeEventType
+  occurredAt      DateTime
+  actorUserId     Int?
+  actorType       OutcomeEventActorType
+  fromStatus      ApplicationPipelineStatus?
+  toStatus        ApplicationPipelineStatus?
+  protocolVersion String
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job         Job          @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  application Application  @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+  actor       User?        @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([id, companyId])
+  @@index([companyId, applicationId, occurredAt])
+  @@index([companyId, jobId, occurredAt])
+}
+
 enum EvidenceGraphNodeType {
   EVIDENCE
   CLAIM
@@ -462,6 +563,11 @@ model Company {
   lexicalRetrievalResults   LexicalRetrievalResult[]
   semanticRetrievalRuns     SemanticRetrievalRun[]
   semanticRetrievalResults  SemanticRetrievalResult[]
+  hybridRetrievalRuns       HybridRetrievalRun[]
+  hybridRetrievalResults    HybridRetrievalResult[]
+  humanRelevanceJudgments   HumanRelevanceJudgment[]
+  humanRelevanceJudgmentEvidence HumanRelevanceJudgmentEvidence[]
+  outcomeEvents             OutcomeEvent[]
   retrievalEmbeddings       RetrievalEmbedding[]
   evidenceGraphRuns         EvidenceGraphRun[]
   evidenceGraphEdges        EvidenceGraphEdge[]
@@ -527,6 +633,9 @@ model Job {
   requirementAssessmentRuns RequirementAssessmentRun[]
   lexicalRetrievalRuns LexicalRetrievalRun[]
   semanticRetrievalRuns SemanticRetrievalRun[]
+  hybridRetrievalRuns HybridRetrievalRun[]
+  humanRelevanceJudgments HumanRelevanceJudgment[]
+  outcomeEvents           OutcomeEvent[]
   evidenceGraphRuns     EvidenceGraphRun[]
 
   @@unique([id, companyId])
@@ -582,6 +691,8 @@ model JobSpecificationVersion {
   requirementAssessmentRuns RequirementAssessmentRun[]
   lexicalRetrievalRuns LexicalRetrievalRun[]
   semanticRetrievalRuns SemanticRetrievalRun[]
+  hybridRetrievalRuns HybridRetrievalRun[]
+  humanRelevanceJudgments HumanRelevanceJudgment[]
   evidenceGraphRuns     EvidenceGraphRun[]
 
   @@unique([jobId, versionNumber])
@@ -714,6 +825,8 @@ model Candidate {
   requirementAssessments    RequirementAssessment[]
   lexicalRetrievalResults   LexicalRetrievalResult[]
   semanticRetrievalResults  SemanticRetrievalResult[]
+  hybridRetrievalResults    HybridRetrievalResult[]
+  humanRelevanceJudgments   HumanRelevanceJudgment[]
   evidenceGraphRuns         EvidenceGraphRun[]
 
   @@unique([id, companyId])
@@ -914,6 +1027,7 @@ model CandidateEvidence {
   requirementMatches    RequirementMatch[]
   requirementAssessments RequirementAssessment[]
   semanticRetrievalResults SemanticRetrievalResult[]
+  humanRelevanceJudgmentEvidence HumanRelevanceJudgmentEvidence[]
 
   @@unique([id, companyId])
   @@index([companyId, candidateId, createdAt])
@@ -1271,6 +1385,7 @@ model LexicalRetrievalRun {
   jobSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
   jobIntelligenceRun      JobIntelligenceRun      @relation(fields: [jobIntelligenceRunId, companyId], references: [id, companyId], onDelete: Restrict)
   results                 LexicalRetrievalResult[]
+  hybridRuns              HybridRetrievalRun[] @relation("HybridLexicalBaseline")
 
   @@unique([id, companyId])
   @@index([companyId, jobId, createdAt])
@@ -1352,10 +1467,66 @@ model SemanticRetrievalRun {
   jobSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
   jobIntelligenceRun      JobIntelligenceRun      @relation(fields: [jobIntelligenceRunId, companyId], references: [id, companyId], onDelete: Restrict)
   results                 SemanticRetrievalResult[]
+  hybridRuns              HybridRetrievalRun[] @relation("HybridSemanticBaseline")
 
   @@unique([id, companyId])
   @@index([companyId, jobId, createdAt])
   @@index([companyId, jobSpecificationVersionId, createdAt])
+}
+
+/// M10 rank fusion of one completed M8 run and one completed M9 run.
+model HybridRetrievalRun {
+  id                         Int                       @id @default(autoincrement())
+  companyId                  Int
+  jobId                      Int
+  jobSpecificationVersionId  Int
+  lexicalRunId               Int
+  semanticRunId              Int
+  status                     HybridRetrievalRunStatus
+  fusionVersion              String
+  rrfK                       Int
+  resultLimit                Int
+  datasetVersion             String
+  lexicalRetrievalVersion    String
+  semanticRetrievalVersion   String
+  retrievedCount             Int                       @default(0)
+  createdAt                  DateTime                  @default(now())
+  completedAt                DateTime?
+  errorCode                  String?
+
+  company                 Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job                     Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  jobSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
+  lexicalRun              LexicalRetrievalRun     @relation("HybridLexicalBaseline", fields: [lexicalRunId, companyId], references: [id, companyId], onDelete: Restrict)
+  semanticRun             SemanticRetrievalRun    @relation("HybridSemanticBaseline", fields: [semanticRunId, companyId], references: [id, companyId], onDelete: Restrict)
+  results                 HybridRetrievalResult[]
+
+  @@unique([id, companyId])
+  @@index([companyId, jobId, createdAt])
+}
+
+/// Per-application RRF row. rrfScore is rank fusion, not candidate quality.
+model HybridRetrievalResult {
+  id              Int      @id @default(autoincrement())
+  companyId       Int
+  runId           Int
+  applicationId   Int
+  candidateId     Int
+  rank            Int
+  rrfScore        Float
+  lexicalRank     Int?
+  semanticRank    Int?
+  fusionVersion   String
+  createdAt       DateTime @default(now())
+
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  run         HybridRetrievalRun @relation(fields: [runId, companyId], references: [id, companyId], onDelete: Restrict)
+  application Application        @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+  candidate   Candidate          @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@index([companyId, runId])
+  @@index([companyId, applicationId])
+  @@index([companyId, candidateId])
 }
 
 /// Per-application semantic retrieval row. semanticScore is cosine similarity.
@@ -1487,6 +1658,9 @@ model Application {
   requirementAssessments    RequirementAssessment[]
   lexicalRetrievalResults   LexicalRetrievalResult[]
   semanticRetrievalResults  SemanticRetrievalResult[]
+  hybridRetrievalResults    HybridRetrievalResult[]
+  humanRelevanceJudgments   HumanRelevanceJudgment[]
+  outcomeEvents             OutcomeEvent[]
   evidenceGraphRuns         EvidenceGraphRun[]
   assessmentInvite AssessmentInvite?
 
@@ -1655,6 +1829,8 @@ model User {
   interviewer Interviewer? @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
 
   organizationMemberships OrganizationMember[]
+  humanRelevanceJudgments HumanRelevanceJudgment[]
+  outcomeEvents           OutcomeEvent[]
   sentInvitations         Invitation[]             @relation("InvitationInviter")
   sentInterviewerInvitations InterviewerInvitation[] @relation("InterviewerInvitationInviter")
   invitedMembers          OrganizationMember[]     @relation("MembershipInviter")

@@ -12,6 +12,8 @@ import { LexicalRetrievalError } from "@/lib/retrieval/lexical-retrieval-errors"
 import { getLexicalRetrieval } from "@/lib/retrieval/lexical-retrieval-service";
 import { EvidenceGraphError } from "@/lib/evidence-graph/evidence-graph-errors";
 import { getEvidenceGraph } from "@/lib/evidence-graph/evidence-graph-service";
+import { HybridRetrievalError } from "@/lib/retrieval/hybrid-retrieval-errors";
+import { getHybridRetrieval } from "@/lib/retrieval/hybrid-retrieval-service";
 import { SemanticRetrievalError } from "@/lib/retrieval/semantic-retrieval-errors";
 import { getSemanticRetrieval } from "@/lib/retrieval/semantic-retrieval-service";
 import { getJobRanking } from "@/lib/candidates/ranking/ranking-service";
@@ -122,6 +124,21 @@ export default async function RequirementWorkspacePage({
     }
   }
 
+  let hybridRetrieval = null;
+  try {
+    hybridRetrieval = await getHybridRetrieval(requirementId);
+  } catch (error) {
+    if (
+      error instanceof AuthenticationError ||
+      error instanceof AuthorizationError ||
+      error instanceof HybridRetrievalError
+    ) {
+      hybridRetrieval = null;
+    } else {
+      throw error;
+    }
+  }
+
   let evidenceCapture = null;
   try {
     evidenceCapture = await getJobEvidenceCapture(requirementId);
@@ -184,6 +201,7 @@ export default async function RequirementWorkspacePage({
       explanation={explanation}
       retrieval={retrieval}
       semanticRetrieval={semanticRetrieval}
+      hybridRetrieval={hybridRetrieval}
       evidenceGraph={evidenceGraph}
       evidenceCapture={evidenceCapture}
       assessmentLeaderboard={assessmentLeaderboard}

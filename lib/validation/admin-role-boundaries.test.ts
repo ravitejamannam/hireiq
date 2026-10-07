@@ -5,6 +5,8 @@ import { isAdminRankingRole } from "@/lib/validation/candidate-ranking-validatio
 import { isAdminEvidenceGraphRole } from "@/lib/validation/evidence-graph-validation";
 import { isAdminLexicalRetrievalRole } from "@/lib/validation/lexical-retrieval-validation";
 import { isAdminMatcherV2Role } from "@/lib/validation/requirement-assessment-validation";
+import { isAdminHybridRetrievalRole } from "@/lib/validation/hybrid-retrieval-validation";
+import { isAdminM11Role } from "@/lib/validation/m11-validation";
 import { isAdminSemanticRetrievalRole } from "@/lib/validation/semantic-retrieval-validation";
 
 describe("admin role boundaries", () => {
@@ -14,6 +16,8 @@ describe("admin role boundaries", () => {
       isAdminRankingRole,
       isAdminLexicalRetrievalRole,
       isAdminSemanticRetrievalRole,
+      isAdminHybridRetrievalRole,
+      isAdminM11Role,
       isAdminEvidenceGraphRole,
     ];
 
