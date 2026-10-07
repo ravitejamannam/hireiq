@@ -1,0 +1,56 @@
+{
+  "label": "RESEARCH_ONLY",
+  "not": ["NOT_RECRUITER_OUTCOMES", "NOT_M14_DATASET"],
+  "protocol": "M12.1 blind collection. Labels are not assigned here.",
+  "collectionSurface": "/client/requirements/{jobId}/relevance/{applicationId}",
+  "excludedHistoricalJudgments": [7, 8],
+  "alsoExcludedSelfConflictJudgments": [19, 20],
+  "samples": [
+    {
+      "sampleId": "nimbus-job1-app7",
+      "companyId": 1,
+      "jobId": 1,
+      "applicationId": 7,
+      "jobSpecificationVersionId": 1,
+      "evidence": [
+        { "id": 11, "contentSha256": "b78a58d9ddb4881de2d148f6f56847a90faf0212cb2d3cf43bba7459c9212366" },
+        { "id": 12, "contentSha256": "70764d612efb79c26b7904945cea357f8811874712432ad6b5919ebe81748e9c" }
+      ],
+      "retrievalMembership": {
+        "m8": { "runId": 1, "completedAt": "2026-10-07T08:09:21.235Z", "present": true },
+        "m9": { "runId": 1, "completedAt": "2026-10-07T08:09:58.749Z", "present": true },
+        "m10": { "runId": 1, "completedAt": "2026-10-07T08:20:50.423Z", "present": true }
+      },
+      "samplingReason": "RETRIEVED",
+      "primaryReviewerUserId": 3,
+      "secondReviewerUserId": 2,
+      "currentM12JudgmentStatus": "NONE",
+      "contaminationStatus": "NOT_COLLECTED",
+      "eligibilityStatus": "PROPOSED_FOR_COLLECTION",
+      "judgmentCreatedAt": null
+    },
+    {
+      "sampleId": "nimbus-job1-app5",
+      "companyId": 1,
+      "jobId": 1,
+      "applicationId": 5,
+      "jobSpecificationVersionId": 1,
+      "evidence": [
+        { "id": 6, "contentSha256": "b78a58d9ddb4881de2d148f6f56847a90faf0212cb2d3cf43bba7459c9212366" },
+        { "id": 7, "contentSha256": "70764d612efb79c26b7904945cea357f8811874712432ad6b5919ebe81748e9c" }
+      ],
+      "retrievalMembership": {
+        "m8": { "runId": 1, "completedAt": "2026-10-07T08:09:21.235Z", "present": false },
+        "m9": { "runId": 1, "completedAt": "2026-10-07T08:09:58.749Z", "present": false },
+        "m10": { "runId": 1, "completedAt": "2026-10-07T08:20:50.423Z", "present": false }
+      },
+      "samplingReason": "NON_RETRIEVED",
+      "primaryReviewerUserId": 3,
+      "secondReviewerUserId": 2,
+      "currentM12JudgmentStatus": "NONE",
+      "contaminationStatus": "NOT_COLLECTED",
+      "eligibilityStatus": "PROPOSED_FOR_COLLECTION",
+      "judgmentCreatedAt": null
+    }
+  ]
+}

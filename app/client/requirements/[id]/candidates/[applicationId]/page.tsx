@@ -79,6 +79,12 @@ export default async function ClientCandidateDetailPage({
         >
           ← Back to Requirements
         </Link>
+        <Link
+          href={`/client/requirements/${requirementId}/relevance/${applicationId}`}
+          className="text-sm font-medium text-zinc-600 underline underline-offset-2 hover:text-black"
+        >
+          Blind relevance collection
+        </Link>
       </div>
 
       {relevance && relevance.evidence.length > 0 ? (

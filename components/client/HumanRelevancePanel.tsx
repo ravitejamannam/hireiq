@@ -11,6 +11,7 @@ type HumanRelevancePanelProps = {
   candidateName: string;
   requirements: string[];
   evidence: Array<{ id: number; text: string }>;
+  pipelineNotice?: string;
 };
 
 export default function HumanRelevancePanel({
@@ -20,6 +21,7 @@ export default function HumanRelevancePanel({
   candidateName,
   requirements,
   evidence,
+  pipelineNotice = "This is a relevance judgment, not a hiring decision. It will not change the application's pipeline status.",
 }: HumanRelevancePanelProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -59,10 +61,7 @@ export default function HumanRelevancePanel({
         Based on the job requirements and the candidate evidence available for this
         application, is this application relevant to this job?
       </p>
-      <p className="mt-2 text-sm text-zinc-600">
-        This is a relevance judgment, not a hiring decision. It will not change the
-        application&apos;s pipeline status.
-      </p>
+      <p className="mt-2 text-sm text-zinc-600">{pipelineNotice}</p>
       <p className="mt-4 text-sm font-semibold text-zinc-900">{jobTitle}</p>
       <p className="text-sm text-zinc-700">{candidateName}</p>
       <div className="mt-4 space-y-2 text-sm text-zinc-700">
