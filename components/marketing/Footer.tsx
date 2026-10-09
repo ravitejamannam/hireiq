@@ -23,6 +23,12 @@ export default function Footer() {
           <Link href="/#faq" className="transition hover:text-zinc-900">
             FAQ
           </Link>
+          <a
+            href="mailto:founder@hireiq.today"
+            className="transition hover:text-zinc-900"
+          >
+            founder@hireiq.today
+          </a>
         </nav>
       </div>
     </footer>

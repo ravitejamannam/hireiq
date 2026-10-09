@@ -23,6 +23,11 @@ const faqs = [
       "Yes. Clients get their own portal with transparent shortlists and billing math shown openly (compensation × markup = fee). No hidden numbers between you and your client.",
   },
   {
+    question: "Who do I contact for services or enquiries?",
+    answer:
+      "Email founder@hireiq.today for services, partnerships, and general enquiries.",
+  },
+  {
     question: "Does it integrate with job boards?",
     answer:
       "Publishing generates hosted apply pages, Google Jobs structured data, an XML feed for aggregators, an embeddable widget for your careers site, and a REST API with webhooks — all from one click.",
