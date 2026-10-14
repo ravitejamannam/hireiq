@@ -1,8 +1,29 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-if (!process.env.DATABASE_URL) {
-  const text = readFileSync(resolve(process.cwd(), ".env"), "utf8");
+export function applyTestEnvFile(options: {
+  env: Record<string, string | undefined>;
+  readFile: (path: string) => string;
+  envPath: string;
+}) {
+  if (options.env.DATABASE_URL) {
+    return;
+  }
+
+  let text: string;
+  try {
+    text = options.readFile(options.envPath);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return;
+    }
+    throw error;
+  }
+
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) {
@@ -20,8 +41,14 @@ if (!process.env.DATABASE_URL) {
     ) {
       value = value.slice(1, -1);
     }
-    if (process.env[key] === undefined) {
-      process.env[key] = value;
+    if (options.env[key] === undefined) {
+      options.env[key] = value;
     }
   }
 }
+
+applyTestEnvFile({
+  env: process.env,
+  readFile: (path) => readFileSync(path, "utf8"),
+  envPath: resolve(process.cwd(), ".env"),
+});
