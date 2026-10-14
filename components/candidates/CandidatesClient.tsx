@@ -31,6 +31,7 @@ export default function CandidatesClient({
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(
     null,
   );
+  const [deleteError, setDeleteError] = useState("");
 
   const router = useRouter();
 
@@ -48,7 +49,6 @@ export default function CandidatesClient({
         candidate.role,
         candidate.experienceYears,
         candidate.status,
-        candidate.companyId,
       );
     } else {
       await createCandidate(
@@ -77,7 +77,17 @@ export default function CandidatesClient({
   setIsModalOpen(true);
 }
   async function handleDeleteCandidate(id: number) {
-    await deleteCandidate(id);
+    const confirmed = window.confirm(
+      "Delete this candidate? This is ordinary deletion, not a GDPR erasure. Candidates with hiring, evidence, identity, or intelligence records cannot be deleted this way. The delete can still be refused after you confirm.",
+    );
+    if (!confirmed) return;
+
+    setDeleteError("");
+    const result = await deleteCandidate(id);
+    if (!result.ok) {
+      setDeleteError(result.error);
+      return;
+    }
 
     router.refresh();
   }
@@ -122,6 +132,12 @@ export default function CandidatesClient({
 
         <AddCandidateButton onClick={() => setIsModalOpen(true)} />
       </div>
+
+      {deleteError ? (
+        <p className="mt-4 text-sm text-red-600" role="alert">
+          {deleteError}
+        </p>
+      ) : null}
 
       {filteredCandidates.length === 0 ? (
         <div className="mt-10">

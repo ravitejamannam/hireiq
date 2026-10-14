@@ -1,7 +1,8 @@
-import { createHash, randomBytes } from "crypto";
+import { createHash } from "crypto";
 
 import { requireAdmin, AuthorizationError } from "@/lib/auth/authorization";
 import { commitOfferDecision } from "@/lib/outcomes/outcome-event-writes";
+import { mintOfferForAuthorizedAdmin } from "@/lib/offers/offer-mint";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -66,19 +67,6 @@ export function isOfferTokenShape(rawToken: string): boolean {
   return /^offer_[a-f0-9]{48}$/.test(rawToken);
 }
 
-function parseProposedStartDate(value: string | null | undefined): Date | null {
-  if (!value?.trim()) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed;
-}
-
-function trimToNull(value: string | null | undefined, max = 4000): string | null {
-  const trimmed = value?.trim() ?? "";
-  if (!trimmed) return null;
-  return trimmed.slice(0, max);
-}
-
 export async function findApplicationByOfferToken(
   rawToken: string,
 ): Promise<PublicOfferRecord | null> {
@@ -93,55 +81,18 @@ export async function mintOfferAcceptance(
   applicationId: number,
   terms: OfferTermsInput = {},
 ): Promise<OfferAcceptanceResult> {
-  let companyId: number | null;
   try {
-    const admin = await requireAdmin();
-    companyId = admin.companyId;
+    await requireAdmin();
   } catch (error) {
     if (error instanceof AuthorizationError) {
       return { ok: false, error: "Admin access required." };
     }
     throw error;
   }
-  if (!companyId) return { ok: false, error: "No workspace found." };
 
-  const application = await prisma.application.findFirst({
-    where: {
-      id: applicationId,
-      companyId,
-      status: { in: ["SELECTED", "HIRED"] },
-    },
-    select: { id: true, offerAcceptedAt: true },
-  });
-  if (!application) {
-    return {
-      ok: false,
-      error: "Application must be SELECTED or HIRED before minting an offer link.",
-    };
-  }
-  if (application.offerAcceptedAt) {
-    return { ok: false, error: "This offer has already been accepted." };
-  }
-
-  const proposedStartDate = parseProposedStartDate(terms.proposedStartDate);
-  if (terms.proposedStartDate?.trim() && !proposedStartDate) {
-    return { ok: false, error: "Proposed start date is invalid." };
-  }
-
-  const rawToken = `offer_${randomBytes(24).toString("hex")}`;
-  await prisma.application.update({
-    where: { id: application.id },
-    data: {
-      offerAcceptanceTokenHash: sha256Hex(rawToken),
-      offerMintedAt: new Date(),
-      offerDeclinedAt: null,
-      offerTerms: trimToNull(terms.terms),
-      offerCompensation: trimToNull(terms.compensation, 200),
-      proposedStartDate,
-    },
-  });
-
-  return { ok: true, acceptUrlPath: `/offer/${rawToken}` };
+  const minted = await mintOfferForAuthorizedAdmin(applicationId, terms);
+  if (!minted.ok) return minted;
+  return { ok: true, acceptUrlPath: minted.acceptUrlPath };
 }
 
 /**
