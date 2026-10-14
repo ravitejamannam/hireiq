@@ -9,6 +9,7 @@ import {
   CandidateIntelligenceRunStatus,
   CandidateStatus,
   EvidenceGraphEdgeType,
+  EvidenceGraphNodeType,
   JobIntelligenceExtractorType,
   JobIntelligenceRunStatus,
   JobRequirementCategory,
@@ -36,6 +37,19 @@ import {
 import { isAdminEvidenceGraphRole } from "@/lib/validation/evidence-graph-validation";
 
 const MARKER = `egv1-iso-${process.pid}-${Date.now()}`;
+
+function endpointKey(type: EvidenceGraphNodeType, id: number) {
+  return `${type}:${id}`;
+}
+
+function tenantOwnedEndpoints(world: TenantWorld) {
+  return new Set([
+    endpointKey(EvidenceGraphNodeType.EVIDENCE, world.evidenceId),
+    endpointKey(EvidenceGraphNodeType.CLAIM, world.claimId),
+    endpointKey(EvidenceGraphNodeType.REQUIREMENT, world.requirementId),
+    endpointKey(EvidenceGraphNodeType.ASSESSMENT, world.assessmentId),
+  ]);
+}
 
 type TenantWorld = {
   companyId: number;
@@ -314,23 +328,21 @@ describe("evidence graph two-company server-action boundary", () => {
       true,
     );
 
-    const aIds = new Set([
-      companyA.evidenceId,
-      companyA.claimId,
-      companyA.requirementId,
-      companyA.assessmentId,
-    ]);
-    const bIds = new Set([
-      companyB.evidenceId,
-      companyB.claimId,
-      companyB.requirementId,
-      companyB.assessmentId,
-    ]);
+    const aOwned = tenantOwnedEndpoints(companyA);
+    const bOwned = tenantOwnedEndpoints(companyB);
     expect(
-      runsA[0]?.edges.some((edge) => bIds.has(edge.fromId) || bIds.has(edge.toId)),
+      runsA[0]?.edges.some(
+        (edge) =>
+          bOwned.has(endpointKey(edge.fromType, edge.fromId)) ||
+          bOwned.has(endpointKey(edge.toType, edge.toId)),
+      ),
     ).toBe(false);
     expect(
-      runsB[0]?.edges.some((edge) => aIds.has(edge.fromId) || aIds.has(edge.toId)),
+      runsB[0]?.edges.some(
+        (edge) =>
+          aOwned.has(endpointKey(edge.fromType, edge.fromId)) ||
+          aOwned.has(endpointKey(edge.toType, edge.toId)),
+      ),
     ).toBe(false);
     expect(
       runsA[0]?.edges.some(
