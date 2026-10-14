@@ -149,7 +149,7 @@ export async function createJob(
     fields: postedFields,
   });
 
-  revalidatePath("/dashboard/jobs");
+  revalidateClientRequirementPaths(job.id);
 
   return job;
 }

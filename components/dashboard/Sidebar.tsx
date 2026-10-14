@@ -18,6 +18,7 @@ import {
   CreditCard,
   Settings,
   Kanban,
+  Layers,
   Search,
   ClipboardCheck,
   Code,
@@ -86,6 +87,11 @@ const sections: NavSection[] = [
         icon: Kanban,
         label: "Pipeline",
         href: "/dashboard/pipeline",
+      },
+      {
+        icon: Layers,
+        label: "Applications",
+        href: "/dashboard/applications",
       },
       {
         icon: ClipboardCheck,

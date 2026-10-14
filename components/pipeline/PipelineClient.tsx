@@ -20,6 +20,11 @@ import WorkflowRequirementNav, {
 import PipelineCard from "@/components/pipeline/PipelineCard";
 import BulkActionsBar from "@/components/requirements/BulkActionsBar";
 import type { getApplications } from "@/lib/repositories/application-repository";
+import {
+  PIPELINE_COLUMNS,
+  PIPELINE_LOADING_MESSAGE,
+  applicationsForRequirement,
+} from "@/lib/pipeline/pipeline-view";
 import { ADMIN_PIPELINE_TRANSITIONS } from "@/lib/validation/application-pipeline";
 
 type Application = Awaited<ReturnType<typeof getApplications>>[number];
@@ -28,16 +33,6 @@ type StatusFilter = "ALL" | ApplicationPipelineStatus;
 type PipelineClientProps = {
   initialApplications: Application[];
 };
-
-const PIPELINE_COLUMNS: ApplicationPipelineStatus[] = [
-  ApplicationPipelineStatus.CV_POOL,
-  ApplicationPipelineStatus.EXPERT_REVIEW,
-  ApplicationPipelineStatus.TECH_EVALUATION,
-  ApplicationPipelineStatus.SHORTLISTED,
-  ApplicationPipelineStatus.SELECTED,
-  ApplicationPipelineStatus.HIRED,
-  ApplicationPipelineStatus.REJECTED,
-];
 
 const APPLICATION_STATUS_TRANSITIONS = ADMIN_PIPELINE_TRANSITIONS;
 
@@ -142,14 +137,10 @@ function PipelineClientInner({
     }
   }
 
-  const filteredApplications = initialApplications.filter((application) => {
-    if (
-      requirementIdFilter !== null &&
-      application.jobId !== requirementIdFilter
-    ) {
-      return false;
-    }
-
+  const filteredApplications = applicationsForRequirement(
+    initialApplications,
+    requirementIdFilter,
+  ).filter((application) => {
     if (statusFilter !== "ALL" && application.status !== statusFilter) {
       return false;
     }
@@ -478,9 +469,22 @@ function PipelineClientInner({
   );
 }
 
+function PipelineLoading() {
+  return (
+    <DashboardLayout>
+      <div
+        role="status"
+        className="rounded-2xl border border-zinc-200 bg-white px-6 py-16 text-center"
+      >
+        <p className="text-lg font-medium text-black">{PIPELINE_LOADING_MESSAGE}</p>
+      </div>
+    </DashboardLayout>
+  );
+}
+
 export default function PipelineClient(props: PipelineClientProps) {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<PipelineLoading />}>
       <PipelineClientInner {...props} />
     </Suspense>
   );

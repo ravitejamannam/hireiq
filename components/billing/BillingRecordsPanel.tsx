@@ -7,12 +7,15 @@ import type { BillingStatus } from "@prisma/client";
 import BillingAdminStatusControls from "@/components/billing/BillingAdminStatusControls";
 import {
   BILLING_GENERATED_AFTER_HIRE,
-  BILLING_STATUS_OPTIONS,
   formatBillingDateTime,
   formatHiredCandidateCount,
   getBillingRecordHref,
   getBillingStatusLabel,
 } from "@/components/billing/billing-labels";
+import {
+  billingStatusFilterOptions,
+  filterBillingRecords,
+} from "@/lib/billing/billing-record-filter";
 import type { BillingRecordView } from "@/components/billing/billing-types";
 
 export type { BillingRecordView };
@@ -37,33 +40,12 @@ export default function BillingRecordsPanel({
     "ALL",
   );
 
-  const availableStatuses = useMemo(() => {
-    const present = new Set(records.map((record) => record.status));
-    return BILLING_STATUS_OPTIONS.filter((status) => present.has(status));
-  }, [records]);
+  const availableStatuses = billingStatusFilterOptions();
 
-  const filtered = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
-
-    return records.filter((record) => {
-      if (statusFilter !== "ALL" && record.status !== statusFilter) {
-        return false;
-      }
-
-      if (!normalized) return true;
-
-      const haystack = [
-        record.company.name,
-        record.job.title,
-        getBillingStatusLabel(record.status),
-        ...record.lineItems.map((item) => item.application.candidate.name),
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(normalized);
-    });
-  }, [records, search, statusFilter]);
+  const filtered = useMemo(
+    () => filterBillingRecords(records, statusFilter, search),
+    [records, search, statusFilter],
+  );
 
   return (
     <div>
