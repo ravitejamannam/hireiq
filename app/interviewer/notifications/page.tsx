@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Notifications",
+};
+
 import CommunicationHistoryList from "@/components/notifications/CommunicationHistoryList";
 import { requireInterviewerPortal } from "@/lib/auth/authorization";
 import { getNotifications } from "@/lib/repositories/notification-repository";

@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Log in",
+};
+
 import AuthLayout from "@/components/auth/AuthLayout";
 import LoginForm from "@/components/auth/LoginForm";
 import { safeInternalCallbackPath } from "@/lib/auth/routes";

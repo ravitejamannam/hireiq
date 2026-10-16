@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Interviewers",
+};
+
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import InterviewersClient from "@/components/interviewers/InterviewersClient";
 import { getInterviewers } from "@/lib/repositories/interviewer-repository";

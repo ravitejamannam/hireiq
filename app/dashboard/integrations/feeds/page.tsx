@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Feeds",
+};
+
 import Link from "next/link";
 
 import CopyField from "@/components/integrations/CopyField";

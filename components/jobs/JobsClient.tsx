@@ -74,12 +74,16 @@ export default function JobsClient({
           job.requirementFields,
         );
       } else {
-        await createJob(
+        const created = await createJob(
           job.title,
           job.status,
           job.companyId,
           job.requirementFields,
         );
+        if (created && typeof created === "object" && "error" in created) {
+          setActionError(created.error);
+          return;
+        }
       }
 
       setEditingJob(null);

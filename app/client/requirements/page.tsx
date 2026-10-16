@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Requirements",
+};
+
 import ClientRequirementsClient from "@/components/client/ClientRequirementsClient";
 import { requireClientPortal } from "@/lib/auth/authorization";
 import { getJobs } from "@/lib/repositories/job-repository";

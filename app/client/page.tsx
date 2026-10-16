@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Client",
+};
+
 import Link from "next/link";
 
 import ClientRequirementCard from "@/components/client/ClientRequirementCard";

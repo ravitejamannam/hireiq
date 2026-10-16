@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Company",
+};
+
 import { redirect } from "next/navigation";
 
 import AuthLayout from "@/components/auth/AuthLayout";

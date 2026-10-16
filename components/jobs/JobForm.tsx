@@ -216,6 +216,7 @@ export default function JobForm({
 
   const [titleError, setTitleError] = useState("");
   const [statusError, setStatusError] = useState("");
+  const [targetHireDateError, setTargetHireDateError] = useState("");
   const [companyIdError, setCompanyIdError] = useState("");
   const [numberOfPositionsError, setNumberOfPositionsError] = useState("");
 
@@ -229,6 +230,7 @@ export default function JobForm({
 
     setTitleError("");
     setStatusError("");
+    setTargetHireDateError("");
     setCompanyIdError("");
     setNumberOfPositionsError("");
 
@@ -254,6 +256,11 @@ export default function JobForm({
       setNumberOfPositionsError(
         "Number of positions must be a positive integer.",
       );
+      valid = false;
+    }
+
+    if (!targetHireDate.trim()) {
+      setTargetHireDateError("Target hire date is required.");
       valid = false;
     }
 
@@ -470,6 +477,7 @@ export default function JobForm({
               onChange={(event) => setTargetHireDate(event.target.value)}
               className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-black outline-none transition focus:border-black"
             />
+            <FieldError message={targetHireDateError} />
           </div>
         </div>
       </section>

@@ -16,7 +16,6 @@ import {
   UserCheck,
   Bell,
   CreditCard,
-  Settings,
   Kanban,
   Layers,
   Search,
@@ -326,16 +325,6 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
-
-        <div className="mt-auto border-t border-stone-200/80 p-3">
-          <button
-            type="button"
-            className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-semibold text-stone-600 transition hover:bg-white hover:text-stone-900"
-          >
-            <Settings size={18} className="text-zinc-600" />
-            <span>Settings</span>
-          </button>
-        </div>
       </aside>
     </>
   );

@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Sign up",
+};
+
 import AuthLayout from "@/components/auth/AuthLayout";
 import SignupForm from "@/components/auth/SignupForm";
 

@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Expert review",
+};
+
 import ExpertReviewClient from "@/components/expert-review/ExpertReviewClient";
 import { getExpertReviewApplications } from "@/lib/repositories/application-repository";
 

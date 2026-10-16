@@ -16,6 +16,7 @@ describe("admin sidebar applications link", () => {
   it("points admins at the existing applications page", () => {
     expect(sidebar).toContain('label: "Applications"');
     expect(sidebar).toContain('href: "/dashboard/applications"');
+    expect(sidebar).not.toContain(">Settings<");
     expect(adminLayout).toContain("requireAdmin()");
   });
 });

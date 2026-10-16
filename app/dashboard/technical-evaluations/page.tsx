@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Technical evaluations",
+};
+
 import TechnicalEvaluationsClient from "@/components/technical-evaluations/TechnicalEvaluationsClient";
 import { getTechnicalEvaluationApplications } from "@/lib/repositories/application-repository";
 

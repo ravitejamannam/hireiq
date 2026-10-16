@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Onboarding",
+};
+
 import { redirect } from "next/navigation";
 import Link from "next/link";
 

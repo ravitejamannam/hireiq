@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Requirement",
+};
+
 import { notFound } from "next/navigation";
 import Link from "next/link";
 

@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Forgot password",
+};
+
 import AuthLayout from "@/components/auth/AuthLayout";
 import ForgotPasswordForm from "@/components/auth/ForgotPasswordForm";
 

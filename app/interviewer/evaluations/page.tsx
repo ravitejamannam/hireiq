@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Evaluations",
+};
+
 import Link from "next/link";
 
 import {

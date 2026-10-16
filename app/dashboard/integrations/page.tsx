@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Integrations",
+};
+
 import Link from "next/link";
 
 import StatCard from "@/components/dashboard/StatCard";

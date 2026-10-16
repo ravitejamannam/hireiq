@@ -1,5 +1,10 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+
+export const metadata: Metadata = {
+  title: "Interviews",
+};
 
 export default function InterviewsPage() {
-  redirect("/dashboard/requirements");
+  notFound();
 }

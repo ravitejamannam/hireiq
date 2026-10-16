@@ -37,6 +37,12 @@ describe("billing status filters", () => {
     ]);
   });
 
+  it("keeps a status with no matching rows selectable", () => {
+    expect(billingStatusFilterOptions()).toContain("CANCELLED");
+    expect(filterBillingRecords(records, "CANCELLED")).toEqual([]);
+    expect(filterBillingRecords(records, "ALL")).toEqual(records);
+  });
+
   it("returns every loaded record when the filter is All", () => {
     const mixed = [
       record("PENDING", "Pending role"),

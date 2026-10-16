@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Assessment bank",
+};
+
 import BankAdminClient from "@/components/assessments/BankAdminClient";
 import BankHealthClient from "@/components/assessments/BankHealthClient";
 import { requireAdmin } from "@/lib/auth/authorization";

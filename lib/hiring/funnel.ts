@@ -38,6 +38,8 @@ export type ApplicationFunnelSnapshot = {
   interviewBookedAt: Date | null;
   offerMintedAt: Date | null;
   offerAcceptedAt: Date | null;
+  /** Timestamp of the immutable HIRED outcome, when one was recorded. */
+  hiredAt?: Date | null;
   billedAt: Date | null;
   sourceChannel?: string | null;
   sourcingDatabaseSource?: string | null;
@@ -49,6 +51,7 @@ export type HiringFunnelReport = {
   sources: Array<{ source: string; count: number; hires: number }>;
   timeToShortlistDays: number | null;
   timeToHireDays: number | null;
+  timeToHireLabel: string;
   totals: {
     applications: number;
     active: number;
@@ -66,6 +69,33 @@ const SHORTLISTED_OR_LATER: ApplicationPipelineStatus[] = [
 function meanDays(spans: number[]): number | null {
   if (spans.length === 0) return null;
   return Math.round((spans.reduce((sum, d) => sum + d, 0) / spans.length) * 10) / 10;
+}
+
+export function formatHireDuration(milliseconds: number): string | null {
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return null;
+  if (milliseconds < 60 * 60 * 1000) return "Less than 1 hour";
+  const hours = Math.round(milliseconds / (60 * 60 * 1000));
+  if (hours < 24) return hours === 1 ? "1 hour" : `${hours} hours`;
+  const days = Math.round(milliseconds / (24 * 60 * 60 * 1000));
+  return days === 1 ? "1 day" : `${days} days`;
+}
+
+export function timeToHireFromSnapshots(
+  snapshots: Array<Pick<ApplicationFunnelSnapshot, "createdAt" | "hiredAt">>,
+): { days: number | null; label: string } {
+  const spans = snapshots.flatMap((snapshot) => {
+    if (!snapshot.hiredAt) return [];
+    const ms = snapshot.hiredAt.getTime() - snapshot.createdAt.getTime();
+    return Number.isFinite(ms) && ms >= 0 ? [ms] : [];
+  });
+  if (spans.length === 0) return { days: null, label: "No data" };
+  const mean = spans.reduce((sum, ms) => sum + ms, 0) / spans.length;
+  const label = formatHireDuration(mean) ?? "No data";
+  const days = mean / (24 * 60 * 60 * 1000);
+  return {
+    days: days >= 1 ? Math.round(days * 10) / 10 : null,
+    label,
+  };
 }
 
 function daysBetween(from: Date, to: Date): number {
@@ -129,12 +159,7 @@ export function buildHiringFunnelReport(
       .map((s) => daysBetween(s.createdAt, s.shortlistedAt as Date)),
   );
 
-  // Prefer offerAcceptedAt. Do not use updatedAt — that is not a hire timestamp.
-  const timeToHireDays = meanDays(
-    hired
-      .filter((s) => s.offerAcceptedAt)
-      .map((s) => daysBetween(s.createdAt, s.offerAcceptedAt as Date)),
-  );
+  const timeToHire = timeToHireFromSnapshots(snapshots);
 
   return {
     funnel,
@@ -142,7 +167,8 @@ export function buildHiringFunnelReport(
       .map(([source, value]) => ({ source, ...value }))
       .sort((a, b) => b.count - a.count),
     timeToShortlistDays,
-    timeToHireDays,
+    timeToHireDays: timeToHire.days,
+    timeToHireLabel: timeToHire.label,
     totals: {
       applications: snapshots.length,
       active: snapshots.length - hired.length - rejected.length,

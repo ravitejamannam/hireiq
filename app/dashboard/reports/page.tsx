@@ -1,5 +1,10 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+
+export const metadata: Metadata = {
+  title: "Reports",
+};
 
 export default function ReportsPage() {
-  redirect("/dashboard/requirements");
+  notFound();
 }

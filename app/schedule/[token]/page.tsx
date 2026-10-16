@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Schedule",
+};
+
 import Link from "next/link";
 
 import SlotPicker from "@/components/scheduling/SlotPicker";

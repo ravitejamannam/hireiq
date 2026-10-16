@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Interviewer",
+};
+
 import Link from "next/link";
 
 import StatCard from "@/components/dashboard/StatCard";

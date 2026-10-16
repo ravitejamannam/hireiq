@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Team",
+};
+
 import TeamInvitePanel from "@/components/client/TeamInvitePanel";
 import TeamMemberActions from "@/components/client/TeamMemberActions";
 import { requireClientPortal } from "@/lib/auth/authorization";

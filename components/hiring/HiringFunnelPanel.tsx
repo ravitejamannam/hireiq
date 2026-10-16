@@ -67,7 +67,7 @@ export default function HiringFunnelPanel({
 }: {
   report: Pick<
     HiringFunnelReport,
-    "funnel" | "sources" | "timeToHireDays" | "timeToShortlistDays" | "totals"
+    "funnel" | "sources" | "timeToHireLabel" | "timeToShortlistDays" | "totals"
   >;
   title?: string;
 }) {
@@ -95,7 +95,7 @@ export default function HiringFunnelPanel({
         <article className="rounded-xl border border-zinc-200 bg-white p-5">
           <p className="text-sm font-medium text-zinc-500">Time to hire</p>
           <p className="mt-2 text-3xl font-bold text-zinc-900">
-            {fmtDays(report.timeToHireDays)}
+            {report.timeToHireLabel}
           </p>
         </article>
       </div>
@@ -104,8 +104,8 @@ export default function HiringFunnelPanel({
         <h2 className="font-semibold text-zinc-900">{title}</h2>
         <p className="mt-0.5 text-xs text-zinc-400">
           Counts of applications that reached each event. Assessment score is
-          not a hire decision. Time to hire uses offer acceptance, not last
-          edit.
+          not a hire decision. Time to hire uses the HIRED outcome, not offer
+          acceptance or the last edit.
         </p>
         <div className="mt-5">
           <HiringFunnelBars funnel={report.funnel} />

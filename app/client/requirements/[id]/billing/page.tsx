@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Billing",
+};
+
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
@@ -60,10 +66,10 @@ export default async function ClientRequirementBillingPage({
     <div>
       <div className="mb-6">
         <Link
-          href="/client/requirements"
+          href={`/client/requirements/${id}`}
           className="text-sm font-medium text-zinc-600 underline underline-offset-2 hover:text-black"
         >
-          ← Back to Requirements
+          ← Back to Requirement
         </Link>
       </div>
 

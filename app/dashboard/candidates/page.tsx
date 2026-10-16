@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Candidates",
+};
+
 import CandidatesClient from "@/components/candidates/CandidatesClient";
 import { getCandidates } from "@/lib/repositories/candidate-repository";
 import { getCompanies } from "@/lib/repositories/company-repository";

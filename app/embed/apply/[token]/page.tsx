@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Apply",
+};
+
 import { unstable_noStore as noStore } from "next/cache";
 
 import HostedApplyForm from "@/components/apply/HostedApplyForm";

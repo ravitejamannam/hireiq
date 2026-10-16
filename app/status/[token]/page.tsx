@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Application status",
+};
+
 import { getPublicStatus } from "@/lib/candidates/public-status-service";
 
 export const dynamic = "force-dynamic";

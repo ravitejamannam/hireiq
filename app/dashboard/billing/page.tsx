@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Billing",
+};
+
 import BillingRecordsPanel from "@/components/billing/BillingRecordsPanel";
 import { BILLING_GENERATED_AFTER_HIRE } from "@/components/billing/billing-labels";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";

@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Candidates",
+};
+
 import Link from "next/link";
 
 import InterviewerCandidatesClient from "@/components/interviewer/InterviewerCandidatesClient";

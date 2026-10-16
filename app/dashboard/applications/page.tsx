@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Applications",
+};
+
 import ApplicationsClient from "@/components/applications/ApplicationsClient";
 import { getApplications } from "@/lib/repositories/application-repository";
 import { getCandidates } from "@/lib/repositories/candidate-repository";

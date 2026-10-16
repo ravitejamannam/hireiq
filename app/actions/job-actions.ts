@@ -35,6 +35,7 @@ import {
   discardGeneratedJobDescriptionForActor,
   generateJobDescriptionForActor,
 } from "@/lib/jobs/job-description-ai";
+import { requirementCreateFailureMessage } from "@/lib/jobs/requirement-create-errors";
 import { createPostedRequirementForCompany } from "@/lib/jobs/posted-requirement";
 import {
   isPostedOrLater,
@@ -141,17 +142,25 @@ export async function createJob(
   const admin = await requireAdmin();
   const { requirementLifecycle: _ignored, ...postedFields } = requirementFields;
   void _ignored;
-  const job = await createPostedRequirementForCompany({
-    companyId,
-    createdByUserId: admin.id,
-    title,
-    status,
-    fields: postedFields,
-  });
+  try {
+    const job = await createPostedRequirementForCompany({
+      companyId,
+      createdByUserId: admin.id,
+      title,
+      status,
+      fields: postedFields,
+    });
 
-  revalidateClientRequirementPaths(job.id);
+    revalidateClientRequirementPaths(job.id);
 
-  return job;
+    return job;
+  } catch (error) {
+    const message = requirementCreateFailureMessage(error);
+    if (message) {
+      return { error: message };
+    }
+    throw error;
+  }
 }
 
 export async function updateJob(

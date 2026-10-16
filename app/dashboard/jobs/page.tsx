@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Requirements",
+};
+
 import JobsClient from "@/components/jobs/JobsClient";
 import { getCompanies } from "@/lib/repositories/company-repository";
 import { getInterviewers } from "@/lib/repositories/interviewer-repository";

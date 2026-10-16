@@ -38,6 +38,12 @@ const deskApplicationSelect = {
   candidate: { select: { name: true } },
   job: { select: { title: true, interviewRoundPlan: true } },
   billingLineItem: { select: { createdAt: true } },
+  outcomeEvents: {
+    where: { eventType: "HIRED" },
+    orderBy: { occurredAt: "asc" },
+    take: 1,
+    select: { occurredAt: true },
+  },
   bookingInvite: { select: { usedAt: true } },
   assessmentInvite: {
     select: {
@@ -102,6 +108,7 @@ function toSnapshot(row: DeskApplicationRow): ApplicationFunnelSnapshot {
     interviewBookedAt,
     offerMintedAt: row.offerMintedAt,
     offerAcceptedAt: row.offerAcceptedAt,
+    hiredAt: row.outcomeEvents[0]?.occurredAt ?? null,
     billedAt: row.billingLineItem?.createdAt ?? null,
     sourceChannel: latestIngestion?.sourceChannel ?? null,
     sourcingDatabaseSource: row.source,

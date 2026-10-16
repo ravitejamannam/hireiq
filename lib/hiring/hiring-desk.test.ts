@@ -1,7 +1,12 @@
 import { ApplicationPipelineStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
-import { buildHiringFunnelReport, reachedHiringStage } from "@/lib/hiring/funnel";
+import {
+  buildHiringFunnelReport,
+  formatHireDuration,
+  reachedHiringStage,
+  timeToHireFromSnapshots,
+} from "@/lib/hiring/funnel";
 import { resolveApplicationSourceLabel } from "@/lib/hiring/ingestion-source";
 import {
   normalizeInterviewRoundPlan,
@@ -53,7 +58,22 @@ describe("hiring funnel", () => {
     ).toBe(true);
   });
 
-  it("does not treat updated pipeline rank as time-to-hire", () => {
+  it("measures hire duration from creation to the HIRED event", () => {
+    const report = buildHiringFunnelReport([
+      {
+        ...base,
+        status: ApplicationPipelineStatus.HIRED,
+        offerAcceptedAt: new Date("2026-01-11T00:00:00Z"),
+        hiredAt: new Date("2026-01-11T00:00:00Z"),
+      },
+    ]);
+    expect(report.timeToHireDays).toBe(10);
+    expect(report.timeToHireLabel).toBe("10 days");
+    expect(report.sources[0]?.source).toBe("Hosted apply");
+    expect(report.funnel.find((s) => s.key === "hired")?.count).toBe(1);
+  });
+
+  it("does not treat offer acceptance as the hire timestamp", () => {
     const report = buildHiringFunnelReport([
       {
         ...base,
@@ -61,9 +81,47 @@ describe("hiring funnel", () => {
         offerAcceptedAt: new Date("2026-01-11T00:00:00Z"),
       },
     ]);
-    expect(report.timeToHireDays).toBe(10);
-    expect(report.sources[0]?.source).toBe("Hosted apply");
-    expect(report.funnel.find((s) => s.key === "hired")?.count).toBe(1);
+    expect(report.timeToHireLabel).toBe("No data");
+    expect(report.timeToHireDays).toBeNull();
+  });
+});
+
+describe("time to hire labels", () => {
+  const created = new Date("2026-01-01T00:00:00Z");
+
+  it("says No data when nothing was hired", () => {
+    expect(timeToHireFromSnapshots([{ createdAt: created }])).toEqual({
+      days: null,
+      label: "No data",
+    });
+  });
+
+  it("ignores a hire timestamp before the application existed", () => {
+    expect(
+      timeToHireFromSnapshots([
+        { createdAt: created, hiredAt: new Date("2025-12-01T00:00:00Z") },
+      ]).label,
+    ).toBe("No data");
+  });
+
+  it("does not call a same-day hire 0 days", () => {
+    expect(formatHireDuration(3 * 60 * 60 * 1000)).toBe("3 hours");
+    expect(formatHireDuration(20 * 60 * 1000)).toBe("Less than 1 hour");
+    expect(
+      timeToHireFromSnapshots([
+        { createdAt: created, hiredAt: new Date("2026-01-01T05:00:00Z") },
+      ]).label,
+    ).toBe("5 hours");
+  });
+
+  it("averages several valid hire intervals", () => {
+    const result = timeToHireFromSnapshots([
+      { createdAt: created, hiredAt: new Date("2026-01-11T00:00:00Z") },
+      { createdAt: created, hiredAt: new Date("2026-01-21T00:00:00Z") },
+      { createdAt: created, hiredAt: new Date("2025-01-01T00:00:00Z") },
+    ]);
+    expect(result.days).toBe(15);
+    expect(result.label).toBe("15 days");
   });
 });
 

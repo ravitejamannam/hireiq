@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Analytics",
+};
+
 import Link from "next/link";
 
 import { requireAdmin } from "@/lib/auth/authorization";

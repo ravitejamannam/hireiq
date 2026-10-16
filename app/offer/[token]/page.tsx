@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Offer",
+};
+
 import { unstable_noStore as noStore } from "next/cache";
 
 import OfferDecisionButtons from "@/components/offers/OfferDecisionButtons";

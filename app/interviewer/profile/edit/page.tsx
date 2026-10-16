@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Edit profile",
+};
+
 import InterviewerProfileEditor from "@/components/interviewer/InterviewerProfileEditor";
 import { getInterviewerOwnProfile } from "@/lib/interviewers/interviewer-profile-service";
 import Link from "next/link";

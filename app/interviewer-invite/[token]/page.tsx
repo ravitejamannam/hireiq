@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Interviewer invite",
+};
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PortalRole } from "@prisma/client";
