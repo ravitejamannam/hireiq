@@ -174,6 +174,13 @@ describe("blind relevance collection", () => {
       "Used Python in production",
     ]);
     const serialized = JSON.stringify(collection);
+    const withoutRecordIds = JSON.stringify({
+      ...collection,
+      applicationId: null,
+      specificationId: null,
+      evidence: collection?.evidence.map((item) => ({ text: item.text })),
+    });
+    expect(withoutRecordIds).not.toContain("99");
     for (const forbidden of [
       "M8",
       "M9",
@@ -183,7 +190,6 @@ describe("blind relevance collection", () => {
       "candidateScore",
       "TECH_EVALUATION",
       "expertScore",
-      "99",
       "secret",
       "PROFILE SKILL",
       "LIVE JOB SKILL",

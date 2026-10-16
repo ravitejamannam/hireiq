@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 
-import { AuthenticationError, requireAdmin } from "@/lib/auth/authorization";
+import {
+  AuthenticationError,
+  requireAdmin,
+  requireApplicationAccess,
+  requireEvaluationAccess,
+  requireInterviewerPortal,
+} from "@/lib/auth/authorization";
 import {
   BlueprintError,
   copyBlueprintForAdmin,
@@ -55,7 +61,8 @@ export async function saveBlueprint(input: {
 
 export async function getInterviewRubric(applicationId: number) {
   try {
-    await requireInterviewerPortalCompat();
+    await requireInterviewerPortal();
+    await requireApplicationAccess(applicationId);
     const blueprint = await getActiveBlueprintForApplication(applicationId);
     return { ok: true as const, blueprint };
   } catch (error) {
@@ -80,17 +87,10 @@ export async function saveInterviewRubricScores(
   }
 }
 
-async function requireInterviewerPortalCompat() {
-  // Local import keeps this action file's dependency graph identical to
-  // evaluation-actions.ts patterns.
-  const { requireInterviewerPortal } = await import("@/lib/auth/authorization");
-  return requireInterviewerPortal();
-}
-
-// re-export for client components that need existing score reads
 export async function loadRubricScores(evaluationId: number) {
   try {
-    await requireInterviewerPortalCompat();
+    await requireInterviewerPortal();
+    await requireEvaluationAccess(evaluationId);
     return { ok: true as const, scores: await getRubricScoresForEvaluation(evaluationId) };
   } catch (error) {
     if (error instanceof AuthenticationError) throw error;
