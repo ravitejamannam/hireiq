@@ -5,6 +5,7 @@ import {
   type Prisma,
 } from "@prisma/client";
 
+import { writeAuditLog, auditActionForStatus } from "@/lib/audit/write-audit-log";
 import { OUTCOME_EVENT_PROTOCOL_VERSION } from "@/lib/outcomes/outcome-event-versions";
 import { shortlistedAtPatch } from "@/lib/hiring/pipeline-timestamps";
 
@@ -38,6 +39,7 @@ export async function commitApplicationStatusChange(
     nextStatus: ApplicationPipelineStatus;
     actorUserId: number;
     actorType: Exclude<OutcomeEventActorType, "PUBLIC_TOKEN">;
+    actorRole?: string;
     patch?: {
       source?: Prisma.ApplicationUpdateManyMutationInput["source"];
       expertScore?: number | null;
@@ -88,6 +90,22 @@ export async function commitApplicationStatusChange(
   });
 
   if (updated.count !== 1) return null;
+
+  if (row.status !== input.nextStatus) {
+    const reason =
+      typeof input.patch?.rejectionReason === "string"
+        ? input.patch.rejectionReason
+        : null;
+    await writeAuditLog(tx, {
+      actorUserId: input.actorUserId,
+      actorRole: input.actorRole ?? input.actorType,
+      companyId: row.companyId,
+      action: auditActionForStatus(input.nextStatus),
+      targetType: "APPLICATION",
+      targetId: row.id,
+      reason,
+    });
+  }
 
   if (
     input.patch?.candidateId !== undefined ||

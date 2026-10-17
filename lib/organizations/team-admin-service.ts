@@ -125,10 +125,23 @@ export async function suspendOrganizationMemberForOwner(input: {
     throw new TeamAdminError("INVALID_STATUS_TRANSITION");
   }
 
-  const updated = await prisma.organizationMember.update({
-    where: { id: member.id },
-    data: { status: OrganizationMemberStatus.SUSPENDED },
-    include: { user: { select: { name: true, email: true } } },
+  const updated = await prisma.$transaction(async (tx) => {
+    const row = await tx.organizationMember.update({
+      where: { id: member.id },
+      data: { status: OrganizationMemberStatus.SUSPENDED },
+      include: { user: { select: { name: true, email: true } } },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorUserId: input.actorUserId,
+        actorRole: "OWNER",
+        companyId,
+        action: "MEMBER_SUSPENDED",
+        targetType: "ORGANIZATION_MEMBER",
+        targetId: member.id,
+      },
+    });
+    return row;
   });
   return toSafe(updated);
 }
@@ -150,10 +163,23 @@ export async function reinstateOrganizationMemberForOwner(input: {
     throw new TeamAdminError("INVALID_STATUS_TRANSITION");
   }
 
-  const updated = await prisma.organizationMember.update({
-    where: { id: member.id },
-    data: { status: OrganizationMemberStatus.ACTIVE },
-    include: { user: { select: { name: true, email: true } } },
+  const updated = await prisma.$transaction(async (tx) => {
+    const row = await tx.organizationMember.update({
+      where: { id: member.id },
+      data: { status: OrganizationMemberStatus.ACTIVE },
+      include: { user: { select: { name: true, email: true } } },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorUserId: input.actorUserId,
+        actorRole: "OWNER",
+        companyId,
+        action: "MEMBER_REINSTATED",
+        targetType: "ORGANIZATION_MEMBER",
+        targetId: member.id,
+      },
+    });
+    return row;
   });
   return toSafe(updated);
 }
@@ -242,6 +268,29 @@ export async function transferOwnershipForOwner(input: {
       where: { id: current.id },
       data: { role: OrganizationMemberRole.OWNER },
       include: { user: { select: { name: true, email: true } } },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorUserId: input.actorUserId,
+        actorRole: "OWNER",
+        companyId,
+        action: "MEMBERSHIP_ROLE_CHANGED",
+        targetType: "ORGANIZATION_MEMBER",
+        targetId: current.id,
+        reason: "MEMBER to OWNER",
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorUserId: input.actorUserId,
+        actorRole: "OWNER",
+        companyId,
+        action: "MEMBERSHIP_ROLE_CHANGED",
+        targetType: "ORGANIZATION_MEMBER",
+        targetId: actorMembership.id,
+        reason: "OWNER to MEMBER",
+      },
     });
 
     return { newOwner, previousOwner };

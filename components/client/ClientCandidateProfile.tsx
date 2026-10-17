@@ -102,6 +102,7 @@ export type ClientCandidateProfileData = {
 
 type ClientCandidateProfileProps = {
   candidate: ClientCandidateProfileData;
+  canConfirmHire?: boolean;
 };
 
 function ScorecardTable({ entries }: { entries: ClientScorecardEntry[] }) {
@@ -133,6 +134,7 @@ function ScorecardTable({ entries }: { entries: ClientScorecardEntry[] }) {
 
 export default function ClientCandidateProfile({
   candidate,
+  canConfirmHire = false,
 }: ClientCandidateProfileProps) {
   const evaluation = candidate.evaluation;
   const scorecard = evaluation
@@ -145,6 +147,7 @@ export default function ClientCandidateProfile({
         applicationId={candidate.applicationId}
         candidateName={candidate.name}
         status={candidate.pipelineStatus}
+        canConfirmHire={canConfirmHire}
       />
 
       <CandidateStructuredProfile

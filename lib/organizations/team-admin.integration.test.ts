@@ -41,6 +41,7 @@ describe("organization team authorization", () => {
   afterAll(async () => {
     if (companyIds.length === 0) return;
     await prisma.invitation.deleteMany({ where: { companyId: { in: companyIds } } });
+    await prisma.auditLog.deleteMany({ where: { companyId: { in: companyIds } } });
     await prisma.organizationMember.deleteMany({ where: { companyId: { in: companyIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.company.deleteMany({ where: { id: { in: companyIds } } });

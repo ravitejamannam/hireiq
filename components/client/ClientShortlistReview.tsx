@@ -52,6 +52,7 @@ type ClientShortlistReviewProps = {
   selectedCount: number;
   hiredCount: number;
   items: ClientShortlistItem[];
+  canConfirmHire: boolean;
 };
 
 function getErrorMessage(error: unknown) {
@@ -100,6 +101,7 @@ export default function ClientShortlistReview({
   selectedCount,
   hiredCount,
   items,
+  canConfirmHire,
 }: ClientShortlistReviewProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -449,6 +451,7 @@ export default function ClientShortlistReview({
               {filteredItems.map((item) => (
                 <ClientShortlistCard
                   key={item.applicationId}
+                  canConfirmHire={canConfirmHire}
                   candidate={{
                     ...item,
                     compareSelected: compareIds.includes(item.applicationId),

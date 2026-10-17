@@ -60,6 +60,14 @@ async function authorizeDistributionCompany(jobId: number) {
   return { companyId: client.companyId, membershipRole: client.membershipRole };
 }
 
+async function authorizeOwnerDistribution(jobId: number) {
+  const actor = await authorizeDistributionCompany(jobId);
+  if (actor.membershipRole === "MEMBER") {
+    throw new JobDistributionError("Unauthorized.");
+  }
+  return actor;
+}
+
 async function authorizeConnectionMutation() {
   const client = await requireClientPortal();
   if (client.membershipRole !== "OWNER") {
@@ -140,7 +148,7 @@ export async function publishJobDistribution(input: {
     typeof input.jobId === "number"
       ? input.jobId
       : Number.parseInt(String(input.jobId), 10);
-  const actor = await authorizeDistributionCompany(jobId);
+  const actor = await authorizeOwnerDistribution(jobId);
   const distribution = await publishJobDistributionForCompany({
     companyId: actor.companyId,
     distributionId: input.distributionId,
@@ -157,7 +165,7 @@ export async function retryJobDistribution(input: {
     typeof input.jobId === "number"
       ? input.jobId
       : Number.parseInt(String(input.jobId), 10);
-  const actor = await authorizeDistributionCompany(jobId);
+  const actor = await authorizeOwnerDistribution(jobId);
   const distribution = await retryJobDistributionForCompany({
     companyId: actor.companyId,
     distributionId: input.distributionId,
@@ -174,7 +182,7 @@ export async function pauseJobDistribution(input: {
     typeof input.jobId === "number"
       ? input.jobId
       : Number.parseInt(String(input.jobId), 10);
-  const actor = await authorizeDistributionCompany(jobId);
+  const actor = await authorizeOwnerDistribution(jobId);
   const distribution = await pauseJobDistributionForCompany({
     companyId: actor.companyId,
     distributionId: input.distributionId,
@@ -191,7 +199,7 @@ export async function closeJobDistribution(input: {
     typeof input.jobId === "number"
       ? input.jobId
       : Number.parseInt(String(input.jobId), 10);
-  const actor = await authorizeDistributionCompany(jobId);
+  const actor = await authorizeOwnerDistribution(jobId);
   const distribution = await closeJobDistributionForCompany({
     companyId: actor.companyId,
     distributionId: input.distributionId,

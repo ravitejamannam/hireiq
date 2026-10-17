@@ -47,10 +47,12 @@ export type ClientShortlistCardData = {
 
 type ClientShortlistCardProps = {
   candidate: ClientShortlistCardData;
+  canConfirmHire?: boolean;
 };
 
 export default function ClientShortlistCard({
   candidate,
+  canConfirmHire = false,
 }: ClientShortlistCardProps) {
   return (
     <article className="rounded-xl border border-zinc-200 bg-white p-5 transition hover:border-black">
@@ -183,6 +185,7 @@ export default function ClientShortlistCard({
             applicationId={candidate.applicationId}
             candidateName={candidate.name}
             status={candidate.status}
+            canConfirmHire={canConfirmHire}
           />
         </div>
       ) : null}

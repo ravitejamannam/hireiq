@@ -360,6 +360,55 @@ function revalidateInterviewerEvaluationPaths(
 }
 
 /**
+ * Assigned interviewer Hire or No Hire recommendation.
+ * Does not change application status or write an OutcomeEvent.
+ */
+export async function submitInterviewerHiringRecommendation(
+  applicationId: number,
+  recommendation: "HIRE" | "NO_HIRE",
+  reason: unknown,
+) {
+  const writtenReason = typeof reason === "string" ? reason.trim() : "";
+  if (!writtenReason) {
+    throw new EvaluationValidationError("A written reason is required.");
+  }
+  if (recommendation !== "HIRE" && recommendation !== "NO_HIRE") {
+    throw new EvaluationValidationError("Recommendation must be Hire or No Hire.");
+  }
+
+  const { interviewer, application } =
+    await assertInterviewerOwnsApplication(applicationId);
+
+  const evaluation = await prisma.evaluation.upsert({
+    where: {
+      applicationId_interviewerId: {
+        applicationId: application.id,
+        interviewerId: interviewer.interviewerId,
+      },
+    },
+    create: {
+      applicationId: application.id,
+      interviewerId: interviewer.interviewerId,
+      recommendation,
+      notes: writtenReason,
+    },
+    update: {
+      recommendation,
+      notes: writtenReason,
+    },
+    select: {
+      id: true,
+      applicationId: true,
+      recommendation: true,
+      notes: true,
+    },
+  });
+
+  revalidateInterviewerEvaluationPaths(application.jobId, application.id);
+  return evaluation;
+}
+
+/**
  * Interviewer upsert of their own Evaluation for an assigned Application.
  * Does not accept interviewerId from the browser.
  */

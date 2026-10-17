@@ -75,6 +75,7 @@ async function world(label: string) {
 afterAll(async () => {
   if (companyIds.length === 0) return;
   await prisma.outcomeEvent.deleteMany({ where: { companyId: { in: companyIds } } });
+  await prisma.auditLog.deleteMany({ where: { companyId: { in: companyIds } } });
   await prisma.billingLineItem.deleteMany({
     where: { application: { companyId: { in: companyIds } } },
   });

@@ -52,6 +52,7 @@ describe("interview and coding-test writes", () => {
     await prisma.interview.deleteMany({
       where: { application: { companyId: { in: companyIds } } },
     });
+    await prisma.auditLog.deleteMany({ where: { companyId: { in: companyIds } } });
     await prisma.codingTest.deleteMany({
       where: { application: { companyId: { in: companyIds } } },
     });

@@ -10,6 +10,7 @@ import {
   requireClientPortal,
   requireInterviewerPortal,
 } from "@/lib/auth/authorization";
+import { clientMayConfirmHire } from "@/lib/hiring/hire-confirmation-auth";
 import { generateBillingForHiredApplication } from "@/lib/billing/generate-hire-billing";
 import { prisma } from "@/lib/prisma";
 import {
@@ -450,6 +451,7 @@ export async function transitionApplicationStatus(
         nextStatus,
         actorUserId: admin.id,
         actorType: OutcomeEventActorType.ADMIN,
+        actorRole: "ADMIN",
         patch: rejectionReason ? { rejectionReason } : {},
       });
       if (!updated) {
@@ -545,6 +547,12 @@ export async function transitionInterviewerApplicationStatus(
     throw new AuthorizationError("Resource not found.");
   }
 
+  if (nextStatus === ApplicationPipelineStatus.REJECTED) {
+    throw new ApplicationValidationError(
+      "Rejection must be confirmed by the client who owns this requirement.",
+    );
+  }
+
   const allowedTransitions = getValidInterviewerPipelineTransitions(
     application.status,
   );
@@ -578,6 +586,7 @@ export async function transitionInterviewerApplicationStatus(
         nextStatus,
         actorUserId: interviewer.id,
         actorType: OutcomeEventActorType.INTERVIEWER,
+        actorRole: "INTERVIEWER",
       });
       if (!updated) {
         throw new ApplicationValidationError(
@@ -695,6 +704,7 @@ export async function selectClientCandidate(applicationId: number) {
         nextStatus: ApplicationPipelineStatus.SELECTED,
         actorUserId: client.id,
         actorType: OutcomeEventActorType.CLIENT,
+        actorRole: client.membershipRole,
       });
       if (!updated) {
         throw new ApplicationValidationError(
@@ -773,6 +783,10 @@ export async function confirmClientCandidateHire(applicationId: number) {
     throw new AuthorizationError("Resource not found.");
   }
 
+  if (!(await clientMayConfirmHire(client))) {
+    throw new AuthorizationError("Unauthorized.");
+  }
+
   if (application.status !== ApplicationPipelineStatus.SELECTED) {
     throw new ApplicationValidationError(
       "Candidate must be selected before hire can be confirmed.",
@@ -810,6 +824,7 @@ export async function confirmClientCandidateHire(applicationId: number) {
         nextStatus: ApplicationPipelineStatus.HIRED,
         actorUserId: client.id,
         actorType: OutcomeEventActorType.CLIENT,
+        actorRole: client.membershipRole,
       });
       if (!updated) {
         throw new ApplicationValidationError(

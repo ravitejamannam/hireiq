@@ -324,81 +324,85 @@ export default function JobDistributionPanel({
         >
           Enable
         </button>
-        <button
-          type="button"
-          disabled={isPending || !selectedDistribution}
-          className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black disabled:text-zinc-400"
-          onClick={() =>
-            selectedDistribution &&
-            run("Publish attempted.", () =>
-              publishJobDistribution({
-                jobId,
-                distributionId: selectedDistribution.id,
-              }),
-            )
-          }
-        >
-          Publish
-        </button>
-        <button
-          type="button"
-          disabled={isPending || !selectedDistribution}
-          className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black disabled:text-zinc-400"
-          onClick={() =>
-            selectedDistribution &&
-            run("Retry attempted.", () =>
-              retryJobDistribution({
-                jobId,
-                distributionId: selectedDistribution.id,
-              }),
-            )
-          }
-        >
-          Retry
-        </button>
-        {!isPauseUnsupportedProvider(selectedProvider) ? (
-          <button
-            type="button"
-            disabled={
-              isPending ||
-              selectedDistribution?.status !== JobDistributionStatus.PUBLISHED
-            }
-            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black disabled:text-zinc-400"
-            onClick={() =>
-              selectedDistribution &&
-              run("Paused.", () =>
-                pauseJobDistribution({
-                  jobId,
-                  distributionId: selectedDistribution.id,
-                }),
-              )
-            }
-          >
-            Pause
-          </button>
-        ) : (
-          <p className="self-center text-sm text-zinc-600">
-            {selectedProvider === "INDEED"
-              ? "Indeed does not support pause or resume."
-              : "Naukri does not support pause or resume."}
-          </p>
-        )}
-        <button
-          type="button"
-          disabled={isPending || !selectedDistribution}
-          className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black disabled:text-zinc-400"
-          onClick={() =>
-            selectedDistribution &&
-            run("Closed.", () =>
-              closeJobDistribution({
-                jobId,
-                distributionId: selectedDistribution.id,
-              }),
-            )
-          }
-        >
-          Close
-        </button>
+        {isOwner ? (
+          <>
+            <button
+              type="button"
+              disabled={isPending || !selectedDistribution}
+              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black disabled:text-zinc-400"
+              onClick={() =>
+                selectedDistribution &&
+                run("Publish attempted.", () =>
+                  publishJobDistribution({
+                    jobId,
+                    distributionId: selectedDistribution.id,
+                  }),
+                )
+              }
+            >
+              Publish
+            </button>
+            <button
+              type="button"
+              disabled={isPending || !selectedDistribution}
+              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black disabled:text-zinc-400"
+              onClick={() =>
+                selectedDistribution &&
+                run("Retry attempted.", () =>
+                  retryJobDistribution({
+                    jobId,
+                    distributionId: selectedDistribution.id,
+                  }),
+                )
+              }
+            >
+              Retry
+            </button>
+            {!isPauseUnsupportedProvider(selectedProvider) ? (
+              <button
+                type="button"
+                disabled={
+                  isPending ||
+                  selectedDistribution?.status !== JobDistributionStatus.PUBLISHED
+                }
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black disabled:text-zinc-400"
+                onClick={() =>
+                  selectedDistribution &&
+                  run("Paused.", () =>
+                    pauseJobDistribution({
+                      jobId,
+                      distributionId: selectedDistribution.id,
+                    }),
+                  )
+                }
+              >
+                Pause
+              </button>
+            ) : (
+              <p className="self-center text-sm text-zinc-600">
+                {selectedProvider === "INDEED"
+                  ? "Indeed does not support pause or resume."
+                  : "Naukri does not support pause or resume."}
+              </p>
+            )}
+            <button
+              type="button"
+              disabled={isPending || !selectedDistribution}
+              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-black disabled:text-zinc-400"
+              onClick={() =>
+                selectedDistribution &&
+                run("Closed.", () =>
+                  closeJobDistribution({
+                    jobId,
+                    distributionId: selectedDistribution.id,
+                  }),
+                )
+              }
+            >
+              Close
+            </button>
+          </>
+        ) : null}
       </div>
 
       {selectedDistribution ? (

@@ -11,6 +11,7 @@ import ClientCandidateProfile from "@/components/client/ClientCandidateProfile";
 import { selectPrimaryClientEvaluation } from "@/components/client/client-labels";
 import { getApplicationAssessmentSummary } from "@/lib/assessments/assessment-service";
 import { requireClientPortal } from "@/lib/auth/authorization";
+import { clientMayConfirmHire } from "@/lib/hiring/hire-confirmation-auth";
 import { getOrMaterializeCandidateProfile } from "@/lib/candidates/candidate-profile-service";
 import { getClientApplicationForRequirement } from "@/lib/repositories/application-repository";
 import { getApplicationHiringTimeline } from "@/lib/hiring/requirement-desk";
@@ -118,6 +119,7 @@ export default async function ClientCandidateDetailPage({
       ) : null}
 
       <ClientCandidateProfile
+        canConfirmHire={await clientMayConfirmHire(client)}
         candidate={{
           applicationId: application.id,
           name: profile.name,

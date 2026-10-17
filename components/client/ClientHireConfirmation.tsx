@@ -11,6 +11,7 @@ type ClientHireConfirmationProps = {
   applicationId: number;
   candidateName: string;
   status: ApplicationPipelineStatus;
+  canConfirmHire?: boolean;
 };
 
 function getErrorMessage(error: unknown) {
@@ -23,6 +24,7 @@ export default function ClientHireConfirmation({
   applicationId,
   candidateName,
   status,
+  canConfirmHire = false,
 }: ClientHireConfirmationProps) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -84,8 +86,9 @@ export default function ClientHireConfirmation({
         </div>
       </dl>
       <p className="mt-3 text-sm text-zinc-600">
-        Confirm Hire to mark this candidate hired. Billing has not been
-        generated.
+        {canConfirmHire
+          ? "Confirm Hire to mark this candidate hired. Billing has not been generated."
+          : "Only the company owner can confirm this hire, unless the company allows members to confirm."}
       </p>
 
       {actionError ? (
@@ -97,6 +100,7 @@ export default function ClientHireConfirmation({
         </p>
       ) : null}
 
+      {canConfirmHire ? (
       <button
         type="button"
         disabled={isPending}
@@ -108,6 +112,7 @@ export default function ClientHireConfirmation({
       >
         {isPending ? "Confirming..." : "Confirm Hire"}
       </button>
+      ) : null}
 
       {confirming ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

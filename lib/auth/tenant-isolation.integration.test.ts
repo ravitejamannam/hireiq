@@ -24,7 +24,8 @@ vi.mock("next/cache", () => ({
 
 import { selectClientCandidate, transitionInterviewerApplicationStatus } from "@/app/actions/application-actions";
 import { inviteOrganizationMember } from "@/app/actions/organization-actions";
-import { getClientBillingRecordById } from "@/lib/repositories/billing-repository";
+import { getClientBillingRecordById, getBillingRecordById } from "@/lib/repositories/billing-repository";
+import { getCandidateById } from "@/lib/repositories/candidate-repository";
 import { getClientApplicationForRequirement, getApplicationById } from "@/lib/repositories/application-repository";
 import { updateBillingRecordStatus } from "@/app/actions/billing-actions";
 import { getEvaluationById } from "@/lib/repositories/evaluation-repository";
@@ -65,6 +66,7 @@ describe("tenant isolation boundaries", () => {
     const companyIds = ids.companies;
     if (companyIds.length === 0) return;
     await prisma.outcomeEvent.deleteMany({ where: { companyId: { in: companyIds } } });
+    await prisma.auditLog.deleteMany({ where: { companyId: { in: companyIds } } });
     await prisma.evaluation.deleteMany({
       where: { application: { companyId: { in: companyIds } } },
     });
@@ -233,6 +235,13 @@ describe("tenant isolation boundaries", () => {
     const ownJob = await getJobById(jobA);
     expect(ownJob?.id).toBe(jobA);
     expect(await getJobById(jobB)).toBeNull();
+    expect(await getCandidateById(candidateB.id)).toBeNull();
+    expect(
+      (await prisma.candidate.findUnique({
+        where: { id: candidateB.id },
+        select: { name: true, companyId: true },
+      })),
+    ).toEqual({ name: `${MARKER} candidate B`, companyId: companyB.id });
 
     const ownApplication = await getClientApplicationForRequirement(jobA, appA);
     expect(ownApplication?.candidate.name).toBe(`${MARKER} candidate A`);
@@ -340,5 +349,14 @@ describe("tenant isolation boundaries", () => {
       (await prisma.billingRecord.findUnique({ where: { id: billingB }, select: { status: true } }))
         ?.status,
     ).toBe(BillingStatus.READY);
+
+    asUser(interviewerA);
+    await expect(getBillingRecordById(billingB)).rejects.toBeInstanceOf(AuthorizationError);
+    expect(
+      (await prisma.billingRecord.findUnique({
+        where: { id: billingB },
+        select: { status: true, companyId: true },
+      })),
+    ).toEqual({ status: BillingStatus.READY, companyId: companyB.id });
   });
 });

@@ -486,6 +486,25 @@ model OutcomeEvent {
   @@index([companyId, jobId, occurredAt])
 }
 
+/// Append-only operational audit. Not an OutcomeEvent and not editable.
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  occurredAt  DateTime @default(now())
+  actorUserId Int
+  actorRole   String
+  companyId   Int
+  action      String
+  targetType  String
+  targetId    Int
+  reason      String?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  actor   User    @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, occurredAt])
+  @@index([actorUserId])
+}
+
 enum EvidenceGraphNodeType {
   EVIDENCE
   CLAIM
@@ -526,6 +545,8 @@ model Company {
   publicSlug String @unique
   /// When true, the public careers hub may show application counts. Off by default.
   publishApplicationCount Boolean @default(false)
+  /// When true, active Client Members may confirm hire. Owners always can. Off by default.
+  membersCanConfirmHire Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -568,6 +589,7 @@ model Company {
   humanRelevanceJudgments   HumanRelevanceJudgment[]
   humanRelevanceJudgmentEvidence HumanRelevanceJudgmentEvidence[]
   outcomeEvents             OutcomeEvent[]
+  auditLogs                 AuditLog[]
   retrievalEmbeddings       RetrievalEmbedding[]
   evidenceGraphRuns         EvidenceGraphRun[]
   evidenceGraphEdges        EvidenceGraphEdge[]
@@ -1831,6 +1853,7 @@ model User {
   organizationMemberships OrganizationMember[]
   humanRelevanceJudgments HumanRelevanceJudgment[]
   outcomeEvents           OutcomeEvent[]
+  auditLogs               AuditLog[]               @relation("AuditLogActor")
   sentInvitations         Invitation[]             @relation("InvitationInviter")
   sentInterviewerInvitations InterviewerInvitation[] @relation("InterviewerInvitationInviter")
   invitedMembers          OrganizationMember[]     @relation("MembershipInviter")

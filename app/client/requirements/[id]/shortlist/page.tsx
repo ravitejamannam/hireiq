@@ -15,6 +15,7 @@ import {
   selectPrimaryClientEvaluation,
 } from "@/components/client/client-labels";
 import { requireClientPortal } from "@/lib/auth/authorization";
+import { clientMayConfirmHire } from "@/lib/hiring/hire-confirmation-auth";
 import {
   getClientApplicationsForRequirement,
   getClientShortlistedApplicationsForRequirement,
@@ -35,7 +36,7 @@ export default async function ClientShortlistPage({
   // Ignore tenant query params — company comes from the session User only.
   void searchParams;
 
-  await requireClientPortal();
+  const client = await requireClientPortal();
 
   const { id } = await params;
   const requirementId = Number(id);
@@ -122,6 +123,7 @@ export default async function ClientShortlistPage({
         candidateCount={applications.length}
         selectedCount={selectedCount}
         hiredCount={hiredCount}
+        canConfirmHire={await clientMayConfirmHire(client)}
         items={items}
       />
     </div>

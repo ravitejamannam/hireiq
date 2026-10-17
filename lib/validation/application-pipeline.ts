@@ -32,7 +32,7 @@ export const ADMIN_PIPELINE_TRANSITIONS: Record<
 
 /**
  * Interviewer recommendation pipeline for assigned requirements.
- * Does not include SELECT or HIRE.
+ * Interviewers may shortlist. They cannot select, hire, or reject.
  */
 export const INTERVIEWER_PIPELINE_TRANSITIONS: Record<
   ApplicationPipelineStatus,
@@ -42,7 +42,6 @@ export const INTERVIEWER_PIPELINE_TRANSITIONS: Record<
   [ApplicationPipelineStatus.EXPERT_REVIEW]: [],
   [ApplicationPipelineStatus.TECH_EVALUATION]: [
     ApplicationPipelineStatus.SHORTLISTED,
-    ApplicationPipelineStatus.REJECTED,
   ],
   [ApplicationPipelineStatus.SHORTLISTED]: [],
   [ApplicationPipelineStatus.SELECTED]: [],
