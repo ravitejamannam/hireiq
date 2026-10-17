@@ -27,6 +27,7 @@ export type ClientCandidateCardData = {
   technicalEvaluationStatus: string;
   recommendation: Recommendation | null;
   fitDecision: EvaluationFitDecision | null;
+  emailDeliveryNote: string | null;
 };
 
 type ClientCandidateCardProps = {
@@ -76,6 +77,12 @@ export default function ClientCandidateCard({
           <dt className="font-medium text-black">Technical evaluation</dt>
           <dd>{candidate.technicalEvaluationStatus}</dd>
         </div>
+        {candidate.emailDeliveryNote ? (
+          <div className="sm:col-span-2">
+            <dt className="font-medium text-black">Email</dt>
+            <dd>{candidate.emailDeliveryNote}</dd>
+          </div>
+        ) : null}
         <div>
           <dt className="font-medium text-black">Recommendation</dt>
           <dd>{getClientRecommendationLabel(candidate.recommendation)}</dd>

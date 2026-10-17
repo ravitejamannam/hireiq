@@ -17,6 +17,7 @@ const applicationSelect = {
   source: true,
   expertScore: true,
   rejectionReason: true,
+  candidateStageEmailStatus: true,
   offerAcceptedAt: true,
   offerMintedAt: true,
   offerDeclinedAt: true,
@@ -76,6 +77,15 @@ const applicationSelect = {
     orderBy: {
       createdAt: "desc" as const,
     },
+  },
+  interviews: {
+    select: {
+      bookingEmailStatus: true,
+    },
+    orderBy: {
+      createdAt: "desc" as const,
+    },
+    take: 1,
   },
 } satisfies Prisma.ApplicationSelect;
 
@@ -255,6 +265,12 @@ const clientApplicationListSelect = {
   source: true,
   expertScore: true,
   createdAt: true,
+  candidateStageEmailStatus: true,
+  interviews: {
+    select: { bookingEmailStatus: true },
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+  },
   candidate: {
     select: {
       name: true,

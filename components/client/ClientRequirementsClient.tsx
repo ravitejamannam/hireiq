@@ -73,9 +73,17 @@ export default function ClientRequirementsClient({
     setActionError("");
 
     try {
-      const job = await createClientRequirement(payload.title, payload.fields);
+      const result = await createClientRequirement(
+        payload.title,
+        payload.fields,
+        payload.idempotencyKey,
+      );
+      if ("error" in result) {
+        setActionError(result.error);
+        return;
+      }
       setIsModalOpen(false);
-      router.push(`/client/requirements/${job.id}`);
+      router.push(`/client/requirements/${result.id}`);
       router.refresh();
     } catch (error) {
       setActionError(

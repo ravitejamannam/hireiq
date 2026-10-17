@@ -63,6 +63,7 @@ const emptyForm: FormState = {
 export type ClientPostRolePayload = {
   title: string;
   fields: ClientRequirementEditableInput;
+  idempotencyKey: string;
 };
 
 type ClientPostRoleModalProps = {
@@ -110,6 +111,7 @@ export default function ClientPostRoleModal({
   onCreate,
 }: ClientPostRoleModalProps) {
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   if (!isOpen) return null;
 
@@ -122,6 +124,7 @@ export default function ClientPostRoleModal({
     onCreate({
       title: form.title,
       fields: parseFields(form),
+      idempotencyKey,
     });
   }
 

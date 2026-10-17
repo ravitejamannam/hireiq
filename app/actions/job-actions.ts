@@ -29,6 +29,7 @@ import {
   type GenericJobRequirementInput,
   JobValidationError,
   assertInterviewerAssignmentNotLocked,
+  validateOptionalIdempotencyKey,
 } from "@/lib/validation/job-validation";
 import {
   acceptGeneratedJobDescriptionForActor,
@@ -96,18 +97,32 @@ function revalidateClientRequirementPaths(jobId: number) {
 export async function createClientRequirement(
   title: string,
   fields: ClientRequirementEditableInput = {},
+  idempotencyKey?: unknown,
 ) {
-  const client = await requireClientPortal();
-  const job = await createPostedRequirementForCompany({
-    companyId: client.companyId,
-    createdByUserId: client.id,
-    title,
-    fields,
-  });
+  try {
+    const clientCreateIdempotencyKey = validateOptionalIdempotencyKey(idempotencyKey);
+    if (!clientCreateIdempotencyKey) {
+      return { error: "Idempotency key is invalid." };
+    }
+    const client = await requireClientPortal();
+    const job = await createPostedRequirementForCompany({
+      companyId: client.companyId,
+      createdByUserId: client.id,
+      title,
+      fields,
+      clientCreateIdempotencyKey,
+    });
 
-  revalidateClientRequirementPaths(job.id);
+    revalidateClientRequirementPaths(job.id);
 
-  return job;
+    return job;
+  } catch (error) {
+    const message = requirementCreateFailureMessage(error);
+    if (message) {
+      return { error: message };
+    }
+    throw error;
+  }
 }
 
 async function requireJobDescriptionAiActor() {

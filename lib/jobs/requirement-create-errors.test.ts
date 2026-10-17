@@ -17,10 +17,12 @@ describe("requirement create failures", () => {
     expect(
       requirementCreateFailureMessage(
         new JobSpecificationError(
-          "No assessment is configured for this role category.",
+          "No assessment is configured for this role category. An administrator must add at least one active assessment question for this role category before the role can be posted.",
         ),
       ),
-    ).toBe("No assessment is configured for this role category.");
+    ).toBe(
+      "No assessment is configured for this role category. An administrator must add at least one active assessment question for this role category before the role can be posted.",
+    );
   });
 
   it("does not hide unexpected errors", () => {

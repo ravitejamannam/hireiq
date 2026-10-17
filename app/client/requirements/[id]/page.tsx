@@ -16,6 +16,7 @@ import {
   getClientTechnicalEvaluationStatus,
   selectPrimaryClientEvaluation,
 } from "@/components/client/client-labels";
+import { describeEmailDeliveryOutcome } from "@/lib/communication/email-delivery-status";
 import { requireClientPortal } from "@/lib/auth/authorization";
 import { getClientApplicationsForRequirement } from "@/lib/repositories/application-repository";
 import { getJobById } from "@/lib/repositories/job-repository";
@@ -96,6 +97,13 @@ export default async function ClientRequirementDetailPage({
           getClientTechnicalEvaluationStatus(evaluation),
         recommendation: evaluation?.recommendation ?? null,
         fitDecision: evaluation?.fitDecision ?? null,
+        emailDeliveryNote:
+          [
+            describeEmailDeliveryOutcome(application.candidateStageEmailStatus),
+            describeEmailDeliveryOutcome(application.interviews[0]?.bookingEmailStatus),
+          ]
+            .filter(Boolean)
+            .join(" ") || null,
       };
     },
   );

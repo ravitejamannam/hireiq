@@ -299,18 +299,28 @@ export async function bookSlotWithToken(input: {
       const { deliverBookingConfirmation } = await import(
         "./scheduling-emails"
       );
-      const submissionContact = await prisma.hostedApplySubmission.findUnique({
-        where: { id: invite.applicationId },
-        select: { name: true, emailNormalized: true },
+      const contact = await prisma.applicationIngestionEvent.findFirst({
+        where: { applicationId: invite.applicationId },
+        orderBy: { id: "desc" },
+        select: {
+          applicantName: true,
+          applicantEmailNormalized: true,
+          hostedApplySubmission: {
+            select: { name: true, emailNormalized: true },
+          },
+        },
       });
       const delivery = await deliverBookingConfirmation({
         interviewerEmail:
           application.job.assignedInterviewer?.users?.[0]?.email ?? null,
         interviewerName:
           application.job.assignedInterviewer?.name ?? "Interviewer",
-        candidateName: submissionContact?.name ?? "Candidate",
+        candidateName:
+          contact?.hostedApplySubmission?.name ?? contact?.applicantName ?? "Candidate",
         candidateEmail:
-          submissionContact?.emailNormalized ?? "",
+          contact?.hostedApplySubmission?.emailNormalized ??
+          contact?.applicantEmailNormalized ??
+          "",
         jobTitle: application.job.title,
         companyName: application.job.company.name,
         scheduledAt: slot.startAt,
@@ -320,8 +330,16 @@ export async function bookSlotWithToken(input: {
         attempted: delivery.attempted,
         sent: delivery.sent,
       });
+      await prisma.interview.updateMany({
+        where: { id: result.id },
+        data: { bookingEmailStatus: delivery.outcome },
+      });
     } catch (emailError) {
       console.error("[scheduling] booking emails failed", emailError);
+      await prisma.interview.updateMany({
+        where: { id: result.id },
+        data: { bookingEmailStatus: "PROVIDER_ERROR" },
+      });
     }
 
     return { ok: true, interviewId: result.id, scheduledAt: slot.startAt };

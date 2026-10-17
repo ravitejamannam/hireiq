@@ -505,6 +505,14 @@ model AuditLog {
   @@index([actorUserId])
 }
 
+/// Candidate-facing email outcome. Does not store the address or message.
+enum EmailDeliveryOutcome {
+  SENT
+  PROVIDER_NOT_CONFIGURED
+  MISSING_RECIPIENT
+  PROVIDER_ERROR
+}
+
 enum EvidenceGraphNodeType {
   EVIDENCE
   CLAIM
@@ -632,6 +640,8 @@ model Job {
   updatedAt DateTime @updatedAt
 
   companyId Int
+  /// Client submit token. Null for jobs created without a request key.
+  clientCreateIdempotencyKey String?
   assignedInterviewerId Int?
 
   /// Compatibility projection of the published (or dual-written draft) spec.
@@ -661,6 +671,7 @@ model Job {
   evidenceGraphRuns     EvidenceGraphRun[]
 
   @@unique([id, companyId])
+  @@unique([companyId, clientCreateIdempotencyKey])
   @@index([companyId, status])
   @@index([assignedInterviewerId])
   interviewSlots InterviewSlot[]
@@ -1646,6 +1657,9 @@ model Application {
   /// First time this application reached SHORTLISTED. Null until that transition.
   shortlistedAt DateTime?
 
+  /// Latest candidate stage-change email. Null when no candidate email was attempted.
+  candidateStageEmailStatus EmailDeliveryOutcome?
+
   /// T133 offer pack: hashed token, terms, and candidate decision timestamps.
   offerAcceptanceTokenHash String? @unique
   offerMintedAt            DateTime?
@@ -1748,6 +1762,8 @@ model Interview {
   type        InterviewType
   interviewAt DateTime
   result      InterviewResult
+  /// Booking confirmation email. Null when delivery was not attempted.
+  bookingEmailStatus EmailDeliveryOutcome?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

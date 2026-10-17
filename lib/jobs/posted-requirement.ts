@@ -33,6 +33,7 @@ export async function createPostedRequirementForCompany(input: {
   title: unknown;
   status?: unknown;
   fields?: PostedRequirementFields;
+  clientCreateIdempotencyKey?: string | null;
 }) {
   const validated = await validateJobInput(
     input.title,
@@ -74,5 +75,6 @@ export async function createPostedRequirementForCompany(input: {
       evaluationCriteria: validated.evaluationCriteria ?? null,
       primarySkills: validated.primarySkills ?? null,
     }),
+    clientCreateIdempotencyKey: input.clientCreateIdempotencyKey ?? null,
   });
 }

@@ -3,7 +3,7 @@ export const ASSESSMENT_UNAVAILABLE = "This assessment is unavailable.";
 export const ASSESSMENT_ALREADY_SUBMITTED = "This assessment has already been submitted.";
 export const ASSESSMENT_GENERIC_FAILURE = "Something went wrong. Please try again.";
 export const ASSESSMENT_BANK_EMPTY =
-  "No assessment is configured for this role category.";
+  "No assessment is configured for this role category. An administrator must add at least one active assessment question for this role category before the role can be posted.";
 export const ASSESSMENT_ROLE_CATEGORY_REQUIRED =
   "A role category is required to enable HireIQ hosted apply.";
 export const ASSESSMENT_ANSWERS_REQUIRED = "Answer every question before submitting.";

@@ -17,6 +17,7 @@ import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import WorkflowRequirementNav, {
   useRequirementIdFilter,
 } from "@/components/dashboard/WorkflowRequirementNav";
+import { describeEmailDeliveryOutcome } from "@/lib/communication/email-delivery-status";
 import PipelineCard from "@/components/pipeline/PipelineCard";
 import BulkActionsBar from "@/components/requirements/BulkActionsBar";
 import type { getApplications } from "@/lib/repositories/application-repository";
@@ -435,6 +436,14 @@ function PipelineClientInner({
                           label: getMoveLabel(nextStatus),
                         }))}
                         monitorNote={getMonitorNote(application.status)}
+                        emailDeliveryNote={
+                          [
+                            describeEmailDeliveryOutcome(application.candidateStageEmailStatus),
+                            describeEmailDeliveryOutcome(application.interviews[0]?.bookingEmailStatus),
+                          ]
+                            .filter(Boolean)
+                            .join(" ") || null
+                        }
                         isMoving={movingApplicationId === application.id}
                         isSelected={selectedIds.includes(application.id)}
                         onToggleSelect={toggleSelected}

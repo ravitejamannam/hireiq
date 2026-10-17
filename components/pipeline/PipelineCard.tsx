@@ -31,6 +31,7 @@ type PipelineCardProps = {
   status: ApplicationPipelineStatus;
   moveOptions: PipelineMoveOption[];
   monitorNote?: string | null;
+  emailDeliveryNote?: string | null;
   isMoving?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: number) => void;
@@ -62,6 +63,7 @@ export default function PipelineCard({
   status,
   moveOptions,
   monitorNote = null,
+  emailDeliveryNote = null,
   isMoving = false,
   requirementHref = null,
   onMove,
@@ -134,6 +136,9 @@ export default function PipelineCard({
         <p className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
           {monitorNote}
         </p>
+      ) : null}
+      {emailDeliveryNote ? (
+        <p className="mt-2 text-xs text-zinc-600">{emailDeliveryNote}</p>
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-200 pt-3">

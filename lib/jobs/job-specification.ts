@@ -9,6 +9,7 @@ import {
 import { AssessmentError } from "@/lib/assessments/assessment-errors";
 import { snapshotAssessmentQuestionIds } from "@/lib/assessments/assessment-snapshot";
 import { prisma } from "@/lib/prisma";
+import { getPrismaErrorCode } from "@/lib/prisma-error";
 import {
   JobSpecificationError,
   SPECIFICATION_POSTED_ERROR,
@@ -133,6 +134,19 @@ export function readEditableJobSpecification(job: {
   return readJobSpecification(job);
 }
 
+export function isClientCreateKeyConflict(error: unknown) {
+  if (getPrismaErrorCode(error) !== "P2002") {
+    return false;
+  }
+  const target = (error as { meta?: { target?: unknown } }).meta?.target;
+  const fields = Array.isArray(target)
+    ? target.map(String)
+    : typeof target === "string"
+      ? [target]
+      : [];
+  return fields.some((field) => field.includes("clientCreateIdempotencyKey"));
+}
+
 export async function createPostedJobWithPublishedSpecification(input: {
   title: string;
   status: JobStatus;
@@ -142,48 +156,80 @@ export async function createPostedJobWithPublishedSpecification(input: {
   sourcingDatabaseSource?: SourcingDatabaseSource | null;
   sourcingAccessDetails?: string | null;
   structuredPayload?: Prisma.InputJsonValue;
+  clientCreateIdempotencyKey?: string | null;
 }) {
   const completed = validateJobRequirementCompletion({
     ...input.fields,
     title: input.title,
   });
 
-  return prisma.$transaction(async (tx) => {
-    const created = await tx.job.create({
-      data: {
-        status: input.status,
-        companyId: input.companyId,
-        requirementLifecycle: "REQUIREMENT_POSTED",
-        clientCompletedAt: new Date(),
-        sourcingDatabaseSource: input.sourcingDatabaseSource ?? null,
-        sourcingAccessDetails: input.sourcingAccessDetails ?? null,
-        ...jobProjectionFromSpec(completed),
-      },
+  const createOnce = () =>
+    prisma.$transaction(async (tx) => {
+      if (input.clientCreateIdempotencyKey) {
+        const existing = await tx.job.findFirst({
+          where: {
+            companyId: input.companyId,
+            clientCreateIdempotencyKey: input.clientCreateIdempotencyKey,
+          },
+        });
+        if (existing) {
+          return existing;
+        }
+      }
+
+      const created = await tx.job.create({
+        data: {
+          status: input.status,
+          companyId: input.companyId,
+          requirementLifecycle: "REQUIREMENT_POSTED",
+          clientCompletedAt: new Date(),
+          sourcingDatabaseSource: input.sourcingDatabaseSource ?? null,
+          sourcingAccessDetails: input.sourcingAccessDetails ?? null,
+          clientCreateIdempotencyKey: input.clientCreateIdempotencyKey ?? null,
+          ...jobProjectionFromSpec(completed),
+        },
+      });
+
+      const published = await tx.jobSpecificationVersion.create({
+        data: {
+          jobId: created.id,
+          versionNumber: 1,
+          status: JobSpecificationVersionStatus.PUBLISHED,
+          publishedAt: new Date(),
+          createdByUserId: input.createdByUserId ?? null,
+          structuredPayload: input.structuredPayload ?? LEGACY_STRUCTURED_PAYLOAD,
+          ...completed,
+          assessmentQuestionIds: await pinAssessmentQuestionIds(
+            completed.roleCategory,
+            tx,
+          ),
+        },
+      });
+
+      return tx.job.update({
+        where: { id: created.id },
+        data: {
+          currentPublishedSpecificationVersionId: published.id,
+        },
+      });
     });
 
-    const published = await tx.jobSpecificationVersion.create({
-      data: {
-        jobId: created.id,
-        versionNumber: 1,
-        status: JobSpecificationVersionStatus.PUBLISHED,
-        publishedAt: new Date(),
-        createdByUserId: input.createdByUserId ?? null,
-        structuredPayload: input.structuredPayload ?? LEGACY_STRUCTURED_PAYLOAD,
-        ...completed,
-        assessmentQuestionIds: await pinAssessmentQuestionIds(
-          completed.roleCategory,
-          tx,
-        ),
-      },
-    });
-
-    return tx.job.update({
-      where: { id: created.id },
-      data: {
-        currentPublishedSpecificationVersionId: published.id,
-      },
-    });
-  });
+  try {
+    return await createOnce();
+  } catch (error) {
+    if (isClientCreateKeyConflict(error) && input.clientCreateIdempotencyKey) {
+      const winner = await prisma.job.findFirst({
+        where: {
+          companyId: input.companyId,
+          clientCreateIdempotencyKey: input.clientCreateIdempotencyKey,
+        },
+      });
+      if (winner) {
+        return winner;
+      }
+    }
+    throw error;
+  }
 }
 
 export async function createDraftSpecificationForJob(input: {

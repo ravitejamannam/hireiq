@@ -1,9 +1,10 @@
 import { ApplicationPipelineStatus } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
+import { outcomeFromTransport } from "@/lib/communication/email-delivery-status";
 import {
   sendOutboundEmail,
 } from "@/lib/communication/email-transport";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Candidate stage-change emails (T117).
@@ -124,6 +125,7 @@ export async function notifyCandidateOfStageChange(
     const contact = await resolveCandidateContact(applicationId);
     if (!contact) {
       console.info("[stage-email] no candidate contact resolved", { applicationId });
+      await recordStageEmailOutcome(applicationId, "MISSING_RECIPIENT");
       return;
     }
 
@@ -140,6 +142,8 @@ export async function notifyCandidateOfStageChange(
       html: `<p>${body.replaceAll("\n", "<br>")}</p>`,
     });
 
+    const outcome = outcomeFromTransport(result);
+    await recordStageEmailOutcome(applicationId, outcome);
     if (!result.sent) {
       console.warn("[stage-email] delivery failed", {
         applicationId,
@@ -154,5 +158,16 @@ export async function notifyCandidateOfStageChange(
     }
   } catch (error) {
     console.error("[stage-email] unexpected error", error);
+    await recordStageEmailOutcome(applicationId, "PROVIDER_ERROR");
   }
+}
+
+async function recordStageEmailOutcome(
+  applicationId: number,
+  candidateStageEmailStatus: "SENT" | "PROVIDER_NOT_CONFIGURED" | "MISSING_RECIPIENT" | "PROVIDER_ERROR",
+) {
+  await prisma.application.updateMany({
+    where: { id: applicationId },
+    data: { candidateStageEmailStatus },
+  });
 }

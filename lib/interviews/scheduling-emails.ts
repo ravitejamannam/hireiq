@@ -102,22 +102,38 @@ export function buildBookingEmails(
 /** Best-effort send. Never throws; results are logged by callers. */
 export async function deliverBookingConfirmation(
   input: BookingEmailInput,
-): Promise<{ attempted: number; sent: number }> {
+): Promise<{
+  attempted: number;
+  sent: number;
+  outcome: "SENT" | "PROVIDER_NOT_CONFIGURED" | "MISSING_RECIPIENT" | "PROVIDER_ERROR";
+}> {
   let sent = 0;
+  let outcome: "SENT" | "PROVIDER_NOT_CONFIGURED" | "MISSING_RECIPIENT" | "PROVIDER_ERROR" =
+    input.candidateEmail.trim() ? "SENT" : "MISSING_RECIPIENT";
   const emails = buildBookingEmails(input);
 
-  // Candidate confirmation first (the important one).
   const order = [emails[0], emails[1]];
   for (const email of order) {
-    if (!email.to) continue;
+    if (!email?.to) continue;
     try {
       const result = await sendOutboundEmail(email);
-      if (result.sent) sent += 1;
+      if (result.sent) {
+        sent += 1;
+      } else if (outcome !== "PROVIDER_ERROR") {
+        outcome = result.reason === "provider-not-configured"
+          ? "PROVIDER_NOT_CONFIGURED"
+          : "PROVIDER_ERROR";
+      }
     } catch {
-      // logged upstream / swallowed: scheduling must never block on mail
+      outcome = "PROVIDER_ERROR";
     }
   }
 
   void getPublicAppUrl;
-  return { attempted: emails.length, sent };
+  if (!input.candidateEmail.trim()) {
+    outcome = outcome === "SENT" ? "MISSING_RECIPIENT" : outcome;
+  } else if (sent === 0 && outcome === "SENT") {
+    outcome = "MISSING_RECIPIENT";
+  }
+  return { attempted: emails.length, sent, outcome };
 }

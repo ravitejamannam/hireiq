@@ -8,6 +8,25 @@ import {
 import { prisma } from "@/lib/prisma";
 import { isInterviewerAssignmentLocked } from "@/lib/jobs/interviewer-assignment-lock";
 
+export function validateOptionalIdempotencyKey(value: unknown) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "string" || !value.trim()) {
+    throw new JobValidationError("Idempotency key is invalid.");
+  }
+  const trimmed = value.trim();
+  if (
+    trimmed.length > 80 ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      trimmed,
+    )
+  ) {
+    throw new JobValidationError("Idempotency key is invalid.");
+  }
+  return trimmed;
+}
+
 export class JobValidationError extends Error {
   constructor(message: string) {
     super(message);
