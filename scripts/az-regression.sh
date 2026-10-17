@@ -2,8 +2,33 @@
 set -a
 source "$(dirname "$0")/../.env"
 set +a
-DB="$DATABASE_URL"
-BASE="${BASE:-http://localhost:4000}"
+if [ -z "${AZ_DATABASE_URL:-}" ]; then
+  echo "AZ_DATABASE_URL is required. Set it to the hireiq_e2e database." >&2
+  exit 1
+fi
+if ! DB_NAME=$(node --input-type=module -e '
+const raw = process.env.AZ_DATABASE_URL;
+let name = "";
+try {
+  name = new URL(raw).pathname.replace(/^\//, "").split("/")[0];
+} catch {
+  console.error("AZ_DATABASE_URL is not a valid database URL.");
+  process.exit(2);
+}
+if (name !== "hireiq_e2e") {
+  console.error("AZ_DATABASE_URL must use the hireiq_e2e database.");
+  process.exit(2);
+}
+process.stdout.write(name);
+'); then
+  exit 1
+fi
+unset DB_NAME
+DB="$AZ_DATABASE_URL"
+if [ -z "${BASE:-}" ]; then
+  echo "BASE is required. Set it to the dedicated E2E server, not the existing port-4000 server." >&2
+  exit 1
+fi
 PASS=0; FAIL=0
 check() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); echo "  ✓ $1"; else FAIL=$((FAIL+1)); echo "  ✗ $1 [got: $2 | want: $3]"; fi }
 q() { psql "$DB" -t -A -c "$1"; }
@@ -14,7 +39,15 @@ TOKEN=$(q 'SELECT split_part("applyUrlSnapshot", '"'"'/apply/'"'"', 2) FROM "Job
 CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/apply/$TOKEN")
 check "apply page loads" "$CODE" "200"
 
-printf 'AZ Test Candidate\nSenior Backend Engineer\nSkills: Go, Postgres, Kafka\n' > /tmp/az-resume.txt
+printf '%s\n' \
+  'AZ Test Candidate' \
+  'Senior Backend Engineer' \
+  'Summary: Backend engineer with experience building hiring systems, APIs, and data services.' \
+  'Experience: Designed services for candidate intake, evidence storage, and interview scheduling.' \
+  'Built reliable PostgreSQL schemas, background jobs, and operational dashboards for recruiting teams.' \
+  'Education: Bachelor of Engineering in Computer Science.' \
+  'Skills: Go, PostgreSQL, Kafka, SQL, TypeScript, Docker, Linux, testing, and system design.' \
+  > /tmp/az-resume.txt
 UP=$(curl -s -X POST "$BASE/api/apply/$TOKEN/resume" -H "Origin: $BASE" -F "file=@/tmp/az-resume.txt")
 STATUS=$(echo "$UP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('parseStatus',''))" 2>/dev/null)
 CLAIM=$(echo "$UP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('resumeClaim',''))" 2>/dev/null)
