@@ -3,7 +3,8 @@ import {
   CandidateEvidenceSourceType,
 } from "@prisma/client";
 
-export const EVIDENCE_INLINE_TEXT_MAX = 8000;
+/** Matches resume extraction so a long resume can be stored as evidence. */
+export const EVIDENCE_INLINE_TEXT_MAX = 30_000;
 
 export class CandidateEvidenceValidationError extends Error {
   readonly code: string;

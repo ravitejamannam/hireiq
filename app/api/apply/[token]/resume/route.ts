@@ -59,6 +59,7 @@ export async function POST(
     const result = await storePendingHostedResume({
       applyTokenRaw: token,
       fileName: file.name,
+      contentType: file.type,
       bytes: Buffer.from(await file.arrayBuffer()),
     });
 

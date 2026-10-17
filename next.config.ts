@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
    * filesystem paths that break when bundled. Keep it external so it
    * loads from node_modules at runtime (T97 resume text extraction).
    */
-  serverExternalPackages: ["pdf-parse"],
+  serverExternalPackages: ["pdf-parse", "unpdf", "tesseract.js", "@napi-rs/canvas"],
   async redirects() {
     return [
       {

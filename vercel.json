@@ -6,6 +6,10 @@
       "schedule": "0 4 * * *"
     },
     {
+      "path": "/api/ops/resume-ocr",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/digest/send",
       "schedule": "0 8 * * *"
     },

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 4000",
-    "build": "prisma generate && next build --webpack",
+    "build": "prisma generate && node scripts/migrate-on-deploy.mjs && next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
@@ -16,6 +16,7 @@
     "eval:live-embeddings": "tsx scripts/evaluate-live-embeddings.ts"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.11",
     "@prisma/client": "6.16.3",
     "bcryptjs": "^3.0.3",
     "lucide-react": "^1.28.0",
@@ -24,7 +25,10 @@
     "next-auth": "5.0.0-beta.32",
     "pdf-parse": "^2.4.5",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tesseract.js": "^7.0.0",
+    "unpdf": "^1.9.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

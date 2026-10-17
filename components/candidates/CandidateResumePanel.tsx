@@ -1,6 +1,6 @@
 import ResumeUploadForm from "@/components/candidates/ResumeUploadForm";
 import { requireAdmin } from "@/lib/auth/authorization";
-import { listResumeDocumentsForCandidate } from "@/lib/resumes/resume-service";
+import { listResumeDocumentsForCandidate, resumeParseStatusNote } from "@/lib/resumes/resume-service";
 
 const PARSE_STYLES: Record<string, string> = {
   PARSED: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
@@ -40,7 +40,9 @@ export default async function CandidateResumePanel({
                 <p className="text-xs text-zinc-500">
                   {(doc.sizeBytes / 1024).toFixed(1)} KB ·{" "}
                   {new Date(doc.createdAt).toLocaleString()}
-                  {doc.parseErrorCode ? ` · ${doc.parseErrorCode}` : ""}
+                  {resumeParseStatusNote(doc.parseErrorCode)
+                    ? ` · ${resumeParseStatusNote(doc.parseErrorCode)}`
+                    : ""}
                 </p>
               </div>
               <span

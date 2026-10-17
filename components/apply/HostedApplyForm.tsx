@@ -2,6 +2,10 @@
 
 import { useMemo, useRef, useState, type FormEvent } from "react";
 
+import {
+  certificationReviewList,
+  fillEmptyProfileFromSuggestion,
+} from "@/lib/apply/resume-suggestion";
 import StructuredProfileFields, {
   type ProfileEditorTab,
 } from "@/components/profiles/StructuredProfileFields";
@@ -16,6 +20,7 @@ type HostedApplyFormProps = {
   token: string;
   compact?: boolean;
   expectsAssessment?: boolean;
+  knockouts?: Array<{ id: number; prompt: string }>;
 };
 
 type FieldErrors = Record<string, string>;
@@ -71,6 +76,7 @@ function tabForError(errors: FieldErrors): ProfileEditorTab | null {
 export default function HostedApplyForm({
   token,
   expectsAssessment = true,
+  knockouts = [],
 }: HostedApplyFormProps) {
   const idempotencyKey = useRef<string | null>(null);
   const [tab, setTab] = useState<ProfileEditorTab>("basic");
@@ -88,6 +94,9 @@ export default function HostedApplyForm({
   const [pending, setPending] = useState(false);
   const [resumeClaim, setResumeClaim] = useState<string | null>(null);
   const [resumeName, setResumeName] = useState<string | null>(null);
+  const [resumePreview, setResumePreview] = useState<string | null>(null);
+  const [certificationReview, setCertificationReview] = useState<string[]>([]);
+  const [resumeNotice, setResumeNotice] = useState<string | null>(null);
   const [resumeState, setResumeState] = useState<
     "idle" | "uploading" | "ready" | "error"
   >("idle");
@@ -96,6 +105,7 @@ export default function HostedApplyForm({
   const [photoState, setPhotoState] = useState<
     "idle" | "uploading" | "ready" | "error"
   >("idle");
+  const [knockoutAnswers, setKnockoutAnswers] = useState<Record<number, string>>({});
 
   const completeness = useMemo(
     () =>
@@ -167,7 +177,31 @@ export default function HostedApplyForm({
         { method: "POST", body: form },
       );
       const body = (await response.json().catch(() => null)) as
-        | { ok?: boolean; resumeClaim?: string; fileName?: string; error?: string }
+        | {
+            ok?: boolean;
+            resumeClaim?: string;
+            fileName?: string;
+            error?: string;
+            parseStatus?: string;
+            parseErrorCode?: string | null;
+            extractedPreview?: string | null;
+            suggestion?: {
+              fullName: string | null;
+              email: string | null;
+              phone: string | null;
+              skills: string[];
+              experiences: Array<{
+                title: string;
+                company: string;
+                startDate: string;
+                endDate: string;
+                tenure: string;
+              }>;
+              education: Array<{ credential: string; institution: string }>;
+              projects: Array<{ name: string }>;
+              certifications?: string[];
+            } | null;
+          }
         | null;
       if (!response.ok || !body?.ok || !body.resumeClaim) {
         setResumeState("error");
@@ -176,6 +210,33 @@ export default function HostedApplyForm({
       }
       setResumeClaim(body.resumeClaim);
       setResumeName(body.fileName ?? file.name);
+      setResumePreview(body.extractedPreview ?? null);
+      setResumeNotice(
+        body.parseStatus === "FAILED"
+          ? integrityFreeResumeError(body.parseErrorCode ?? undefined)
+          : body.parseErrorCode === "LOW_QUALITY"
+            ? "We read this file, but the text looks incomplete. Check it below and fill in anything missing in your profile."
+            : null,
+      );
+      const suggestion = body.suggestion;
+      if (suggestion) {
+        if (suggestion.fullName) setName((current) => current || suggestion.fullName || "");
+        if (suggestion.email) setEmail((current) => current || suggestion.email || "");
+        if (suggestion.phone) setPhone((current) => current || suggestion.phone || "");
+        if (suggestion.experiences.length > 0 || suggestion.education.length > 0 || suggestion.projects.length > 0) {
+          setDraft((current) => fillEmptyProfileFromSuggestion(current, {
+            ...suggestion,
+            skills: suggestion.skills ?? [],
+            certifications: suggestion.certifications ?? [],
+          }));
+        }
+        const certifications = certificationReviewList(suggestion.certifications);
+        if (certifications.length > 0) {
+          setCertificationReview((current) =>
+            current.some((value) => value.trim()) ? current : certifications,
+          );
+        }
+      }
       setResumeState("ready");
     } catch {
       setResumeState("error");
@@ -186,11 +247,22 @@ export default function HostedApplyForm({
   function integrityFreeResumeError(code?: string): string {
     switch (code) {
       case "UNSUPPORTED_FILE_TYPE":
-        return "Only PDF and TXT resumes are supported right now.";
+      case "UNSUPPORTED_FORMAT":
+        return "Upload a PDF, DOCX, or TXT resume. Images and other files are not accepted.";
+      case "LEGACY_DOC_UNSUPPORTED":
+        return "Older Word .doc files are not supported. Save the resume as PDF or DOCX and upload that.";
       case "FILE_TOO_LARGE":
         return "Resume must be 10MB or smaller.";
       case "EMPTY_FILE":
         return "That file appears to be empty.";
+      case "OCR_DEFERRED":
+        return "This looks like a scan. The file is saved. Reading it can take a while. If it stays unreadable, upload a text-based PDF or DOCX, and type your experience below in the meantime.";
+      case "OCR_EXHAUSTED":
+        return "We could not read this scan. Upload a text-based PDF or DOCX instead, and type your experience in the profile below.";
+      case "PDF_NO_TEXT_LAYER":
+        return "This PDF has no readable text. The file is saved. Please type your experience in the profile below.";
+      case "PARSE_TIMEOUT":
+        return "This file took too long to read. It is saved. Please type your experience in the profile below.";
       case "APPLY_LINK_INVALID":
         return "This application link is no longer accepting resumes.";
       default:
@@ -237,6 +309,10 @@ export default function HostedApplyForm({
           experiences: draft.experiences,
           education: draft.education,
           projects: draft.projects,
+          knockoutAnswers: knockouts.map((question) => ({
+            questionId: question.id,
+            answer: knockoutAnswers[question.id] ?? "",
+          })),
         }),
       });
 
@@ -429,7 +505,7 @@ export default function HostedApplyForm({
         <div>
           <p className="text-sm font-semibold text-zinc-900">Resume</p>
           <p className="text-xs text-zinc-500">
-            Optional · PDF or TXT · stored as evidence, not as your profile
+            Optional · PDF, DOCX, or TXT · stored as evidence, not as your profile
           </p>
         </div>
         <label className="inline-flex cursor-pointer items-center">
@@ -442,7 +518,7 @@ export default function HostedApplyForm({
           </span>
           <input
             type="file"
-            accept=".pdf,.txt,application/pdf,text/plain"
+            accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) void onResumeSelected(file);
@@ -453,9 +529,47 @@ export default function HostedApplyForm({
         </label>
       </div>
       {resumeState === "ready" ? (
-        <p className="text-sm font-medium text-emerald-700">
-          ✓ {resumeName} attached
-        </p>
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-emerald-700">✓ {resumeName} attached</p>
+          {resumeNotice ? (
+            <p className="text-sm text-amber-800">{resumeNotice}</p>
+          ) : null}
+          {certificationReview.length > 0 ? (
+            <div className="space-y-2 rounded-lg border border-zinc-200 bg-white px-3 py-2">
+              <p className="text-sm font-medium text-zinc-800">Certifications we read</p>
+              <p className="text-xs text-zinc-500">
+                Review or edit these notes. They are not saved with the application.
+              </p>
+              {certificationReview.map((value, index) => (
+                <input
+                  key={`certification-${index}`}
+                  value={value}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setCertificationReview((current) =>
+                      current.map((item, itemIndex) => (itemIndex === index ? next : item)),
+                    );
+                  }}
+                  disabled={pending}
+                  className={inputClasses}
+                />
+              ))}
+            </div>
+          ) : null}
+          {resumePreview ? (
+            <details className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+              <summary className="cursor-pointer text-sm font-medium text-zinc-800">
+                Check what we read
+              </summary>
+              <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-zinc-600">
+                {resumePreview}
+              </p>
+              <p className="mt-2 text-xs text-zinc-500">
+                Correct anything wrong in the profile fields below. Those fields are what we keep.
+              </p>
+            </details>
+          ) : null}
+        </div>
       ) : null}
       <FieldError message={errors.resume} />
 
@@ -506,6 +620,34 @@ export default function HostedApplyForm({
           />
           <FieldError message={errors.coverLetter} />
         </label>
+      ) : null}
+
+      {knockouts.length > 0 ? (
+        <fieldset className="space-y-4 border-t border-zinc-200 pt-5">
+          <legend className="text-sm font-semibold text-zinc-900">
+            Required answers
+          </legend>
+          <p className="text-sm text-zinc-600">
+            A wrong answer on these questions rejects the application by rule.
+          </p>
+          {knockouts.map((question) => (
+            <label key={question.id} className="block">
+              <span className="text-sm font-medium text-zinc-800">{question.prompt}</span>
+              <input
+                value={knockoutAnswers[question.id] ?? ""}
+                onChange={(event) =>
+                  setKnockoutAnswers((current) => ({
+                    ...current,
+                    [question.id]: event.target.value,
+                  }))
+                }
+                required
+                disabled={pending}
+                className={inputClasses}
+              />
+            </label>
+          ))}
+        </fieldset>
       ) : null}
 
       <div className="space-y-4 border-t border-zinc-200 pt-5">

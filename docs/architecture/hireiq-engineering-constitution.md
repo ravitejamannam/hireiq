@@ -352,6 +352,16 @@ PostgreSQL unless there is a compelling reason.
 Distinguish raw document, extracted text, normalized text, evidence, and
 inferred intelligence. Do not destroy the original.
 
+Admin replacement of a failed resume updates the row to the new storage key,
+then deletes the old object only when no candidate document, hosted resume,
+or hosted photo row still references that key. The reference check and the
+object-storage delete are not atomic. That is acceptable for current
+application paths: new uploads mint a fresh random key, hosted ingestion
+copies a key that the hosted upload row keeps, and OCR and reparse do not
+change storage keys. A future feature that attaches an existing unreferenced
+key to a new row must revisit this deletion protocol. The race is otherwise
+reachable only through an external or manual writer.
+
 ## 39. Assessments
 
 Assessment results are independent evidence. Do not automatically merge

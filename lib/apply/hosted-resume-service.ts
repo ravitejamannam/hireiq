@@ -9,10 +9,12 @@ import {
   buildResumeStorageKey,
   storeResume,
 } from "@/lib/resumes/storage";
+import { abandonNewResumeObject } from "@/lib/resumes/resume-upload-cleanup";
 import {
   extractResumeText,
   RESUME_TEXT_EXTRACTOR_VERSION,
 } from "@/lib/resumes/text-extraction";
+import { proposeResumeFields, suggestionFromFields, type ResumeFormSuggestion } from "@/lib/resumes/resume-field-extractor";
 import type { Prisma } from "@prisma/client";
 import { generateSecureToken, hashSecureToken } from "@/lib/auth/secure-token";
 import { createEvidence } from "@/lib/repositories/candidate-evidence-repository";
@@ -58,10 +60,30 @@ function extensionOf(fileName: string): string {
   return fileName.slice(dot + 1).toLowerCase();
 }
 
+/**
+ * The stored object is deleted only when the insert throws.
+ * Suggestion work runs after that and cannot delete the file.
+ */
+export async function finishHostedResumeUpload<T>(input: {
+  storageKey: string;
+  insert: () => Promise<void>;
+  suggest: () => Promise<T>;
+  remove?: (key: string) => Promise<void>;
+}): Promise<T> {
+  try {
+    await input.insert();
+  } catch (error) {
+    await abandonNewResumeObject(input.storageKey, error, input.remove);
+    throw error;
+  }
+  return input.suggest();
+}
+
 /** POST /api/apply/[token]/resume — store + parse, return one-time claim. */
 export async function storePendingHostedResume(input: {
   applyTokenRaw: string;
   fileName: unknown;
+  contentType?: unknown;
   bytes: Buffer;
 }): Promise<{
   resumeClaim: string;
@@ -69,6 +91,8 @@ export async function storePendingHostedResume(input: {
   sizeBytes: number;
   parseStatus: "PARSED" | "FAILED";
   parseErrorCode: string | null;
+  extractedPreview: string | null;
+  suggestion: ResumeFormSuggestion | null;
 }> {
   const applyTokenHash = hashSecureToken(input.applyTokenRaw);
   const tokenRow = await prisma.applyToken.findUnique({
@@ -101,44 +125,80 @@ export async function storePendingHostedResume(input: {
     extension,
   );
   const stored = await storeResume(storageKey, input.bytes);
-  const extraction = await extractResumeText(input.bytes);
-  const { rawToken: claimToken, tokenHash: claimHash } = generateSecureToken();
-
-  await prisma.hostedApplyResumeUpload.create({
-    data: {
-      distributionId: tokenRow.distribution.id,
-      jobId: tokenRow.distribution.jobId,
-      companyId: tokenRow.distribution.companyId,
-      applyTokenHash,
-      hostedApplySubmissionId: null,
-      claimTokenHash: claimHash,
-      storageKey: stored.storageKey,
+  let extraction: Awaited<ReturnType<typeof extractResumeText>>;
+  try {
+    extraction = await extractResumeText(input.bytes, {
       fileName,
-      contentType:
-        extension === "pdf"
-          ? "application/pdf"
-          : extension === "docx"
-            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            : "text/plain",
-      sizeBytes: stored.sizeBytes,
-      contentSha256: stored.contentSha256,
-      parseStatus: extraction.ok
-        ? HostedResumeParseStatus.PARSED
-        : HostedResumeParseStatus.FAILED,
-      extractedText: extraction.ok ? extraction.text : null,
-      extractorVersion: extraction.ok ? RESUME_TEXT_EXTRACTOR_VERSION : null,
-      parseErrorCode: extraction.ok ? null : extraction.errorCode,
-      expiresAt: new Date(Date.now() + CLAIM_TTL_HOURS * 60 * 60 * 1000),
+      contentType: typeof input.contentType === "string" ? input.contentType : undefined,
+      ocr: "skip",
+    });
+  } catch (error) {
+    await abandonNewResumeObject(stored.storageKey, error);
+    throw error;
+  }
+  const generated = generateSecureToken();
+
+  return finishHostedResumeUpload({
+    storageKey: stored.storageKey,
+    insert: async () => {
+      await prisma.hostedApplyResumeUpload.create({
+        data: {
+          distributionId: tokenRow.distribution.id,
+          jobId: tokenRow.distribution.jobId,
+          companyId: tokenRow.distribution.companyId,
+          applyTokenHash,
+          hostedApplySubmissionId: null,
+          claimTokenHash: generated.tokenHash,
+          storageKey: stored.storageKey,
+          fileName,
+          contentType:
+            extension === "pdf"
+              ? "application/pdf"
+              : extension === "docx"
+                ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                : "text/plain",
+          sizeBytes: stored.sizeBytes,
+          contentSha256: stored.contentSha256,
+          parseStatus: extraction.ok
+            ? HostedResumeParseStatus.PARSED
+            : HostedResumeParseStatus.FAILED,
+          extractedText: extraction.ok ? extraction.text : null,
+          extractorVersion: extraction.ok ? RESUME_TEXT_EXTRACTOR_VERSION : null,
+          parseErrorCode: extraction.ok
+            ? extraction.quality.needsReview
+              ? "LOW_QUALITY"
+              : null
+            : extraction.errorCode,
+          expiresAt: new Date(Date.now() + CLAIM_TTL_HOURS * 60 * 60 * 1000),
+        },
+      });
+    },
+    suggest: async () => {
+      const suggestion = extraction.ok
+        ? suggestionFromFields((await proposeResumeFields(extraction.text)) ?? {
+            fullName: null,
+            email: null,
+            phone: null,
+            skills: [],
+            experience: [],
+            education: [],
+            certifications: [],
+            projects: [],
+          })
+        : null;
+      return {
+        resumeClaim: generated.rawToken,
+        fileName,
+        sizeBytes: stored.sizeBytes,
+        parseStatus: extraction.ok ? "PARSED" as const : "FAILED" as const,
+        parseErrorCode: extraction.ok ? extraction.quality.needsReview ? "LOW_QUALITY" : null : extraction.errorCode,
+        extractedPreview: extraction.ok ? extraction.text.slice(0, 400) : null,
+        suggestion: suggestion && (suggestion.fullName || suggestion.email || suggestion.phone || suggestion.experiences.length || suggestion.education.length || suggestion.projects.length || suggestion.certifications.length || suggestion.skills.length)
+          ? suggestion
+          : null,
+      };
     },
   });
-
-  return {
-    resumeClaim: claimToken,
-    fileName,
-    sizeBytes: stored.sizeBytes,
-    parseStatus: extraction.ok ? "PARSED" : "FAILED",
-    parseErrorCode: extraction.ok ? null : extraction.errorCode,
-  };
 }
 
 /**
@@ -219,6 +279,10 @@ export async function claimPendingResumeInIngestion(
     data: { claimedAt: new Date() },
   });
 
+  const lowQuality =
+    pending.parseStatus === HostedResumeParseStatus.PARSED &&
+    pending.parseErrorCode === "LOW_QUALITY";
+
   await tx.candidateResumeDocument.create({
     data: {
       companyId: input.companyId,
@@ -236,17 +300,20 @@ export async function claimPendingResumeInIngestion(
         pending.parseStatus === HostedResumeParseStatus.PARSED
           ? RESUME_TEXT_EXTRACTOR_VERSION
           : null,
-      parseErrorCode:
-        pending.parseStatus === HostedResumeParseStatus.PARSED
+      parseErrorCode: lowQuality
+        ? "LOW_QUALITY"
+        : pending.parseStatus === HostedResumeParseStatus.PARSED
           ? null
           : pending.parseErrorCode,
+      ocrAttempts: pending.ocrAttempts,
       createdAt: pending.createdAt,
     },
   });
 
-  // Evidence only from successfully extracted text (§1 truthfulness).
+  // Evidence only from clean extracted text. Low-quality text stays on the document.
   if (
     pending.parseStatus === HostedResumeParseStatus.PARSED &&
+    !lowQuality &&
     pending.extractedText &&
     pending.extractedText.trim()
   ) {

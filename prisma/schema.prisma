@@ -1016,6 +1016,8 @@ model CandidateResumeDocument {
   extractedText    String?
   extractorVersion String?
   parseErrorCode   String?
+  ocrAttempts      Int               @default(0)
+  ocrClaimedAt     DateTime?
   uploadedByUserId Int?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -2389,6 +2391,8 @@ model HostedApplyResumeUpload {
   extractedText            String?
   extractorVersion         String?
   parseErrorCode           String?
+  ocrAttempts              Int                      @default(0)
+  ocrClaimedAt             DateTime?
   expiresAt                DateTime
   claimedAt                DateTime?
   createdAt                DateTime                 @default(now())

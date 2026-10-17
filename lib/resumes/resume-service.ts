@@ -10,6 +10,11 @@ import {
   storeResume,
 } from "@/lib/resumes/storage";
 import {
+  discardUnattachedResumeObject,
+  persistAfterResumeExtract,
+  releaseReplacedResumeObject,
+} from "@/lib/resumes/resume-upload-cleanup";
+import {
   extractResumeText,
   RESUME_TEXT_EXTRACTOR_VERSION,
 } from "@/lib/resumes/text-extraction";
@@ -103,6 +108,16 @@ export async function listResumeDocumentsForCandidate(candidateId: unknown) {
   }));
 }
 
+/** Hosted uploads and photos can share a binary with a candidate document. */
+export async function resumeStorageKeyStillReferenced(storageKey: string): Promise<boolean> {
+  const [documents, uploads, photos] = await Promise.all([
+    prisma.candidateResumeDocument.count({ where: { storageKey } }),
+    prisma.hostedApplyResumeUpload.count({ where: { storageKey } }),
+    prisma.hostedApplyPhotoUpload.count({ where: { storageKey } }),
+  ]);
+  return documents + uploads + photos > 0;
+}
+
 export async function uploadResumeForAdmin(input: {
   candidateId: unknown;
   applicationId?: unknown;
@@ -165,8 +180,15 @@ export async function uploadResumeForAdmin(input: {
   const storageKey = buildResumeStorageKey(candidate.companyId, candidateId, extension);
   const stored = await storeResume(storageKey, input.file.bytes);
 
-  const extraction = await extractResumeText(input.file.bytes);
-
+  const owned = await persistAfterResumeExtract({
+    storageKey: stored.storageKey,
+    extract: () =>
+      extractResumeText(input.file.bytes, {
+        fileName,
+        contentType: typeof input.file.type === "string" ? input.file.type : undefined,
+        ocr: "skip",
+      }),
+    persist: async (extraction) => {
   // Dedup semantics (§42): identical content that already PARSED is a
   // duplicate and returns the existing record. A prior FAILED parse never
   // blocks retry — the row is updated in place with fresh parse results.
@@ -178,7 +200,10 @@ export async function uploadResumeForAdmin(input: {
   });
 
   if (existing && existing.parseStatus === "PARSED") {
+    await discardUnattachedResumeObject(stored.storageKey);
     return {
+      kind: "duplicate" as const,
+      response: {
       id: existing.id,
       fileName: existing.fileName,
       contentType: existing.contentType,
@@ -187,6 +212,7 @@ export async function uploadResumeForAdmin(input: {
       parseErrorCode: null,
       createdAt: existing.createdAt,
       hasEvidenceText: true,
+    },
     };
   }
 
@@ -206,7 +232,11 @@ export async function uploadResumeForAdmin(input: {
           parseStatus: extraction.ok ? "PARSED" : "FAILED",
           extractedText: extraction.ok ? extraction.text : null,
           extractorVersion: extraction.ok ? RESUME_TEXT_EXTRACTOR_VERSION : null,
-          parseErrorCode: extraction.ok ? null : extraction.errorCode,
+          parseErrorCode: extraction.ok
+            ? extraction.quality.needsReview
+              ? "LOW_QUALITY"
+              : null
+            : extraction.errorCode,
           uploadedByUserId: input.actorUserId,
           applicationId,
         },
@@ -229,10 +259,32 @@ export async function uploadResumeForAdmin(input: {
           parseStatus: extraction.ok ? "PARSED" : "FAILED",
           extractedText: extraction.ok ? extraction.text : null,
           extractorVersion: extraction.ok ? RESUME_TEXT_EXTRACTOR_VERSION : null,
-          parseErrorCode: extraction.ok ? null : extraction.errorCode,
+          parseErrorCode: extraction.ok
+            ? extraction.quality.needsReview
+              ? "LOW_QUALITY"
+              : null
+            : extraction.errorCode,
           uploadedByUserId: input.actorUserId,
         },
       });
+    return {
+      kind: "saved" as const,
+      extraction,
+      document,
+      replacedKey: existing ? existing.storageKey : null,
+    };
+    },
+  });
+
+  if (owned.kind === "duplicate") return owned.response;
+  const { extraction, document, replacedKey } = owned;
+  if (replacedKey) {
+    await releaseReplacedResumeObject({
+      previousKey: replacedKey,
+      currentKey: stored.storageKey,
+      stillReferenced: resumeStorageKeyStillReferenced,
+    });
+  }
 
   if (!extraction.ok) {
     return {
@@ -296,6 +348,18 @@ function validateCandidateId(value: unknown): number {
   throw new ResumeUploadError("INVALID_CANDIDATE_ID");
 }
 
+export function resumeParseStatusNote(code: string | null): string | null {
+  if (!code) return null;
+  if (code === "OCR_EXHAUSTED") {
+    return "Could not read this scan. Ask for a text-based PDF or DOCX.";
+  }
+  if (code === "OCR_DEFERRED" || code === "OCR_CLAIMED") {
+    return "Scan saved. Reading it can take a while.";
+  }
+  if (code === "LOW_QUALITY") return "Text was extracted, but it looks incomplete.";
+  return code;
+}
+
 export function isResumeUploadActionError(error: unknown): boolean {
   return error instanceof ResumeUploadError || error instanceof ResumeStorageError;
 }
@@ -307,14 +371,21 @@ export function resumeUploadActionErrorMessage(error: unknown): string {
   const code = error.code;
   switch (code) {
     case "UNSUPPORTED_FILE_TYPE":
-      return "Only PDF and TXT resumes are supported right now.";
+    case "UNSUPPORTED_FORMAT":
+      return "Upload a PDF, DOCX, or TXT resume. Images and other files are not accepted.";
+    case "LEGACY_DOC_UNSUPPORTED":
+      return "Older Word .doc files are not supported. Save the resume as PDF or DOCX and upload that.";
     case "FILE_TOO_LARGE":
       return "Resume must be 10MB or smaller.";
     case "EMPTY_FILE":
     case "EMPTY_DOCUMENT":
       return "The uploaded file appears to be empty.";
+    case "OCR_DEFERRED":
+      return "This looks like a scan. It is saved and will be read when the next OCR run picks it up. That can take longer than a few minutes.";
+    case "OCR_EXHAUSTED":
+      return "We could not read this scan after several tries. Ask for a text-based PDF or DOCX.";
     case "PDF_NO_TEXT_LAYER":
-      return "This PDF has no extractable text (likely a scan). Text-based PDFs are required.";
+      return "This PDF has no readable text. Upload a text-based PDF, or a clearer scan.";
     case "PDF_PARSE_FAILED":
     case "BINARY_CONTENT_REJECTED":
       return "The file could not be read as a resume. It has been stored for review.";
