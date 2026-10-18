@@ -56,6 +56,9 @@ export const AUTH_RATE_LIMITS = {
   portalMagicLinkEmail: { windowMs: 60 * 60 * 1000, max: 5 },
   portalMagicLinkIp: { windowMs: 60 * 60 * 1000, max: 10 },
   copilotUser: { windowMs: 60 * 60 * 1000, max: 30 },
+  ssoStartIp: { windowMs: 15 * 60 * 1000, max: 30 },
+  offerLetterIp: { windowMs: 15 * 60 * 1000, max: 60 },
+  healthIp: { windowMs: 60 * 1000, max: 120 },
 } as const;
 
 export type AuthRateLimitName = keyof typeof AUTH_RATE_LIMITS;

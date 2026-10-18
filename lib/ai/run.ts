@@ -14,6 +14,9 @@ export const MODEL_FEATURES = [
   "evidence_review",
   "talent_rediscovery",
   "copilot",
+  "interview_notes",
+  "assessment_assistant",
+  "outreach_draft",
 ] as const;
 
 export type ModelFeature = (typeof MODEL_FEATURES)[number];

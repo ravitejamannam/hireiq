@@ -18,13 +18,20 @@ const nextConfig: NextConfig = {
     ];
   },
   async headers() {
+    const shared = [
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+      { key: "X-DNS-Prefetch-Control", value: "off" },
+    ];
     return [
       {
         source: "/embed/:path*",
         headers: [
+          ...shared,
           {
             key: "Content-Security-Policy",
-            value: "frame-ancestors *",
+            value: "frame-ancestors *; base-uri 'self'; object-src 'none'",
           },
         ],
       },
@@ -32,9 +39,11 @@ const nextConfig: NextConfig = {
         source: "/((?!embed/).*)",
         headers: [
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          ...shared,
           {
             key: "Content-Security-Policy",
-            value: "frame-ancestors 'self'",
+            value:
+              "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'",
           },
         ],
       },

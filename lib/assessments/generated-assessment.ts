@@ -11,6 +11,13 @@ export const assessmentItemSchema = z
     correctIndex: z.number().int().min(0).max(5).optional(),
     requirement: z.string().trim().min(1).max(300),
     rubricCriterion: z.string().trim().min(1).max(200),
+    language: z.enum(["javascript", "python"]).optional(),
+    starter: z.string().max(4000).optional(),
+    tests: z.array(z.object({
+      input: z.string().max(2000),
+      output: z.string().max(2000),
+      hidden: z.boolean().optional(),
+    })).max(12).optional(),
   })
   .strict()
   .superRefine((item, ctx) => {

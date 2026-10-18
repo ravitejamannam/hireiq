@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { consumeAuthRateLimit, rateLimitKeyForIp, RateLimitError } from "@/lib/auth/rate-limit";
+import { readRequestIp } from "@/lib/auth/request-ip";
 import { findApplicationByOfferToken } from "@/lib/offers/offer-acceptance";
 import { renderOfferDocumentHtml } from "@/lib/offers/offer-documents";
 
@@ -14,6 +16,14 @@ export async function GET(
   context: { params: Promise<{ token: string }> },
 ) {
   const { token } = await context.params;
+  try {
+    await consumeAuthRateLimit({ name: "offerLetterIp", key: rateLimitKeyForIp(await readRequestIp()) });
+  } catch (error) {
+    if (error instanceof RateLimitError) {
+      return NextResponse.json({ ok: false, error: "Too many attempts. Try again later." }, { status: 429, headers: NO_STORE });
+    }
+    throw error;
+  }
   const application = await findApplicationByOfferToken(token);
 
   if (!application?.offerAcceptedAt) {

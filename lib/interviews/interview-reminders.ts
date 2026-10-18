@@ -28,6 +28,7 @@ export async function sendDueInterviewReminders(now = new Date()) {
       interview: {
         select: {
           id: true,
+          applicationId: true,
           interviewAt: true,
           meetUrl: true,
           application: {
@@ -72,6 +73,25 @@ export async function sendDueInterviewReminders(now = new Date()) {
     ].filter((email): email is string => Boolean(email));
     for (const to of recipients) {
       await sendOutboundEmail({ to, subject: `Interview reminder: ${row.interview.application.job.title}`, text, html: `<p>${text}</p>` });
+    }
+    const applicationRow = await prisma.application.findUnique({
+      where: { id: row.interview.applicationId },
+      select: { whatsAppOptInAt: true, companyId: true },
+    });
+    const submission = applicationRow?.whatsAppOptInAt
+      ? await prisma.hostedApplySubmission.findFirst({
+          where: { emailNormalized: event?.applicantEmailNormalized ?? "", companyId: applicationRow.companyId },
+          select: { phone: true },
+        })
+      : null;
+    if (applicationRow?.whatsAppOptInAt && submission?.phone) {
+      const { sendWhatsApp, whatsAppTemplateName } = await import("@/lib/communication/whatsapp");
+      await sendWhatsApp({
+        to: submission.phone.startsWith("+") ? submission.phone : `+${submission.phone}`,
+        optedIn: true,
+        templateName: whatsAppTemplateName("interview"),
+        parameters: [row.interview.application.job.title, when],
+      }).catch(() => undefined);
     }
     await prisma.interviewReminder.update({ where: { id: row.id }, data: { sentAt: now } });
     sent += 1;

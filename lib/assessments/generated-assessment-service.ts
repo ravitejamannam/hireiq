@@ -1,4 +1,4 @@
-import { writeAuditLog } from "@/lib/audit/write-audit-log";
+import { runCodeSubmission } from "@/lib/assessments/code-sandbox";
 import { completeStructured } from "@/lib/ai/gateway";
 import { withAIRun } from "@/lib/ai/run";
 import {
@@ -254,6 +254,24 @@ export async function submitGeneratedAssessment(rawToken: string, actorUserId: n
   const grades = [];
   for (const item of items.data) {
     if (!order.includes(item.id)) continue;
+    if (item.type === "coding") {
+      const tests = item.tests ?? [];
+      const result = await runCodeSubmission({
+        language: item.language ?? "javascript",
+        source: answers[item.id] ?? item.starter ?? "",
+        tests,
+      });
+      const unavailable = result.runner === "unavailable";
+      const score = unavailable || tests.length === 0 ? null : Math.round((result.passed / tests.length) * 5);
+      grades.push({
+        itemId: item.id,
+        requirement: item.requirement,
+        score,
+        needsHuman: unavailable,
+        quote: result.error ?? `${result.passed} of ${result.total} tests passed`,
+      });
+      continue;
+    }
     if (item.type === "multiple_choice") {
       const selected = Number(answers[item.id] ?? "-1");
       const graded = gradeMultipleChoice(item, selected);

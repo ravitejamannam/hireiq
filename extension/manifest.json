@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "HireIQ profile capture",
+  "version": "0.1.0",
+  "description": "Save the public profile you are viewing as a HireIQ candidate draft. One profile per click.",
+  "action": { "default_title": "Save this profile to HireIQ" },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "background": { "service_worker": "capture.js" }
+}

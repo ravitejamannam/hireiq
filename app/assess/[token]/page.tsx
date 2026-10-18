@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 
+import { CodeAnswer } from "@/components/assessments/CodeAnswer";
+import { difficultyForSortOrder } from "@/lib/assessments/submission-similarity";
 import { loadCandidateAssessment } from "@/lib/assessments/generated-assessment-service";
 
 type PageProps = { params: Promise<{ token: string }> };
@@ -31,12 +33,13 @@ export default async function CandidateAssessmentPage({ params }: PageProps) {
         {page.items.map((item, index) => (
           <li key={item.id} className="rounded-xl border border-zinc-200 p-4">
             <p className="text-sm font-semibold">{index + 1}. {item.prompt}</p>
+            <p className="mt-1 text-xs uppercase tracking-wide text-zinc-500">{difficultyForSortOrder(index + 1)}</p>
             {item.choices.length > 0 ? (
               <ul className="mt-2 space-y-1 text-sm">
                 {item.choices.map((choice) => <li key={choice}>{choice}</li>)}
               </ul>
             ) : (
-              <textarea aria-label={item.prompt} className="mt-2 w-full rounded border px-2 py-1" rows={4} />
+              <CodeAnswer label={item.prompt} />
             )}
           </li>
         ))}

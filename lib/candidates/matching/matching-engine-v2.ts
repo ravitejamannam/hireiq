@@ -11,7 +11,7 @@ import type {
 } from "@/lib/candidates/matching/matching-v2-types";
 import { MATCH_V2_REASON } from "@/lib/candidates/matching/matching-v2-versions";
 import { gateMeets } from "@/lib/evidence/review-status";
-import { canonicalSkillKey } from "@/lib/ontology/skill-alias";
+import { canonicalSkillKey, impliedSkillKeys } from "@/lib/ontology/skill-alias";
 
 export { hashIntelligenceSnapshot };
 
@@ -103,7 +103,10 @@ export function computeRequirementAssessments(input: {
     const target =
       requirement.skillCanonicalKey ??
       canonicalSkillKey(requirement.normalizedValue ?? requirement.sourceText);
-    const matches = skillClaims.filter((claim) => claim.normalizedValue === target);
+    const matches = skillClaims.filter(
+      (claim) =>
+        claim.normalizedValue === target || impliedSkillKeys(claim.normalizedValue).includes(target),
+    );
     const negated = matches.find((claim) => claim.polarity === "NEGATED");
     if (negated) {
       return {
@@ -123,9 +126,10 @@ export function computeRequirementAssessments(input: {
       jobRequirementId: requirement.id,
       supportState: RequirementSupportState.SUPPORTED,
       method: "deterministic-v2",
-      reasonCode: supported.viaAlias
-        ? MATCH_V2_REASON.ALIAS_SKILL_MATCH
-        : MATCH_V2_REASON.EXACT_SKILL_MATCH,
+      reasonCode:
+        supported.viaAlias || impliedSkillKeys(supported.normalizedValue).includes(target)
+          ? MATCH_V2_REASON.ALIAS_SKILL_MATCH
+          : MATCH_V2_REASON.EXACT_SKILL_MATCH,
       claimId: supported.id,
       evidenceId: supported.evidenceId,
     };
@@ -152,10 +156,12 @@ export function explainAssessment(input: {
   reasonCode: string;
   sourceText: string;
   category: JobRequirementCategory;
+  quote?: string | null;
 }): { why: string; gap: string | null; uncertainty: string | null } {
   if (input.supportState === RequirementSupportState.SUPPORTED) {
+    const quoted = input.quote?.trim() ? ` Quoted evidence: “${input.quote.trim()}”.` : "";
     return {
-      why: `Available evidence supports “${input.sourceText}”.`,
+      why: `Available evidence supports “${input.sourceText}”.${quoted}`,
       gap: null,
       uncertainty: null,
     };

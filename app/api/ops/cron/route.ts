@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       { headers: NO_STORE },
     );
   } catch (error) {
-    reportError("ops-cron", error);
+    reportError("ops-cron", error, { alert: "cron_failed", page: true });
     return NextResponse.json(
       { ok: false, error: "Retry sweep failed." },
       { status: 500, headers: NO_STORE },

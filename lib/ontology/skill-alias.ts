@@ -55,6 +55,17 @@ export function catalogAliasesLongestFirst() {
   return aliases;
 }
 
+/** A database implies SQL. The specific database stays its own skill. */
+const SKILL_IMPLICATIONS: Record<string, string[]> = {
+  postgresql: ["sql"],
+  mysql: ["sql"],
+  sqlserver: ["sql"],
+};
+
+export function impliedSkillKeys(canonicalKey: string): string[] {
+  return SKILL_IMPLICATIONS[canonicalKey] ?? [];
+}
+
 export function isKnownDistinctPair(left: string, right: string) {
   const leftKey = canonicalSkillKey(left);
   const rightKey = canonicalSkillKey(right);

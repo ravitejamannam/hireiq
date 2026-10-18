@@ -128,3 +128,95 @@ h2,
 h3 {
   letter-spacing: -0.02em;
 }
+
+html[data-theme="dark"] {
+  --background: #14110e;
+  --foreground: #f4f2ed;
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] body {
+  background: #14110e;
+  color: #f4f2ed;
+}
+
+html[data-theme="dark"] .bg-white {
+  background-color: #211d19;
+}
+
+html[data-theme="dark"] .text-black,
+html[data-theme="dark"] .text-zinc-900,
+html[data-theme="dark"] .text-zinc-800 {
+  color: #f4f2ed;
+}
+
+html[data-theme="dark"] .text-zinc-600,
+html[data-theme="dark"] .text-zinc-500 {
+  color: #c4bfb4;
+}
+
+html[data-theme="dark"] .border-zinc-200,
+html[data-theme="dark"] .border-zinc-300 {
+  border-color: #45403a;
+}
+
+html[data-theme="dark"] .bg-zinc-50,
+html[data-theme="dark"] .bg-zinc-100 {
+  background-color: #1c1916;
+}
+
+html[data-theme="dark"] .bg-\[\#FBF9F4\],
+html[data-theme="dark"] .bg-\[\#FBF9F4\]\/95,
+html[data-theme="dark"] .bg-\[\#F7F4EE\] {
+  background-color: #14110e;
+}
+
+html[data-theme="dark"] .text-stone-900,
+html[data-theme="dark"] .text-stone-800,
+html[data-theme="dark"] .text-stone-700,
+html[data-theme="dark"] .text-zinc-700 {
+  color: #f4f2ed;
+}
+
+html[data-theme="dark"] .text-stone-600,
+html[data-theme="dark"] .text-stone-500,
+html[data-theme="dark"] .text-stone-400,
+html[data-theme="dark"] .text-zinc-400 {
+  color: #d2cbc2;
+}
+
+html[data-theme="dark"] .border-stone-200,
+html[data-theme="dark"] .border-stone-200\/80,
+html[data-theme="dark"] .border-stone-300 {
+  border-color: #45403a;
+}
+
+html[data-theme="dark"] .bg-stone-100,
+html[data-theme="dark"] .bg-stone-50 {
+  background-color: #1c1916;
+}
+
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  background-color: #211d19;
+  color: #f4f2ed;
+  border-color: #45403a;
+}
+
+html[data-theme="dark"] button.bg-black,
+html[data-theme="dark"] .bg-black.text-white {
+  background-color: #f4f2ed;
+  color: #14110e;
+}
+
+html[data-theme="dark"] .bg-stone-900 {
+  background-color: #f4f2ed;
+  color: #14110e;
+}
+
+html[data-theme="dark"] .bg-stone-900.text-\[\#FBF9F4\],
+html[data-theme="dark"] a.bg-stone-900,
+html[data-theme="dark"] .bg-stone-900 * {
+  color: #14110e;
+}

@@ -14,6 +14,7 @@ import {
   Prisma,
   RequirementLifecycle,
 } from "@prisma/client";
+import { leadAssignmentAllowed } from "@/lib/interviewers/qualification";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { parseInterviewRoundPlanInput } from "@/lib/hiring/interview-rounds";
@@ -379,8 +380,10 @@ export async function assignInterviewerToJob(
     },
     select: {
       id: true,
+      companyId: true,
       requirementLifecycle: true,
       assignedInterviewerId: true,
+      company: { select: { requireQualifiedLead: true } },
     },
   });
 
@@ -404,6 +407,16 @@ export async function assignInterviewerToJob(
 
   if (validatedInterviewerId !== null) {
     await ensureInterviewerExists(validatedInterviewerId);
+    const training = await prisma.interviewerTraining.findUnique({
+      where: { companyId_interviewerId: { companyId: existingJob.companyId, interviewerId: validatedInterviewerId } },
+    });
+    const lead = leadAssignmentAllowed({
+      requireQualifiedLead: existingJob.company.requireQualifiedLead,
+      record: training,
+      jobCompanyId: existingJob.companyId,
+      interviewerCompanyId: existingJob.companyId,
+    });
+    if (!lead.ok) throw new JobValidationError(lead.error ?? "This interviewer is not qualified to lead yet.");
   }
 
   const job = await prisma.job.update({

@@ -402,6 +402,91 @@ export function mergeJobDescriptionSection(
   return jobDescriptionDocumentSchema.parse(next);
 }
 
+export type TitleSeo = {
+  ok: boolean;
+  issues: string[];
+};
+
+/** Job-board title check: readable length, no shouted text, no biased filler. */
+export function seoTitleCheck(title: string): TitleSeo {
+  const issues: string[] = [];
+  const trimmed = title.trim();
+  if (trimmed.length < 8) issues.push("Title is too short for a job board.");
+  if (trimmed.length > 70) issues.push("Title is longer than 70 characters.");
+  if (trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed)) issues.push("Title is all capitals.");
+  if (findBiasFlags(trimmed).length > 0) issues.push("Title uses biased wording.");
+  if (!/[a-z]/i.test(trimmed)) issues.push("Title has no letters.");
+  return { ok: issues.length === 0, issues };
+}
+
+export function salaryTransparencyNudge(compensation: string | null | undefined) {
+  if (compensation?.trim()) return null;
+  return "Add a salary or CTC range. Listings with pay are easier to trust and get more qualified applicants.";
+}
+
+export function applyBiasRewrites(text: string) {
+  let next = text;
+  for (const rule of BIAS_RULES) {
+    next = next.replace(rule.pattern, rule.suggestion);
+  }
+  return next;
+}
+
+function wordsOf(text: string) {
+  return text.split(/\s+/).filter(Boolean);
+}
+
+/** Expand a structured role into a detailed post of about 400 words, using only given facts. */
+export function detailedJobDescription(document: JobDescriptionDocument, source: GroundingSource) {
+  const company = source.companyName?.trim() || "the company";
+  const skills = document.mustHaveSkills.filter(Boolean);
+  const preferred = document.niceToHaveSkills.filter(Boolean);
+  const duties = document.responsibilities.filter(Boolean);
+  const sentences = [
+    `${document.title} at ${company}. ${document.summary}`.trim(),
+    document.experienceRange ? `Experience asked for: ${document.experienceRange}.` : "",
+    document.location ? `Location: ${document.location}.` : "",
+    document.workMode ? `Work mode: ${document.workMode}.` : "",
+    document.compensation ? `Compensation: ${document.compensation}.` : "",
+    duties.length
+      ? `In this role you will ${duties.map((item) => item.replace(/\.$/, "")).join("; ")}.`
+      : "",
+    skills.length
+      ? `Required skills are ${skills.join(", ")}. Each of these should show up in work you have already done, with an example you can talk through.`
+      : "",
+    preferred.length ? `Helpful extras are ${preferred.join(", ")}.` : "",
+    document.hiringProcess ? `Hiring process: ${document.hiringProcess}.` : "",
+    document.benefits.length ? `Benefits include ${document.benefits.join(", ")}.` : "",
+  ].filter(Boolean);
+  const elaboration = skills.flatMap((skill) => [
+    `For ${skill}, describe the system you worked on, who used it, and what changed because of your work.`,
+    `Interviewers will ask how you learned ${skill} and how you decide when it is the right tool.`,
+  ]);
+  const dutyNotes = duties.flatMap((duty) => [
+    `About “${duty.replace(/\.$/, "")}”: say what you owned, what you handed off, and how you knew it was done.`,
+  ]);
+  const parts = [...sentences, ...dutyNotes, ...elaboration];
+  let text = "";
+  for (const part of parts) {
+    const next = `${text} ${part}`.trim();
+    if (wordsOf(next).length > 460) break;
+    text = next;
+  }
+  while (wordsOf(text).length < 360 && skills.length > 0) {
+    const skill = skills[wordsOf(text).length % skills.length];
+    text = `${text} Bring one story about ${skill} that includes a constraint, a choice, and a result.`.trim();
+    if (wordsOf(text).length > 460) break;
+  }
+  return text.trim();
+}
+
+export function jobDescriptionVariants(document: JobDescriptionDocument, source: GroundingSource) {
+  return {
+    detailed: detailedJobDescription(document, source),
+    compact: boardCopies(document).linkedin,
+  };
+}
+
 export function diffWords(current: string, proposed: string) {
   const currentWords = new Set(current.toLowerCase().split(/\s+/).filter(Boolean));
   const proposedWords = new Set(proposed.toLowerCase().split(/\s+/).filter(Boolean));

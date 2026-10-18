@@ -153,3 +153,45 @@ export function advanceStatus(status: ApplicationPipelineStatus) {
 export function shortlistStatus(status: ApplicationPipelineStatus) {
   return status === "TECH_EVALUATION" ? "SHORTLISTED" : null;
 }
+
+export const REVIEW_COLUMNS = ["name", "title", "company", "status", "score", "knockout", "parse"] as const;
+export type ReviewColumn = (typeof REVIEW_COLUMNS)[number];
+
+export type SavedReviewView = {
+  id: string;
+  name: string;
+  filters: ReviewFilters;
+  columns: ReviewColumn[];
+};
+
+export function normalizeColumns(columns: string[]): ReviewColumn[] {
+  const picked = columns.filter((column): column is ReviewColumn =>
+    (REVIEW_COLUMNS as readonly string[]).includes(column),
+  );
+  return picked.length > 0 ? picked : ["name", "status", "score"];
+}
+
+export function applySavedView(rows: ReviewRow[], view: SavedReviewView) {
+  return sortByScore(filterReviewRows(rows, view.filters));
+}
+
+export function compareCandidates(rows: ReviewRow[], ids: number[]) {
+  const unique = [...new Set(ids)].slice(0, 3);
+  if (unique.length < 2) return [];
+  return unique.flatMap((id) => {
+    const row = rows.find((item) => item.id === id);
+    return row ? [row] : [];
+  });
+}
+
+export type BulkSnapshot = { ids: number[]; status: ApplicationPipelineStatus };
+
+export function undoBulk(rows: ReviewRow[], snapshot: BulkSnapshot): ReviewRow[] {
+  const ids = new Set(snapshot.ids);
+  return rows.map((row) => (ids.has(row.id) ? { ...row, status: snapshot.status } : row));
+}
+
+/** In-memory stand-in for a teammate's write. Callers poll this version. */
+export function reviewVersion(rows: ReviewRow[]) {
+  return rows.map((row) => `${row.id}:${row.status}:${row.score ?? ""}`).join("|");
+}

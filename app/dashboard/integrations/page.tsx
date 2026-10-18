@@ -116,6 +116,12 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
           >
             {reconnectCalendar ? "Reconnect Google Calendar" : "Connect Google Calendar"}
           </a>
+          <a
+            href="/api/integrations/microsoft/connect"
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-900"
+          >
+            Connect Microsoft 365
+          </a>
           <Link
             href="/dashboard/integrations/feeds"
             className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"

@@ -125,8 +125,8 @@ async function exchangeCodeOrRefresh(
 }
 
 async function validAccessToken(userId: number): Promise<string> {
-  const integration = await prisma.interviewerCalendarIntegration.findUnique({
-    where: { userId },
+  const integration = await prisma.interviewerCalendarIntegration.findFirst({
+    where: { userId, provider: "GOOGLE" },
   });
   if (!integration) throw new CalendarSyncError("NOT_CONNECTED");
 
@@ -134,13 +134,12 @@ async function validAccessToken(userId: number): Promise<string> {
     return decryptCredentialSecret(integration.accessTokenEnc);
   }
 
-  // Refresh
   const refreshed = await exchangeCodeOrRefresh({
     refresh_token: decryptCredentialSecret(integration.refreshTokenEnc),
     grant_type: "refresh_token",
   });
   await prisma.interviewerCalendarIntegration.update({
-    where: { userId },
+    where: { id: integration.id },
     data: {
       accessTokenEnc: encryptCredentialSecret(refreshed.accessToken),
       expiresAt: refreshed.expiresAt,

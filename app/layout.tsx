@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import AuthSessionProvider from "@/components/providers/AuthSessionProvider";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -33,6 +34,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
+        <div className="flex justify-end px-4 pt-3">
+          <ThemeToggle />
+        </div>
         <AuthSessionProvider>{children}</AuthSessionProvider>
       </body>
     </html>

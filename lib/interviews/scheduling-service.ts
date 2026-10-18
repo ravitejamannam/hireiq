@@ -385,18 +385,27 @@ export async function bookSlotWithToken(input: {
     try {
       const { queueInterviewReminders } = await import("./interview-reminders");
       const { createGoogleMeetEvent } = await import("./calendar-sync-service");
+      const { createMicrosoftCalendarEvent } = await import("./microsoft-calendar");
       await queueInterviewReminders(result.id, slot.startAt);
       const userId = application.job.assignedInterviewer?.users?.[0]?.id;
       if (userId) {
         const end = new Date(slot.startAt.getTime() + slot.durationMinutes * 60_000);
-        const created = await createGoogleMeetEvent({
-          userId,
-          summary: `Interview: ${application.job.title}`,
-          start: slot.startAt,
-          end,
-          attendees: [application.job.assignedInterviewer?.users?.[0]?.email ?? ""].filter(Boolean),
-          requestId: `hireiq-interview-${result.id}`,
+        const attendees = [application.job.assignedInterviewer?.users?.[0]?.email ?? ""].filter(Boolean);
+        const summary = `Interview: ${application.job.title}`;
+        const microsoft = await prisma.interviewerCalendarIntegration.findFirst({
+          where: { userId, provider: "MICROSOFT" },
+          select: { id: true },
         });
+        const created = microsoft
+          ? await createMicrosoftCalendarEvent({ userId, summary, start: slot.startAt, end, attendees }).catch(() => null)
+          : await createGoogleMeetEvent({
+              userId,
+              summary,
+              start: slot.startAt,
+              end,
+              attendees,
+              requestId: `hireiq-interview-${result.id}`,
+            });
         if (created) {
           await prisma.interview.update({
             where: { id: result.id },

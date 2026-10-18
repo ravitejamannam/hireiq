@@ -1,5 +1,4 @@
-import { createHmac } from "node:crypto";
-
+import { signWebhookBody } from "@/lib/api/partner-webhook";
 import { decryptCredentialSecret } from "@/lib/crypto/credential-encryption";
 import { prisma } from "@/lib/prisma";
 import { reportError } from "@/lib/obs/report-error";
@@ -8,7 +7,8 @@ import { reportError } from "@/lib/obs/report-error";
  * Outbound webhook dispatch (T112 Phase 12) with durable retries.
  *
  * Delivery guarantees:
- * - HMAC-SHA256 signature in `X-HireIQ-Signature`.
+ * - HMAC-SHA256 of `timestamp.body` in `X-HireIQ-Signature`, with the timestamp
+ *   in `X-HireIQ-Timestamp`. Receivers reject anything older than 5 minutes.
  * - A row is persisted before the first attempt.
  * - Failures never block the triggering action.
  */
@@ -28,10 +28,6 @@ function nextRetryAt(attempts: number) {
   return new Date(Date.now() + minutes * 60 * 1000);
 }
 
-function signPayload(payload: string, secret: string): string {
-  return createHmac("sha256", secret).update(payload, "utf8").digest("hex");
-}
-
 function decryptSecret(encrypted: string): string {
   return decryptCredentialSecret(encrypted);
 }
@@ -42,12 +38,14 @@ async function deliverOnce(input: {
   payload: string;
 }): Promise<{ ok: boolean; statusCode: number | null; error: string | null }> {
   const secret = decryptSecret(input.secretEnc);
-  const signature = signPayload(input.payload, secret);
+  const timestamp = new Date().toISOString();
+  const signature = signWebhookBody(secret, timestamp, input.payload);
   try {
     const res = await fetch(input.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "X-HireIQ-Timestamp": timestamp,
         "X-HireIQ-Signature": `sha256=${signature}`,
       },
       body: input.payload,

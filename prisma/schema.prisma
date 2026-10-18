@@ -563,6 +563,8 @@ model Company {
   eeoBoilerplate  String?
   /// Evidence matching stays off until a company opts in. Never a hire score.
   evidenceMatchingEnabled Boolean @default(false)
+  /// When true, only an interviewer with a qualified training record can be the lead.
+  requireQualifiedLead Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -633,6 +635,21 @@ model Company {
   fairnessSnapshots         FairnessSnapshot[]
   fairnessReviews           FairnessReview[]
   copilotMessages           CopilotMessage[]
+  ssoConnections            CompanySsoConnection[]
+  whatsAppOptIns            WhatsAppOptIn[]
+  scimUsers                 ScimDirectoryUser[]
+  scimGroups                ScimDirectoryGroup[]
+  scimTokens                ScimToken[]
+  idpGroupRoles             IdpGroupRole[]
+  notetakerConsents         NotetakerConsent[]
+  notetakerNotes            NotetakerNote[]
+  assessmentAiExchanges     AssessmentAiExchange[]
+  hrisHandoffs              HrisHandoff[]
+  outreachSequences         OutreachSequence[]
+  profileCaptures           ProfileCapture[]
+  offerEsigns               OfferEsign[]
+  interviewerTraining       InterviewerTraining[]
+  shadowObservations        ShadowObservation[]
 }
 
 model Job {
@@ -1763,7 +1780,7 @@ model Application {
   withdrawReason String?
   emailUnsubscribedAt DateTime?
   candidateTimeZone String?
-  futureRolesConsent Boolean @default(false)
+  whatsAppOptInAt DateTime?
 
   candidate Candidate @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
   job       Job       @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
@@ -2000,7 +2017,7 @@ model User {
   resumesUploaded CandidateResumeDocument[] @relation("ResumeUploadedBy")
   approvedRequirements JobRequirement[] @relation("RequirementApprover")
   decisionRecords DecisionRecord[] @relation("DecisionRecorder")
-  calendarIntegration InterviewerCalendarIntegration? @relation("UserCalendarIntegration")
+  calendarIntegrations InterviewerCalendarIntegration[] @relation("UserCalendarIntegration")
 }
 
 model OrganizationMember {
@@ -2411,6 +2428,8 @@ model AssessmentInvite {
   startedAt     DateTime?
   submittedAt   DateTime?
   revokedAt     DateTime?
+  /// AI_ALLOWED or NOT_ALLOWED. The assistant stays off unless a company sets AI_ALLOWED.
+  aiUsePolicy   String   @default("NOT_ALLOWED")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2748,7 +2767,7 @@ model OutboundWebhookDelivery {
 /// Tokens are AES-256-GCM encrypted at rest (HIREIQ_CREDENTIAL_ENCRYPTION_KEY).
 model InterviewerCalendarIntegration {
   id                  Int      @id @default(autoincrement())
-  userId              Int      @unique
+  userId              Int
   provider            String   @default("GOOGLE")
   /// Space-separated OAuth scopes granted at connect time. Null means the old read-only grant.
   grantedScopes       String?
@@ -2761,6 +2780,37 @@ model InterviewerCalendarIntegration {
   updatedAt           DateTime @updatedAt
 
   user User @relation("UserCalendarIntegration", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, provider])
+}
+
+model CompanySsoConnection {
+  id              Int      @id @default(autoincrement())
+  companyId       Int
+  provider        String
+  /// OIDC or SAML. OIDC is the default for Okta, Azure AD, and Google Workspace.
+  protocol        String   @default("OIDC")
+  domain          String
+  issuer          String
+  clientId        String
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, domain])
+  @@index([companyId])
+}
+
+model WhatsAppOptIn {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  phoneE164 String
+  optedInAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, phoneE164])
 }
 
 /// T96 Phase 4: result of checking one PUBLISHED distribution against its
@@ -3149,4 +3199,211 @@ model PipelineStageTemplate {
   company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
   @@unique([companyId, name])
+}
+
+model ScimToken {
+  id         Int       @id @default(autoincrement())
+  companyId  Int
+  tokenHash  String    @unique
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
+}
+
+model ScimDirectoryUser {
+  id           Int      @id @default(autoincrement())
+  companyId    Int
+  userName     String
+  externalId   String?
+  givenName    String   @default("")
+  familyName   String   @default("")
+  active       Boolean  @default(true)
+  portalUserId Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, userName])
+  @@index([companyId, active])
+}
+
+model ScimDirectoryGroup {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  displayName String
+  externalId  String?
+  memberIds   Int[]    @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, displayName])
+}
+
+model IdpGroupRole {
+  id         Int    @id @default(autoincrement())
+  companyId  Int
+  groupName  String
+  portalRole String
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, groupName])
+}
+
+model NotetakerConsent {
+  id               Int      @id @default(autoincrement())
+  companyId        Int
+  interviewId      Int
+  participantEmail String
+  consentedAt      DateTime
+  createdAt        DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, interviewId, participantEmail])
+}
+
+model NotetakerNote {
+  id           Int      @id @default(autoincrement())
+  companyId    Int
+  interviewId  Int
+  quote        String
+  timestampSec Int
+  source       String
+  createdAt    DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, interviewId])
+}
+
+model AssessmentAiExchange {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  inviteId  Int
+  role      String
+  body      String
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, inviteId])
+}
+
+model HrisHandoff {
+  id            Int      @id @default(autoincrement())
+  companyId     Int
+  applicationId Int
+  provider      String
+  status        String
+  payload       Json
+  createdAt     DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, applicationId])
+}
+
+model OutreachSequence {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  name      String
+  createdAt DateTime @default(now())
+
+  company     Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  steps       OutreachStep[]
+  enrollments OutreachEnrollment[]
+
+  @@index([companyId])
+}
+
+model OutreachStep {
+  id               Int       @id @default(autoincrement())
+  sequenceId       Int
+  position         Int
+  subject          String
+  body             String
+  approvedAt       DateTime?
+  approvedByUserId Int?
+
+  sequence OutreachSequence @relation(fields: [sequenceId], references: [id], onDelete: Restrict)
+
+  @@unique([sequenceId, position])
+}
+
+model OutreachEnrollment {
+  id             Int       @id @default(autoincrement())
+  companyId      Int
+  sequenceId     Int
+  applicationId  Int
+  status         String    @default("ACTIVE")
+  currentStep    Int       @default(0)
+  unsubscribedAt DateTime?
+  pausedAt       DateTime?
+
+  sequence OutreachSequence @relation(fields: [sequenceId], references: [id], onDelete: Restrict)
+
+  @@unique([sequenceId, applicationId])
+  @@index([companyId, status])
+}
+
+model ProfileCapture {
+  id         Int      @id @default(autoincrement())
+  companyId  Int
+  userId     Int
+  profileUrl String
+  name       String
+  headline   String   @default("")
+  createdAt  DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, createdAt])
+}
+
+model OfferEsign {
+  id            Int      @id @default(autoincrement())
+  companyId     Int
+  applicationId Int
+  provider      String
+  aadhaar       Boolean  @default(false)
+  status        String   @default("DRAFT")
+  createdAt     DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, applicationId])
+}
+
+model InterviewerTraining {
+  id                    Int       @id @default(autoincrement())
+  companyId             Int
+  interviewerId         Int
+  shadowSessions        Int       @default(0)
+  reverseShadowSessions Int       @default(0)
+  qualifiedAt           DateTime?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, interviewerId])
+}
+
+model ShadowObservation {
+  id                    Int      @id @default(autoincrement())
+  companyId             Int
+  interviewId           Int
+  leadInterviewerId     Int
+  observerInterviewerId Int
+  kind                  String
+  createdAt             DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, leadInterviewerId])
 }

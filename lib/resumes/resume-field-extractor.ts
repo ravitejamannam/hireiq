@@ -4,6 +4,7 @@ import { getOpenAiApiKey } from "@/lib/ai/job-description-generator";
 import { acceptResumeFields, type ResumeFields } from "@/lib/resumes/resume-fields";
 import { canonicalDegree } from "@/lib/resumes/degree-canonical";
 import { canonicalEmployer } from "@/lib/resumes/employer-aliases";
+import { mineResumeSpans } from "@/lib/resumes/resume-span-miner";
 import { canonicalSkill } from "@/lib/resumes/skill-canonical";
 
 const FIELD_INSTRUCTIONS = `Extract resume fields as JSON. Use null when a value is not written in the resume.
@@ -50,19 +51,69 @@ function isRoleHeading(line: string) {
   );
 }
 
-/** Months between two "Mon YYYY" dates. Null when either date is not that shape. */
-export function tenureMonths(start: string, end: string): number | null {
-  const parse = (value: string) => {
-    const match = value.trim().toLowerCase().match(/^([a-z]{3,9})\s+(\d{4})$/);
-    if (!match) return null;
-    const month = MONTHS.findIndex((name) => match[1].startsWith(name));
+const PRESENT = /^(present|current|now|till date|ongoing)$/i;
+
+function monthIndex(value: string, asOf: Date, allowPresent: boolean): number | null {
+  const trimmed = value.trim();
+  if (allowPresent && PRESENT.test(trimmed)) return asOf.getFullYear() * 12 + asOf.getMonth();
+  const named = trimmed.toLowerCase().match(/^([a-z]{3,9})\.?\s+(\d{4})$/);
+  if (named) {
+    const month = MONTHS.findIndex((name) => named[1].startsWith(name));
     if (month < 0) return null;
-    return Number(match[2]) * 12 + month;
-  };
-  const from = parse(start);
-  const to = parse(end === "Present" ? "" : end);
+    return Number(named[2]) * 12 + month;
+  }
+  const year = trimmed.match(/^(19|20)\d{2}$/);
+  if (year) return Number(year[0]) * 12;
+  return null;
+}
+
+/** Months between two dates. "Present" uses `asOf`. Year-only dates count as January. */
+export function tenureMonths(start: string, end: string, asOf = new Date()): number | null {
+  const from = monthIndex(start, asOf, false);
+  const to = monthIndex(end, asOf, true);
   if (from === null || to === null || to < from) return null;
   return to - from;
+}
+
+export type ExperienceSummary = {
+  totalYears: number | null;
+  currentTitle: string | null;
+  currentOrganization: string | null;
+};
+
+/** Merge overlapping roles and report years, plus the role that is still open. */
+export function summarizeExperience(
+  roles: Array<{ title: string; organization?: string | null; startDate?: string | null; endDate?: string | null }>,
+  asOf = new Date(),
+): ExperienceSummary {
+  const intervals: Array<[number, number]> = [];
+  let current: { title: string; organization: string | null; end: number } | null = null;
+  for (const role of roles) {
+    const start = role.startDate ?? "";
+    const end = role.endDate ?? "";
+    if (!start || !end) continue;
+    const from = monthIndex(start, asOf, false);
+    const to = monthIndex(end, asOf, true);
+    if (from === null || to === null || to < from) continue;
+    intervals.push([from, to]);
+    const open = PRESENT.test(end.trim());
+    if (open && (!current || to >= current.end)) {
+      current = { title: role.title, organization: role.organization ?? null, end: to };
+    }
+  }
+  intervals.sort((left, right) => left[0] - right[0]);
+  let total = 0;
+  let cursor = -1;
+  for (const [start, end] of intervals) {
+    const from = Math.max(start, cursor);
+    if (end > from) total += end - from;
+    cursor = Math.max(cursor, end);
+  }
+  return {
+    totalYears: intervals.length ? Math.round((total / 12) * 10) / 10 : null,
+    currentTitle: current?.title ?? null,
+    currentOrganization: current?.organization ?? null,
+  };
 }
 
 /** Grounded fallback used when no model is configured or the model output is rejected. */
@@ -117,7 +168,15 @@ export function heuristicResumeFields(source: string): ResumeFields | null {
     const organization = quoted(companyLine, source);
     if (!title) continue;
     used.add(titleLine);
-    experience.push({ title, organization, startDate: null, endDate: null });
+    const range = following.match(
+      /\b((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{4}|\d{4})\s*(?:to|–|—|-)\s*((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{4}|present|current|till date|\d{4})\b/i,
+    );
+    experience.push({
+      title,
+      organization,
+      startDate: range ? quoted(range[1], source) : null,
+      endDate: range ? quoted(range[2], source) : null,
+    });
   }
   const education = lines.flatMap((line) => {
     const match = line.match(/^education\s*[:\-]\s*(.{2,80}?)\s+at\s+(.{2,80})$/i);
@@ -154,26 +213,94 @@ export function heuristicResumeFields(source: string): ResumeFields | null {
     return name ? [{ name }] : [];
   });
 
+  const mined = mineResumeSpans(source);
+  for (const role of mined.roles) {
+    if (experience.some((row) => row.title.value.toLowerCase() === role.title.toLowerCase())) continue;
+    const title = quoted(role.title, source);
+    if (!title) continue;
+    experience.push({
+      title,
+      organization: role.organization ? quoted(role.organization, source) : null,
+      startDate: role.startDate ? quoted(role.startDate, source) : null,
+      endDate: role.endDate ? quoted(role.endDate, source) : null,
+    });
+  }
+  for (const titleText of mined.titles) {
+    if (experience.some((row) => row.title.value.toLowerCase() === titleText.toLowerCase())) continue;
+    const title = quoted(titleText, source);
+    if (!title) continue;
+    const organizationText = mined.companies.find((company) => source.includes(company)) ?? null;
+    experience.push({
+      title,
+      organization: organizationText ? quoted(organizationText, source) : null,
+      startDate: null,
+      endDate: null,
+    });
+    if (experience.length >= 20) break;
+  }
+  for (const company of mined.companies) {
+    if (experience.some((row) => row.organization?.value.toLowerCase() === company.toLowerCase())) continue;
+    const title = experience.find((row) => !row.organization)?.title;
+    if (!title) continue;
+    const organization = quoted(company, source);
+    if (!organization) continue;
+    const open = experience.find((row) => row.title === title && !row.organization);
+    if (open) open.organization = organization;
+  }
+  for (const degree of mined.degrees) {
+    const credential = quoted(degree, source);
+    if (!credential) continue;
+    if (education.some((row) => row.credential.value.toLowerCase() === credential.value.toLowerCase())) continue;
+    education.push({ credential, institution: null });
+    if (education.length >= 10) break;
+  }
+  for (const skill of mined.skills) {
+    const field = quoted(skill, source);
+    if (!field) continue;
+    skills.push({ ...field, value: canonicalSkill(skill) });
+    if (skills.length >= 40) break;
+  }
+  for (const name of mined.projects) {
+    const field = quoted(name, source);
+    if (!field) continue;
+    if (projects.some((row) => row.name.value.toLowerCase() === field.value.toLowerCase())) continue;
+    projects.push({ name: field });
+    if (projects.length >= 20) break;
+  }
+
   const accepted = acceptResumeFields(
     {
       fullName: nameLine ? quoted(nameLine, source) : null,
       email: email ? quoted(email, source) : null,
       phone: phone ? quoted(phone, source) : null,
-      skills,
-      experience,
-      education,
+      skills: dedupedQuoted(skills),
+      experience: experience.slice(0, 20),
+      education: education.slice(0, 10),
       certifications,
-      projects,
+      projects: projects.slice(0, 20),
     },
     source,
   );
   return accepted.ok ? normalizeResumeFields(accepted.fields) : null;
 }
 
+function dedupedQuoted(fields: Array<{ value: string; quote: string }>) {
+  const seen = new Set<string>();
+  const out: Array<{ value: string; quote: string }> = [];
+  for (const field of fields) {
+    const value = canonicalSkill(field.value);
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...field, value });
+  }
+  return out;
+}
+
 function normalizeResumeFields(fields: ResumeFields): ResumeFields {
   return {
     ...fields,
-    skills: fields.skills.map((skill) => ({ ...skill, value: canonicalSkill(skill.value) })),
+    skills: dedupedQuoted(fields.skills),
     experience: fields.experience.map((role) => {
       const employer = role.organization ? canonicalEmployer(role.organization.value) : null;
       return employer && role.organization
@@ -310,6 +437,8 @@ export type ResumeFormSuggestion = {
   projects: Array<{ name: string }>;
   certifications: string[];
   skills: string[];
+  totalExperienceYears: number | null;
+  currentRole: string | null;
 };
 
 function tenureLabel(start: string, end: string): string {
@@ -323,27 +452,34 @@ function tenureLabel(start: string, end: string): string {
 }
 
 export function suggestionFromFields(fields: ResumeFields): ResumeFormSuggestion {
+  const experiences = fields.experience.map((role) => {
+    const startDate = role.startDate?.value ?? "";
+    const endDate = role.endDate?.value ?? "";
+    return {
+      title: role.title.value,
+      company: role.organization?.value ?? "",
+      startDate,
+      endDate,
+      tenure: startDate && endDate ? tenureLabel(startDate, endDate) : "",
+    };
+  });
+  const summary = summarizeExperience(experiences);
+  const currentRole = summary.currentTitle
+    ? [summary.currentTitle, summary.currentOrganization].filter(Boolean).join(" at ")
+    : null;
   return {
     fullName: fields.fullName?.value ?? null,
     email: fields.email?.value ?? null,
     phone: fields.phone?.value ?? null,
     skills: fields.skills.map((skill) => skill.value),
-    experiences: fields.experience.map((role) => {
-      const startDate = role.startDate?.value ?? "";
-      const endDate = role.endDate?.value ?? "";
-      return {
-        title: role.title.value,
-        company: role.organization?.value ?? "",
-        startDate,
-        endDate,
-        tenure: startDate && endDate ? tenureLabel(startDate, endDate) : "",
-      };
-    }),
+    experiences,
     education: fields.education.map((school) => ({
       credential: school.credential.value,
       institution: school.institution?.value ?? "",
     })),
     projects: fields.projects.map((project) => ({ name: project.name.value })),
     certifications: fields.certifications.map((item) => item.value),
+    totalExperienceYears: summary.totalYears,
+    currentRole,
   };
 }

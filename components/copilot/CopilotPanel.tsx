@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { copilotShortcutBlocked } from "@/lib/copilot/policy";
+import type { StructuredFilters } from "@/lib/copilot/structured-filters";
 
 type Citation = { label: string; quote: string; href: string };
 type Action = { kind: string; label: string; applicationIds: number[]; draft: string | null; confirmed: boolean };
@@ -19,6 +20,7 @@ export function CopilotPanel(input: { jobId: number | null; companyId: number })
   const [action, setAction] = useState<Action | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<StructuredFilters | null>(null);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -63,10 +65,16 @@ export function CopilotPanel(input: { jobId: number | null; companyId: number })
       const split = raw.split("\n\n");
       setAnswer(split[0] ?? "");
       if (split[1]) {
-        const meta = JSON.parse(split[1]) as { citations?: Citation[]; action?: Action | null; link?: PastLink | null };
+        const meta = JSON.parse(split[1]) as {
+          citations?: Citation[];
+          action?: Action | null;
+          link?: PastLink | null;
+          filters?: StructuredFilters;
+        };
         setCitations(meta.citations ?? []);
         setLink(meta.link ?? null);
         setAction(meta.action ?? null);
+        setFilters(meta.filters ?? null);
       }
     } catch {
       setError("The copilot could not answer.");
@@ -101,6 +109,55 @@ export function CopilotPanel(input: { jobId: number | null; companyId: number })
           </form>
           {error ? <p role="alert" className="mt-3 text-sm">{error}</p> : null}
           {answer ? <p className="mt-4 text-sm whitespace-pre-wrap">{answer}</p> : null}
+          {filters ? (
+            <form
+              className="mt-3 grid gap-2 rounded border border-zinc-300 p-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const text = [
+                  filters.skills.join(" "),
+                  filters.minYears ? `${filters.minYears} years` : "",
+                  filters.location ? `in ${filters.location}` : "",
+                  filters.stage ?? "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+                setQuestion(text);
+                void ask(text);
+              }}
+            >
+              <p className="text-xs font-semibold">Filters from the question. Edit them, then run the same search.</p>
+              <label className="text-xs">
+                Skills
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                  value={filters.skills.join(", ")}
+                  onChange={(event) =>
+                    setFilters({
+                      ...filters,
+                      skills: event.target.value.split(",").map((part) => part.trim()).filter(Boolean),
+                    })
+                  }
+                />
+              </label>
+              <label className="text-xs">
+                Minimum years
+                <input
+                  className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                  value={filters.minYears ?? ""}
+                  onChange={(event) =>
+                    setFilters({
+                      ...filters,
+                      minYears: event.target.value === "" ? null : Number(event.target.value),
+                    })
+                  }
+                />
+              </label>
+              <button className="min-h-6 rounded border px-3 py-1 text-xs font-semibold" type="submit">
+                Run with these filters
+              </button>
+            </form>
+          ) : null}
           {link ? <p className="mt-2 text-sm"><a className="font-semibold underline" href={link.href}>{link.label}</a></p> : null}
           {citations.length > 0 ? (
             <ul className="mt-3 flex flex-wrap gap-2">
