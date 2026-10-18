@@ -4,7 +4,12 @@ export const metadata: Metadata = {
   title: "Application status",
 };
 
+import { SelfIdForm } from "@/components/fairness/SelfIdForm";
 import { getPublicStatus } from "@/lib/candidates/public-status-service";
+import {
+  optOutOfAiEvaluation,
+  requestHumanReview,
+} from "@/app/actions/candidate-portal-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -98,16 +103,54 @@ export default async function StatusPage({ params }: PageProps) {
             <p className="mt-1 text-xl font-bold text-indigo-700">{status.currentStage}</p>
           </div>
 
-          {status.assessmentScore !== null && status.assessmentMax !== null ? (
-            <div className="mt-4 rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-                Assessment score
-              </p>
-              <p className="mt-0.5 text-2xl font-bold text-zinc-900">
-                {status.assessmentScore}
-                <span className="text-base font-normal text-zinc-400"> / {status.assessmentMax}</span>
-              </p>
-            </div>
+          <p className="mt-4 text-sm text-zinc-800">
+            <a className="font-semibold underline" href="/portal">
+              Open the candidate portal
+            </a>{" "}
+            to see every application, upload documents, and manage interviews. Scores are not shown to you.
+          </p>
+
+          <section className="mt-6" aria-labelledby="ai-notice-heading">
+            <h2 id="ai-notice-heading" className="text-sm font-semibold text-zinc-900">
+              AI notice
+            </h2>
+            <p className="mt-2 text-sm text-zinc-700">
+              {status.notice ??
+                "HireIQ may draft notes for recruiters. A person approves anything you would see. Opting out stops AI evaluation of this application."}
+            </p>
+            <form action={optOutOfAiEvaluation.bind(null, token)} className="mt-3">
+              <button
+                type="submit"
+                disabled={status.optedOut}
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-900 disabled:opacity-60"
+              >
+                {status.optedOut ? "Opted out of AI evaluation" : "Opt out of AI evaluation"}
+              </button>
+            </form>
+            <form action={requestHumanReview.bind(null, token)} className="mt-2">
+              <button
+                type="submit"
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-900"
+              >
+                {status.humanReviewRequested ? "Human review requested" : "Request a human review"}
+              </button>
+            </form>
+          </section>
+          <SelfIdForm action={`/status/${token}/self-id`} saved={false} />
+
+          {status.interviews.length > 0 ? (
+            <section className="mt-6" aria-labelledby="interviews-heading">
+              <h2 id="interviews-heading" className="text-sm font-semibold text-zinc-900">
+                Interviews
+              </h2>
+              <ul className="mt-2 space-y-1 text-sm text-zinc-700">
+                {status.interviews.map((interview) => (
+                  <li key={interview.at.toISOString()}>
+                    {interview.type} · {interview.at.toLocaleString()}
+                  </li>
+                ))}
+              </ul>
+            </section>
           ) : null}
 
           <div className="mt-4">

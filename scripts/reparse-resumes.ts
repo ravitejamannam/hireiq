@@ -15,6 +15,7 @@
 import { planReparse, reparseUpdateWhere } from "@/lib/resumes/reparse-plan";
 import { prisma } from "@/lib/prisma";
 import { readResume } from "@/lib/resumes/storage";
+import type { ResumeVisionAudit } from "@/lib/resumes/layout-vision";
 import {
   extractResumeText,
   RESUME_TEXT_EXTRACTOR_VERSION,
@@ -34,6 +35,8 @@ async function main() {
     take: Number.isFinite(limit) && limit > 0 ? limit : 100,
     select: {
       id: true,
+      companyId: true,
+      applicationId: true,
       storageKey: true,
       fileName: true,
       contentType: true,
@@ -56,6 +59,13 @@ async function main() {
       fileName: row.fileName,
       contentType: row.contentType,
       ocr: "skip",
+      visionAudit: {
+        companyId: row.companyId,
+        entityType: row.applicationId ? "Application" : "CandidateResumeDocument",
+        entityId: row.applicationId ?? row.id,
+        applicationId: row.applicationId,
+        db: prisma as unknown as ResumeVisionAudit["db"],
+      },
     });
     const plan = planReparse({
       extractedText: row.extractedText,

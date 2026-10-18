@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
 
+import { postOpenAi } from "@/lib/ai/gateway";
+import { withAIRun, type AiRunCallSubject } from "@/lib/ai/run";
+
 import {
   SEMANTIC_EMBEDDING_INVALID,
   SEMANTIC_EMBEDDING_PROVIDER_ERROR,
@@ -84,7 +87,17 @@ export function createOfflineHashProjectionEmbedder(): SemanticEmbedder {
   });
 }
 
-async function embedWithOpenAi(texts: string[]): Promise<EmbeddingBatchResult> {
+export type EmbeddingAudit = {
+  companyId: number;
+  entityType: string;
+  entityId: number;
+  feature?: string;
+} | null;
+
+async function embedWithOpenAi(
+  texts: string[],
+  audit?: EmbeddingAudit,
+): Promise<EmbeddingBatchResult> {
   const apiKey = getOpenAiApiKey();
   if (!apiKey) {
     throw new SemanticRetrievalError(
@@ -93,14 +106,33 @@ async function embedWithOpenAi(texts: string[]): Promise<EmbeddingBatchResult> {
     );
   }
   const model = getSemanticEmbeddingModel();
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ model, input: texts }),
-    signal: AbortSignal.timeout(20_000),
+  const subject: AiRunCallSubject | null = audit
+    ? {
+        companyId: audit.companyId,
+        entityType: audit.entityType,
+        entityId: audit.entityId,
+        model,
+        promptVersion: DEFAULT_OPENAI_EMBEDDING_VERSION,
+        input: { count: texts.length },
+      }
+    : null;
+  return withAIRun(audit?.feature ?? "embeddings", null, subject, () => requestOpenAiEmbeddings(texts, apiKey, model));
+}
+
+async function requestOpenAiEmbeddings(
+  texts: string[],
+  apiKey: string,
+  model: string,
+): Promise<{
+  value: EmbeddingBatchResult;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  output: unknown;
+}> {
+  const response = await postOpenAi({
+    path: "/v1/embeddings",
+    apiKey,
+    body: { model, input: texts },
   });
   if (!response.ok) {
     throw new SemanticRetrievalError(
@@ -122,7 +154,7 @@ async function embedWithOpenAi(texts: string[]): Promise<EmbeddingBatchResult> {
   const vectors = rows.map((row) =>
     assertEmbeddingVector(row.embedding, DEFAULT_OPENAI_EMBEDDING_DIMENSIONS),
   );
-  return {
+  const value: EmbeddingBatchResult = {
     vectors,
     provider: "openai",
     model,
@@ -138,6 +170,12 @@ async function embedWithOpenAi(texts: string[]): Promise<EmbeddingBatchResult> {
         : null,
     apiCalls: 1,
   };
+  return {
+    value,
+    promptTokens: value.promptTokens ?? null,
+    completionTokens: null,
+    output: { count: texts.length, dimensions: value.dimensions },
+  };
 }
 
 /**
@@ -146,6 +184,7 @@ async function embedWithOpenAi(texts: string[]): Promise<EmbeddingBatchResult> {
  */
 export async function embedLiveProductionTexts(
   texts: string[],
+  audit?: EmbeddingAudit,
 ): Promise<EmbeddingBatchResult> {
   if (!getOpenAiApiKey()) {
     throw new SemanticRetrievalError(
@@ -173,7 +212,7 @@ export async function embedLiveProductionTexts(
   let meta: EmbeddingBatchResult | null = null;
   for (let index = 0; index < texts.length; index += 64) {
     const slice = texts.slice(index, index + 64);
-    const result = await embedWithOpenAi(slice);
+    const result = await embedWithOpenAi(slice, audit);
     meta = result;
     batches.push(...result.vectors);
     apiCalls += result.apiCalls ?? 1;
@@ -203,6 +242,7 @@ export async function embedLiveProductionTexts(
 
 export async function embedRetrievalTexts(
   texts: string[],
+  audit?: EmbeddingAudit,
 ): Promise<EmbeddingBatchResult> {
   if (texts.length === 0) {
     const configured = embedderOverride
@@ -230,7 +270,7 @@ export async function embedRetrievalTexts(
     let meta: EmbeddingBatchResult | null = null;
     for (let index = 0; index < texts.length; index += 64) {
       const slice = texts.slice(index, index + 64);
-      const result = await embedWithOpenAi(slice);
+      const result = await embedWithOpenAi(slice, audit);
       meta = result;
       batches.push(...result.vectors);
     }

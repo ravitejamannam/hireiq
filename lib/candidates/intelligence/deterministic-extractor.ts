@@ -29,7 +29,7 @@ function overlaps(
   return taken.some((span) => start < span.end && end > span.start);
 }
 
-export const DETERMINISTIC_EXTRACTOR_VERSION = "v1";
+export const DETERMINISTIC_EXTRACTOR_VERSION = "v1.1";
 export const DETERMINISTIC_MODEL_PROVIDER = "none";
 export const DETERMINISTIC_MODEL_NAME = "deterministic";
 export const DETERMINISTIC_PROMPT_VERSION = "none";

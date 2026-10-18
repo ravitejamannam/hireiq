@@ -29,6 +29,7 @@ import {
 
 import { createEvidence } from "@/lib/repositories/candidate-evidence-repository";
 import { claimPendingResumeInIngestion } from "@/lib/apply/hosted-resume-service";
+import { analyseParsedCandidate } from "@/lib/resumes/analyse-after-parse";
 import { claimPendingPhotoInIngestion } from "@/lib/apply/hosted-photo-service";
 import { getPrismaErrorCode } from "@/lib/prisma-error";
 import { upsertProfileFromApply } from "@/lib/repositories/candidate-profile-repository";
@@ -344,6 +345,7 @@ export async function ingestHostedApplySubmission(submissionId: unknown) {
               source: null,
               expertScore: null,
               rejectionReason: null,
+              futureRolesConsent: Boolean((fresh.profilePayload as { futureRolesConsent?: boolean } | null)?.futureRolesConsent),
             },
           });
           applicationId = created.id;
@@ -414,6 +416,14 @@ export async function ingestHostedApplySubmission(submissionId: unknown) {
       jobId: processed.jobId,
       distributionId: processed.distributionId,
     });
+
+    if (processed.candidateId) {
+      await analyseParsedCandidate({
+        candidateId: processed.candidateId,
+        companyId: processed.companyId,
+        applicationId: processed.applicationId,
+      }).catch((error) => console.error("[analyse] after hosted apply", error));
+    }
 
     return toSafe(processed);
   } catch (error) {

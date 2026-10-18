@@ -1,7 +1,9 @@
+import type { AiRunScope } from "@/lib/ai/ai-run";
+import { runGuardedCompletion } from "@/lib/ai/guarded-completion";
 import {
   CandidateIntelligenceError,
-  INTELLIGENCE_AI_INVALID_OUTPUT,
   INTELLIGENCE_AI_NOT_CONFIGURED,
+  INTELLIGENCE_AI_OPT_OUT,
   INTELLIGENCE_AI_PROVIDER_ERROR,
   INTELLIGENCE_AI_TIMEOUT,
   INTELLIGENCE_UNCHANGED_ERROR,
@@ -74,7 +76,30 @@ function toProviderError(error: unknown): never {
   );
 }
 
-async function generateWithOpenAi(evidenceText: string): Promise<unknown> {
+const CLAIMS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["claims"],
+  properties: {
+    claims: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["claimType", "value"],
+        properties: {
+          claimType: { type: "string", enum: ["SKILL", "EMPLOYER", "JOB_TITLE", "LOCATION"] },
+          value: { type: "string" },
+        },
+      },
+    },
+  },
+} as const;
+
+async function generateWithOpenAi(
+  evidenceText: string,
+  scope: AiRunScope | null,
+): Promise<unknown> {
   const apiKey = getOpenAiApiKey();
   if (!apiKey) {
     throw new CandidateIntelligenceError(
@@ -84,66 +109,40 @@ async function generateWithOpenAi(evidenceText: string): Promise<unknown> {
   }
 
   const model = getCandidateIntelligenceAiModel();
-  let response: Response;
   try {
-    response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const outcome = await runGuardedCompletion({
+      optedOut: false,
+      scope,
+      request: {
+        feature: "evidence_review",
         model,
-        response_format: { type: "json_object" },
-        temperature: 0,
-        messages: [
-          {
-            role: "system",
-            content: CANDIDATE_INTELLIGENCE_SYSTEM_INSTRUCTIONS,
-          },
-          {
-            role: "user",
-            content: buildCandidateIntelligenceUserPayload(evidenceText),
-          },
-        ],
-      }),
-      signal: AbortSignal.timeout(20_000),
+        promptVersion: CANDIDATE_INTELLIGENCE_PROMPT_VERSION,
+        system: CANDIDATE_INTELLIGENCE_SYSTEM_INSTRUCTIONS,
+        user: buildCandidateIntelligenceUserPayload(evidenceText),
+        schemaName: "candidate_claims",
+        schema: CLAIMS_SCHEMA,
+        timeoutMs: 20_000,
+        maxRetries: 0,
+        apiKey,
+      },
     });
+    return outcome.result?.parsed;
   } catch (error) {
     return toProviderError(error);
-  }
-
-  if (!response.ok) {
-    throw new CandidateIntelligenceError(
-      INTELLIGENCE_UNCHANGED_ERROR,
-      INTELLIGENCE_AI_PROVIDER_ERROR,
-    );
-  }
-
-  const body = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const content = body.choices?.[0]?.message?.content;
-  if (!content) {
-    throw new CandidateIntelligenceError(
-      INTELLIGENCE_UNCHANGED_ERROR,
-      INTELLIGENCE_AI_INVALID_OUTPUT,
-    );
-  }
-
-  try {
-    return JSON.parse(content) as unknown;
-  } catch {
-    throw new CandidateIntelligenceError(
-      INTELLIGENCE_UNCHANGED_ERROR,
-      INTELLIGENCE_AI_INVALID_OUTPUT,
-    );
   }
 }
 
 export async function extractClaimsFromEvidenceText(
   evidenceText: string,
+  guard?: { optedOut: boolean; scope: AiRunScope | null },
 ): Promise<ExtractedClaimDraft[]> {
+  if (guard?.optedOut) {
+    throw new CandidateIntelligenceError(
+      "Candidate opted out of AI evaluation.",
+      INTELLIGENCE_AI_OPT_OUT,
+    );
+  }
+
   let raw: unknown;
   try {
     if (generatorOverride) {
@@ -154,7 +153,7 @@ export async function extractClaimsFromEvidenceText(
         INTELLIGENCE_AI_NOT_CONFIGURED,
       );
     } else {
-      raw = await generateWithOpenAi(evidenceText);
+      raw = await generateWithOpenAi(evidenceText, guard?.scope ?? null);
     }
   } catch (error) {
     return toProviderError(error);

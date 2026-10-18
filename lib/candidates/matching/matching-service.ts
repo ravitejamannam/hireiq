@@ -35,6 +35,9 @@ import {
   REQUIREMENT_PARSE_VERSION,
   STALE_MATCH_RUNNING_MS,
 } from "@/lib/candidates/matching/matching-versions";
+import { matcherSignalsFromPayload } from "@/lib/ai/job-description-document";
+import { AiEvaluationOptOutError, assertAIEvaluationAllowed } from "@/lib/ai/opt-out";
+import { parseRequirementChecks, quotesForVagueRequirements } from "@/lib/jobs/requirement-checks";
 import { prisma } from "@/lib/prisma";
 import {
   createMatchRun,
@@ -233,6 +236,14 @@ export async function executeRunCandidateMatching(input: {
   if (!application) {
     matchingNotFound();
   }
+  try {
+    await assertAIEvaluationAllowed({ applicationId: application.id });
+  } catch (error) {
+    if (error instanceof AiEvaluationOptOutError) {
+      throw new CandidateMatchingError("Manual review. Candidate opted out of AI evaluation.", "AI_EVALUATION_OPT_OUT");
+    }
+    throw error;
+  }
   if (
     application.job.companyId !== application.companyId ||
     application.candidate.companyId !== application.companyId ||
@@ -314,12 +325,38 @@ export async function executeRunCandidateMatching(input: {
   });
 
   try {
+    const signals = matcherSignalsFromPayload(spec.structuredPayload);
+    const evidence = await prisma.candidateEvidence.findMany({
+      where: {
+        candidateId: application.candidateId,
+        companyId: application.companyId,
+        revokedAt: null,
+        inlineText: { not: null },
+      },
+      select: { inlineText: true },
+      take: 5,
+    });
+    const resumeText = evidence.map((row) => row.inlineText).filter(Boolean).join("\n");
+    const prose = [
+      ...parseRequirementChecks(spec.mustHaveRequirements, "mustHaveRequirements"),
+      ...parseRequirementChecks(spec.niceToHaveRequirements, "niceToHaveRequirements"),
+    ].filter((check) => check.kind === "prose");
+    const verifiedProse = await quotesForVagueRequirements(
+      resumeText,
+      prose.map((check) => check.text),
+      { companyId: application.companyId, applicationId: application.id },
+    ).catch(() => [] as string[]);
     const drafts = computeRequirementMatches({
       spec: {
         primarySkills: spec.primarySkills,
         location: spec.location,
         mustHaveRequirements: spec.mustHaveRequirements,
         niceToHaveRequirements: spec.niceToHaveRequirements,
+        screeningQuestions: signals.screeningQuestions,
+        rubricCriteria: signals.rubricCriteria,
+        resumeText,
+        profileLocation: application.candidate.location,
+        verifiedProse,
       },
       claims: selected.claims,
     });

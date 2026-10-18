@@ -4,7 +4,7 @@ import {
   JobDistributionStatus,
   JobSpecificationVersionStatus,
   JobStatus,
-
+  ApplicationPipelineStatus,
 } from "@prisma/client";
 
 import {
@@ -37,6 +37,7 @@ import {
   validateIdempotencyKey,
   validatePublicApplyToken,
 } from "@/lib/validation/hosted-apply-validation";
+import { gradeKnockouts, parseKnockoutAnswers, parseScreeningAnswers } from "@/lib/apply/knockout";
 import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 const publicSpecSelect = {
@@ -174,6 +175,33 @@ async function assessmentUrlForApplication(applicationId: number | null) {
   }
 }
 
+async function applyKnockoutDecision(input: {
+  body: unknown;
+  jobId: number;
+  companyId: number;
+  applicationId: number | null;
+}) {
+  if (!input.applicationId) return;
+  const questions = await prisma.knockoutQuestion.findMany({
+    where: { jobId: input.jobId, companyId: input.companyId },
+    select: { id: true, expectedAnswer: true },
+  });
+  if (questions.length === 0) return;
+  const graded = gradeKnockouts({
+    questions,
+    answers: parseKnockoutAnswers(input.body),
+  });
+  if (!graded.rejectByRule) return;
+  await prisma.application.update({
+    where: { id: input.applicationId },
+    data: {
+      status: ApplicationPipelineStatus.REJECTED,
+      rejectionReasonCode: "KNOCKOUT",
+      rejectionReason: "Knockout answer",
+    },
+  });
+}
+
 export async function submitHostedApply(input: {
   token: string;
   idempotencyKey: unknown;
@@ -222,7 +250,12 @@ export async function submitHostedApply(input: {
         experienceYears: fields.experienceYears,
         linkedInUrl: fields.linkedInUrl,
         coverLetter: fields.coverLetter,
-        profilePayload: fields.profile as object,
+        profilePayload: {
+          ...fields.profile,
+          futureRolesConsent: fields.futureRolesConsent,
+          knockoutAnswers: parseKnockoutAnswers(input.body),
+          screeningAnswers: parseScreeningAnswers(input.body),
+        } as object,
         consentAcceptedAt: new Date(),
         status: HostedApplySubmissionStatus.RECEIVED,
       },
@@ -273,6 +306,12 @@ export async function submitHostedApply(input: {
       submissionId: created.id,
     });
     const ingested = await ingestReceivedSubmission(created.id);
+    await applyKnockoutDecision({
+      body: input.body,
+      jobId: row.distribution.jobId,
+      companyId: row.distribution.companyId,
+      applicationId: ingested.applicationId,
+    });
     return {
       success: true as const,
       assessmentUrl: await assessmentUrlForApplication(ingested.applicationId),

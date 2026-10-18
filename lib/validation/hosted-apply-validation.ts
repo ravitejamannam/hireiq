@@ -32,6 +32,7 @@ export type HostedApplySubmitInput = {
   linkedInUrl: string | null;
   coverLetter: string | null;
   consentAccepted: true;
+  futureRolesConsent: boolean;
   profile: StructuredProfilePayload;
 };
 
@@ -206,6 +207,7 @@ export function validateHostedApplySubmitBody(body: unknown): HostedApplySubmitI
     linkedInUrl: profile.linkedInUrl,
     coverLetter: typeof coverRaw === "string" ? coverRaw : null,
     consentAccepted: true,
+    futureRolesConsent: record.futureRolesConsent === true,
     profile,
   };
 }

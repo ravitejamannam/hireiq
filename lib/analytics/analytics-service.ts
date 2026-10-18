@@ -117,3 +117,11 @@ function stageRank(status: ApplicationPipelineStatus): number {
 }
 
 void RequirementLifecycle.REQUIREMENT_POSTED;
+
+export {
+  aiActionRates,
+  feedbackTimeliness,
+  funnelCounts,
+  sourceCounts,
+  timeInStageHours,
+} from "@/lib/analytics/mvp-metrics";

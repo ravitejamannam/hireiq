@@ -1,9 +1,28 @@
+import type { AiRunScope } from "@/lib/ai/ai-run";
+import { runGuardedCompletion } from "@/lib/ai/guarded-completion";
 import { getOpenAiApiKey } from "@/lib/ai/job-description-generator";
 import { acceptResumeFields, type ResumeFields } from "@/lib/resumes/resume-fields";
+import { canonicalDegree } from "@/lib/resumes/degree-canonical";
+import { canonicalEmployer } from "@/lib/resumes/employer-aliases";
 import { canonicalSkill } from "@/lib/resumes/skill-canonical";
 
 const FIELD_INSTRUCTIONS = `Extract resume fields as JSON. Use null when a value is not written in the resume.
 Every value must include a quote copied exactly from the resume. Do not add keys.
+
+Indian education is usually a degree line, then the college, then the years. The credential is the degree, not the college.
+Example:
+EDUCATION
+B.Tech in Computer Science
+Osmania University
+2011 to 2015
+Bachelor of Technology in Computer Science
+University College of Engineering
+2005
+MCA
+Osmania University
+Treat B.Tech, BTech, and Bachelor of Technology as the degree. Do not put the college in the credential field.
+
+Extract every employer listed, including earlier roles and roles without dates. A job may be a header such as "Associate consultant@SAP labs", a line such as "fresher job Accenture", or an older block further down the page. Do not stop after the most recent role.
 Shape:
 {"fullName":{"value":"","quote":""}|null,"email":{"value":"","quote":""}|null,"phone":{"value":"","quote":""}|null,"skills":[{"value":"","quote":""}],"experience":[{"title":{"value":"","quote":""},"organization":{"value":"","quote":""}|null,"startDate":{"value":"","quote":""}|null,"endDate":{"value":"","quote":""}|null}],"education":[{"credential":{"value":"","quote":""},"institution":{"value":"","quote":""}|null}],"certifications":[{"value":"","quote":""}],"projects":[{"name":{"value":"","quote":""}}]}`;
 
@@ -14,6 +33,22 @@ function quoted(value: string, source: string): { value: string; quote: string }
 }
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const SECTION_LINE = /^(work experience|professional experience|experience|education|skills|technical skills|projects?|summary|additional information|certifications?)$/i;
+const DATE_LINE = /^(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|\d{4})\b/i;
+const DEGREE_PATTERN = /\b(B\.?\s?Tech|M\.?\s?Tech|B\.?\s?Sc|M\.?\s?Sc|B\.?\s?Com|M\.?\s?Com|B\.?\s?E|M\.?\s?E|MCA|MBA|B\.E|M\.E)\b/i;
+
+function isRoleHeading(line: string) {
+  const words = line.split(/\s+/);
+  return (
+    words.length >= 1 &&
+    words.length <= 8 &&
+    line.length <= 60 &&
+    !SECTION_LINE.test(line) &&
+    !DATE_LINE.test(line) &&
+    !/[.!?]$/.test(line) &&
+    !/@/.test(line)
+  );
+}
 
 /** Months between two "Mon YYYY" dates. Null when either date is not that shape. */
 export function tenureMonths(start: string, end: string): number | null {
@@ -53,6 +88,7 @@ export function heuristicResumeFields(source: string): ResumeFields | null {
         })
         .filter((part): part is { value: string; quote: string } => part !== null)
     : [];
+  const used = new Set<string>();
   const experience = lines.flatMap((line) => {
     const match = line.match(/^(.{2,80}?)\s+at\s+(.+?)\s+\((.+?)\s+-\s+(.+?)\)$/i);
     if (!match) {
@@ -68,8 +104,21 @@ export function heuristicResumeFields(source: string): ResumeFields | null {
     const startDate = quoted(match[3].trim(), source);
     const endDate = quoted(match[4].trim(), source);
     if (!title) return [];
+    used.add(line);
     return [{ title, organization, startDate, endDate }];
   });
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const titleLine = lines[index];
+    const companyLine = lines[index + 1];
+    const following = lines[index + 2] ?? "";
+    if (used.has(titleLine) || !isRoleHeading(titleLine) || !isRoleHeading(companyLine)) continue;
+    if (DEGREE_PATTERN.test(titleLine) || !DATE_LINE.test(following)) continue;
+    const title = quoted(titleLine, source);
+    const organization = quoted(companyLine, source);
+    if (!title) continue;
+    used.add(titleLine);
+    experience.push({ title, organization, startDate: null, endDate: null });
+  }
   const education = lines.flatMap((line) => {
     const match = line.match(/^education\s*[:\-]\s*(.{2,80}?)\s+at\s+(.{2,80})$/i);
     if (!match) {
@@ -84,6 +133,14 @@ export function heuristicResumeFields(source: string): ResumeFields | null {
     if (!credential) return [];
     return [{ credential, institution }];
   });
+  for (const line of lines) {
+    const degree = line.match(DEGREE_PATTERN);
+    if (!degree) continue;
+    const credential = quoted(degree[0].replace(/\s+/g, " ").trim(), source) ?? quoted(line, source);
+    if (!credential) continue;
+    if (education.some((row) => row.credential.value === credential.value)) continue;
+    education.push({ credential, institution: null });
+  }
   const certifications = lines.flatMap((line) => {
     const match = line.match(/^certifications?\s*[:\-]\s*(.{2,120})$/i);
     if (!match) return [];
@@ -110,55 +167,132 @@ export function heuristicResumeFields(source: string): ResumeFields | null {
     },
     source,
   );
-  return accepted.ok ? accepted.fields : null;
+  return accepted.ok ? normalizeResumeFields(accepted.fields) : null;
 }
 
-async function fieldsFromModel(source: string): Promise<ResumeFields | null> {
+function normalizeResumeFields(fields: ResumeFields): ResumeFields {
+  return {
+    ...fields,
+    skills: fields.skills.map((skill) => ({ ...skill, value: canonicalSkill(skill.value) })),
+    experience: fields.experience.map((role) => {
+      const employer = role.organization ? canonicalEmployer(role.organization.value) : null;
+      return employer && role.organization
+        ? { ...role, organization: { ...role.organization, value: employer } }
+        : role;
+    }),
+    education: fields.education.map((school) => {
+      const degree = canonicalDegree(school.credential.value);
+      return degree ? { ...school, credential: { ...school.credential, value: degree } } : school;
+    }),
+  };
+}
+
+const QUOTED = {
+  type: "object",
+  additionalProperties: false,
+  required: ["value", "quote"],
+  properties: { value: { type: "string" }, quote: { type: "string" } },
+} as const;
+
+const RESUME_FIELDS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["fullName", "email", "phone", "skills", "experience", "education", "certifications", "projects"],
+  properties: {
+    fullName: { anyOf: [QUOTED, { type: "null" }] },
+    email: { anyOf: [QUOTED, { type: "null" }] },
+    phone: { anyOf: [QUOTED, { type: "null" }] },
+    skills: { type: "array", items: QUOTED },
+    experience: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "organization", "startDate", "endDate"],
+        properties: {
+          title: QUOTED,
+          organization: { anyOf: [QUOTED, { type: "null" }] },
+          startDate: { anyOf: [QUOTED, { type: "null" }] },
+          endDate: { anyOf: [QUOTED, { type: "null" }] },
+        },
+      },
+    },
+    education: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["credential", "institution"],
+        properties: {
+          credential: QUOTED,
+          institution: { anyOf: [QUOTED, { type: "null" }] },
+        },
+      },
+    },
+    certifications: { type: "array", items: QUOTED },
+    projects: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name"],
+        properties: { name: QUOTED },
+      },
+    },
+  },
+} as const;
+
+export type ResumeFieldGuard = {
+  optedOut: boolean;
+  scope?: AiRunScope | null;
+};
+
+async function fieldsFromModel(source: string, guard?: ResumeFieldGuard): Promise<ResumeFields | null> {
+  if (guard?.optedOut) return null;
   const key = getOpenAiApiKey();
   if (!key) return null;
   const model = process.env.OPENAI_RESUME_FIELDS_MODEL?.trim() || "gpt-4o-mini";
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12_000);
-  try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: FIELD_INSTRUCTIONS },
-          { role: "user", content: source.slice(0, 12_000) },
-        ],
-      }),
-    });
-    if (!response.ok) return null;
-    const body = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const content = body.choices?.[0]?.message?.content;
-    if (!content) return null;
-    const accepted = acceptResumeFields(JSON.parse(content), source);
-    if (!accepted.ok) return null;
-    return {
-      ...accepted.fields,
-      skills: accepted.fields.skills.map((skill) => ({
-        ...skill,
-        value: canonicalSkill(skill.value),
-      })),
-    };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
+  const timeoutMs = source.length > 6_000 ? 28_000 : 12_000;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const outcome = await runGuardedCompletion({
+        optedOut: false,
+        scope: guard?.scope,
+        request: {
+          feature: "resume_fields",
+          model,
+          promptVersion: "resume-fields-3",
+          system: FIELD_INSTRUCTIONS,
+          user: source.slice(0, 12_000),
+          schemaName: "resume_fields",
+          schema: RESUME_FIELDS_SCHEMA,
+          timeoutMs,
+          maxRetries: 0,
+          apiKey: key,
+        },
+      });
+      const accepted = acceptResumeFields(outcome.result?.parsed, source);
+      if (!accepted.ok) return null;
+      return normalizeResumeFields(accepted.fields);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const timedOut = /timeout|aborted|abort/i.test(message);
+      if (attempt === 0 && timedOut) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        continue;
+      }
+      return null;
+    }
   }
+  return null;
 }
 
-export async function proposeResumeFields(source: string): Promise<ResumeFields | null> {
-  return (await fieldsFromModel(source)) ?? heuristicResumeFields(source);
+export async function proposeResumeFields(
+  source: string,
+  guard?: ResumeFieldGuard,
+): Promise<ResumeFields | null> {
+  if (guard?.optedOut) return heuristicResumeFields(source);
+  return (await fieldsFromModel(source, guard)) ?? heuristicResumeFields(source);
 }
 
 export type ResumeFormSuggestion = {

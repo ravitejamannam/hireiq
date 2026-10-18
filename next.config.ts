@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   /**
    * pdf-parse bundles pdfjs-dist, which resolves its worker via
    * filesystem paths that break when bundled. Keep it external so it

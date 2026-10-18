@@ -80,4 +80,26 @@ describe("job intelligence extractor", () => {
 
     expect(rows[0]?.category).toBe(JobRequirementCategory.AMBIGUOUS);
   });
+
+  it("turns rubric criteria and screening questions into required skills", () => {
+    const rows = extractJobRequirements({
+      title: "Engineer",
+      primarySkills: null,
+      mustHaveRequirements: null,
+      niceToHaveRequirements: null,
+      location: null,
+      experienceRange: null,
+      jobDescription: null,
+      evaluationCriteria: null,
+      screeningQuestions: ["Have you shipped TypeScript?"],
+      rubricCriteria: ["PostgreSQL"],
+    });
+
+    expect(rows.find((row) => row.sourceField === "scoringRubric")?.category).toBe(
+      JobRequirementCategory.REQUIRED,
+    );
+    expect(rows.find((row) => row.sourceField === "screeningQuestions")?.normalizedValue).toBe(
+      "typescript",
+    );
+  });
 });

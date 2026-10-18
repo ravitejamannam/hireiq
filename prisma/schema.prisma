@@ -71,6 +71,7 @@ enum RoleCategory {
   SALES
   DESIGN
   FINANCE
+  GRADUATE
 }
 
 enum SourcingDatabaseSource {
@@ -555,6 +556,13 @@ model Company {
   publishApplicationCount Boolean @default(false)
   /// When true, active Client Members may confirm hire. Owners always can. Off by default.
   membersCanConfirmHire Boolean @default(false)
+  /// Apply-form AI notice shown before submit. Null until a company writes one.
+  applyNoticeText String?
+  brandTone       String?
+  brandBenefits   String?
+  eeoBoilerplate  String?
+  /// Evidence matching stays off until a company opts in. Never a hire score.
+  evidenceMatchingEnabled Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -604,6 +612,27 @@ model Company {
   resumeDocuments CandidateResumeDocument[]
   apiTokens ApiToken[]
   webhookSubscriptions PartnerWebhookSubscription[]
+  aiRuns                    AIRun[]
+  featureFlags              CompanyFeatureFlag[]
+  jdLintDismissals          JdLintDismissal[]
+  workflowRules             WorkflowRule[]
+  workflowExecutions        WorkflowExecution[]
+  retentionPolicy           RetentionPolicy?
+  jobTemplates              JobTemplate[]
+  pipelineStageTemplates    PipelineStageTemplate[]
+  decisionRecords           DecisionRecord[]
+  knockoutQuestions         KnockoutQuestion[]
+  generatedAssessments      GeneratedAssessment[]
+  rediscoveryRejectDays     Int      @default(90)
+  portalIdentities          CandidatePortalIdentity[]
+  talentRediscoveryRuns     TalentRediscoveryRun[]
+  talentRediscoveryActions  TalentRediscoveryAction[]
+  talentRediscoveryInvites  TalentRediscoveryInvite[]
+  portalDocuments           CandidatePortalDocument[]
+  deletionRequests          CandidateDeletionRequest[]
+  fairnessSnapshots         FairnessSnapshot[]
+  fairnessReviews           FairnessReview[]
+  copilotMessages           CopilotMessage[]
 }
 
 model Job {
@@ -635,6 +664,20 @@ model Job {
 
   /// Ordered interview types for this requirement. Empty = default phone screen, then technical.
   interviewRoundPlan InterviewType[] @default([])
+
+  level        String?
+  team         String?
+  scopeText    String?
+  outcomesText String?
+  payBand      String?
+  remotePolicy String?
+  /// Per-job evidence opt-in. Hidden when the candidate opted out.
+  evidenceMatchingEnabled Boolean @default(false)
+  /// Names and photos stay off reviewer surfaces when true.
+  blindReview Boolean @default(false)
+  /// Human approval required before a job is treated as publish-approved (F17).
+  publishApprovedAt   DateTime?
+  publishApprovedByUserId Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -675,6 +718,10 @@ model Job {
   @@index([companyId, status])
   @@index([assignedInterviewerId])
   interviewSlots InterviewSlot[]
+  generatedAssessments GeneratedAssessment[]
+  talentRediscoveryRuns TalentRediscoveryRun[]
+  talentRediscoveryActions TalentRediscoveryAction[]
+  talentRediscoveryInvites TalentRediscoveryInvite[]
 }
 
 /// Versioned hiring specification. Job remains the operational root.
@@ -702,6 +749,12 @@ model JobSpecificationVersion {
   evaluationCriteria     String?
   primarySkills          String?
   structuredPayload      Json                    @default("{}")
+  level                  String?
+  team                   String?
+  scopeText              String?
+  outcomesText           String?
+  payBand                String?
+  remotePolicy           String?
   /// Frozen assessment bank IDs for this published version. Empty on DRAFT
   /// and on specs published before pinning existed (those mint from the live bank).
   assessmentQuestionIds  Int[]                   @default([])
@@ -836,6 +889,9 @@ model Candidate {
   skills          String?
   expectedCTC     String?
 
+  /// Set when we email this person once to ask about future roles.
+  futureRolesAskedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -865,6 +921,8 @@ model Candidate {
   @@unique([id, companyId])
   @@index([companyId])
   resumeDocuments CandidateResumeDocument[] @relation("CandidateResumeDocuments")
+  portalIdentities CandidatePortalIdentity[]
+  deletionRequests CandidateDeletionRequest[]
 }
 
 /// T89 deterministic descriptive profile. 1:1 with Candidate.
@@ -1318,14 +1376,24 @@ model JobRequirement {
   skillConceptId            Int?
   provenance                String
   uncertainty               JobRequirementUncertainty
+  requirementType           RequirementOwnershipType  @default(REQUIRED)
+  evidenceType              RequirementEvidenceType?
+  weight                    Int                       @default(1)
+  rationale                 String?
+  origin                    RequirementOrigin         @default(AI)
+  approvalStatus            RequirementApprovalStatus @default(DRAFT)
+  approvedByUserId          Int?
+  displayOrder              Int                       @default(0)
   createdAt                 DateTime                  @default(now())
 
   company                 Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  approvedBy              User?                   @relation("RequirementApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
   run                     JobIntelligenceRun      @relation(fields: [runId, companyId], references: [id, companyId], onDelete: Restrict)
   job                     Job                     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
   jobSpecificationVersion JobSpecificationVersion @relation(fields: [jobSpecificationVersionId], references: [id], onDelete: Restrict)
   skillConcept            SkillConcept?           @relation(fields: [skillConceptId], references: [id], onDelete: Restrict)
   assessments             RequirementAssessment[]
+  blueprintQuestions      BlueprintQuestion[]
 
   @@unique([id, companyId])
   @@unique([runId, stableKey])
@@ -1377,6 +1445,11 @@ model RequirementAssessment {
   reasonCode       String
   claimId          Int?
   evidenceId       Int?
+  /// Recruiter-facing status. MEETS is stored only when citationQuote is verbatim.
+  reviewStatus       EvidenceReviewStatus @default(UNKNOWN)
+  citationQuote      String?
+  overrideReason     String?
+  overriddenByUserId Int?
   createdAt        DateTime                @default(now())
 
   company        Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
@@ -1655,6 +1728,12 @@ model Application {
   source SourcingDatabaseSource?
   expertScore Int?
   rejectionReason String?
+  rejectionReasonCode String?
+  aiEvaluationOptOut Boolean @default(false)
+  aiOptOutAt DateTime?
+  consentAt DateTime?
+  applyNoticeVersion String?
+  humanReviewRequestedAt DateTime?
 
   /// First time this application reached SHORTLISTED. Null until that transition.
   shortlistedAt DateTime?
@@ -1680,6 +1759,11 @@ model Application {
   /// via composite foreign keys (database defense-in-depth).
   companyId   Int
   statusTokenHash String? @unique
+  withdrawnAt DateTime?
+  withdrawReason String?
+  emailUnsubscribedAt DateTime?
+  candidateTimeZone String?
+  futureRolesConsent Boolean @default(false)
 
   candidate Candidate @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
   job       Job       @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
@@ -1709,6 +1793,8 @@ model Application {
   @@index([companyId])
   resumeDocuments CandidateResumeDocument[]
   bookingInvite InterviewBookingInvite?
+  portalDocuments CandidatePortalDocument[]
+  deletionRequests CandidateDeletionRequest[]
 }
 
 model Evaluation {
@@ -1722,6 +1808,8 @@ model Evaluation {
   hireProbability String?
   fitDecision     EvaluationFitDecision?
   evaluatedAt     DateTime?
+  /// Null until this interviewer submits. Other scorecards stay hidden until then.
+  submittedAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1748,6 +1836,7 @@ model EvaluationQuestion {
   score         Int?
   difficulty    String?
   weight        String?
+  jobRequirementId Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1766,6 +1855,11 @@ model Interview {
   result      InterviewResult
   /// Booking confirmation email. Null when delivery was not attempted.
   bookingEmailStatus EmailDeliveryOutcome?
+  /// Google Calendar event this app created. Null when Calendar is not connected.
+  calendarEventId String?
+  meetUrl         String?
+  noShow          Boolean @default(false)
+  reminders       InterviewReminder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1774,6 +1868,21 @@ model Interview {
 
   application Application @relation(fields: [applicationId], references: [id])
   @@index([applicationId])
+}
+
+/// Email reminders for an interview this app booked. A cron sends rows whose sendAt has passed.
+model InterviewReminder {
+  id           Int       @id @default(autoincrement())
+  interviewId  Int
+  kind         String
+  sendAt       DateTime
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@unique([interviewId, kind])
+  @@index([sentAt, sendAt])
 }
 
 model CodingTest {
@@ -1805,6 +1914,11 @@ model Report {
   recommendation Recommendation
 
   notes String?
+
+  version    Int     @default(1)
+  bodyJson   Json    @default("{}")
+  narrative  String?
+  inputHash  String?
 
   createdAt DateTime @default(now())
 
@@ -1884,6 +1998,8 @@ model User {
   @@index([companyId])
   @@index([role])
   resumesUploaded CandidateResumeDocument[] @relation("ResumeUploadedBy")
+  approvedRequirements JobRequirement[] @relation("RequirementApprover")
+  decisionRecords DecisionRecord[] @relation("DecisionRecorder")
   calendarIntegration InterviewerCalendarIntegration? @relation("UserCalendarIntegration")
 }
 
@@ -2203,6 +2319,54 @@ model ApplicationIngestionEvent {
 }
 
 /// HireIQ-owned MCQ bank. Not tenant data. Not interviewer-authored.
+enum GeneratedAssessmentStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model GeneratedAssessment {
+  id               Int                       @id @default(autoincrement())
+  jobId            Int
+  companyId        Int
+  version          Int
+  status           GeneratedAssessmentStatus @default(DRAFT)
+  timeLimitMinutes Int                       @default(45)
+  items            Json
+  publishedAt      DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  job     Job     @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  invites GeneratedAssessmentInvite[]
+
+  @@unique([jobId, version])
+  @@index([jobId, status])
+}
+
+model GeneratedAssessmentInvite {
+  id                 Int       @id @default(autoincrement())
+  applicationId      Int
+  assessmentId       Int
+  tokenHash          String    @unique
+  handoffTokenHash   String?   @unique
+  itemOrder          Json
+  answers            Json      @default("{}")
+  integrity          Json?
+  extraTimeRequested Boolean   @default(false)
+  startedAt          DateTime?
+  submittedAt        DateTime?
+  expiresAt          DateTime
+  grades             Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  assessment GeneratedAssessment @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+
+  @@index([applicationId])
+  @@index([expiresAt])
+}
+
 enum QuestionDifficulty {
   EASY
   MEDIUM
@@ -2480,9 +2644,14 @@ model BlueprintQuestion {
   guidance     String?
   difficulty   String?
   active       Boolean @default(true)
+  jobRequirementId Int?
+  anchorLow    String?
+  anchorMid    String?
+  anchorHigh   String?
 
   blueprint  InterviewBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Restrict)
   competency BlueprintCompetency @relation(fields: [competencyId], references: [id], onDelete: Restrict)
+  jobRequirement JobRequirement? @relation(fields: [jobRequirementId], references: [id], onDelete: Restrict)
 
   @@index([blueprintId, active])
 }
@@ -2581,6 +2750,8 @@ model InterviewerCalendarIntegration {
   id                  Int      @id @default(autoincrement())
   userId              Int      @unique
   provider            String   @default("GOOGLE")
+  /// Space-separated OAuth scopes granted at connect time. Null means the old read-only grant.
+  grantedScopes       String?
   calendarId          String   @default("primary")
   accessTokenEnc      String
   refreshTokenEnc     String
@@ -2617,4 +2788,365 @@ enum ReconciliationOutcome {
   DRIFT
   ERROR
   SKIPPED
+}
+
+enum AiReviewerAction {
+  PENDING
+  ACCEPTED
+  EDITED
+  DISMISSED
+  OVERRIDDEN
+  /// Model was not called. This is not a successful evaluation.
+  REFUSED_OPT_OUT
+}
+
+enum RequirementOwnershipType {
+  REQUIRED
+  PREFERRED
+}
+
+enum RequirementEvidenceType {
+  RESUME
+  ASSESSMENT
+  INTERVIEW
+}
+
+enum RequirementOrigin {
+  HUMAN
+  AI
+}
+
+enum RequirementApprovalStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+}
+
+/// Recruiter-facing evidence status. Not a hire score.
+enum EvidenceReviewStatus {
+  MEETS
+  NOT_MET
+  UNKNOWN
+}
+
+enum WorkflowTrigger {
+  STAGE_CHANGE
+  TIME_ELAPSED
+  FORM_SUBMITTED
+  SCORECARD_OVERDUE
+}
+
+/// Append-only model call. Tenant admins do not get update or delete paths.
+model AIRun {
+  id             Int              @id @default(autoincrement())
+  companyId      Int
+  feature        String
+  entityType     String
+  entityId       Int
+  modelId        String
+  promptVersion  String
+  inputHash      String
+  outputJson     Json
+  latencyMs      Int
+  promptTokens   Int?
+  completionTokens Int?
+  /// ok or error. Opt-out does not insert a row.
+  status         String           @default("ok")
+  error          String?
+  reviewerAction AiReviewerAction @default(PENDING)
+  reviewerReason String?
+  createdAt      DateTime         @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, feature, createdAt])
+  @@index([companyId, entityType, entityId])
+}
+
+model CompanyFeatureFlag {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  feature   String
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, feature])
+}
+
+model JdLintDismissal {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  jobId     Int
+  ruleId    String
+  reason    String
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, jobId])
+}
+
+model WorkflowRule {
+  id            Int             @id @default(autoincrement())
+  companyId     Int
+  name          String
+  version       Int             @default(1)
+  trigger       WorkflowTrigger
+  conditionJson Json
+  actionJson    Json
+  active        Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+
+  company    Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  executions WorkflowExecution[]
+
+  @@index([companyId, active])
+}
+
+model WorkflowExecution {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  ruleId      Int
+  ruleVersion Int
+  dryRun      Boolean  @default(false)
+  outcome     String
+  detailJson  Json
+  createdAt   DateTime @default(now())
+
+  company Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  rule    WorkflowRule @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, ruleId, createdAt])
+}
+
+model KnockoutQuestion {
+  id            Int    @id @default(autoincrement())
+  companyId     Int
+  jobId         Int
+  prompt        String
+  expectedAnswer String
+  displayOrder  Int    @default(0)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, jobId])
+}
+
+model RetentionPolicy {
+  id             Int      @id @default(autoincrement())
+  companyId      Int      @unique
+  jurisdiction   String
+  retentionDays  Int
+  updatedAt      DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+}
+
+model DecisionRecord {
+  id              Int      @id @default(autoincrement())
+  companyId       Int
+  applicationId   Int
+  rationale       String
+  decidedByUserId Int
+  createdAt       DateTime @default(now())
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  decidedBy User    @relation("DecisionRecorder", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, applicationId])
+}
+
+model JobTemplate {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  name      String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, name])
+}
+
+model TalentRediscoveryRun {
+  id                     Int      @id @default(autoincrement())
+  companyId              Int
+  jobId                  Int
+  specificationVersionId Int
+  status                 String
+  results                Json
+  createdAt              DateTime @default(now())
+  completedAt            DateTime?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job     Job     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@unique([jobId, specificationVersionId])
+  @@index([companyId, jobId])
+}
+
+model TalentRediscoveryAction {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  jobId       Int
+  candidateId Int
+  kind        String
+  createdAt   DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job     Job     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@unique([jobId, candidateId, kind])
+}
+
+model TalentRediscoveryInvite {
+  id              Int       @id @default(autoincrement())
+  companyId       Int
+  jobId           Int
+  candidateId     Int
+  emailNormalized String
+  tokenHash       String    @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job     Job     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@unique([jobId, candidateId])
+}
+
+model CandidateSelfIdentification {
+  id          Int      @id @default(autoincrement())
+  companyId   Int
+  candidateId Int      @unique
+  consentedAt DateTime
+  gender      String   @default("prefer_not")
+  ageBand     String   @default("prefer_not")
+  disability  String   @default("prefer_not")
+  region      String   @default("prefer_not")
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+model FairnessSnapshot {
+  id         Int      @id @default(autoincrement())
+  companyId  Int
+  jobId      Int?
+  computedAt DateTime @default(now())
+  report     Json
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, computedAt])
+}
+
+model CopilotMessage {
+  id         Int      @id @default(autoincrement())
+  companyId  Int
+  jobId      Int?
+  userId     Int
+  role       String
+  body       String
+  citations  Json
+  toolCalls  Json
+  createdAt  DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, jobId, createdAt])
+}
+
+model FairnessReview {
+  id             Int      @id @default(autoincrement())
+  companyId      Int
+  jobId          Int
+  requirementKey String
+  reason         String
+  actorUserId    Int
+  createdAt      DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, jobId])
+}
+
+model PortalLoginLink {
+  id               Int       @id @default(autoincrement())
+  emailNormalized  String
+  tokenHash        String    @unique
+  expiresAt        DateTime
+  consumedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([emailNormalized, createdAt])
+}
+
+model CandidatePortalIdentity {
+  id              Int      @id @default(autoincrement())
+  emailNormalized String
+  candidateId     Int
+  companyId       Int
+  createdAt       DateTime @default(now())
+
+  candidate Candidate @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([emailNormalized, candidateId])
+  @@index([emailNormalized])
+}
+
+model CandidatePortalDocument {
+  id            Int       @id @default(autoincrement())
+  applicationId Int
+  companyId     Int
+  candidateId   Int
+  kind          String
+  fileName      String
+  contentType   String
+  sizeBytes     Int
+  storageKey    String
+  parseStatus   String
+  parseMessage  String?
+  replacedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([applicationId, replacedAt])
+}
+
+model CandidateDeletionRequest {
+  id              Int      @id @default(autoincrement())
+  companyId       Int
+  candidateId     Int
+  applicationId   Int?
+  emailNormalized String
+  status          String   @default("QUEUED")
+  decidedAt       DateTime?
+  decisionReason  String?
+  decidedByUserId Int?
+  createdAt       DateTime @default(now())
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  candidate   Candidate    @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+}
+
+model PipelineStageTemplate {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  name      String
+  stages    String[]
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, name])
 }

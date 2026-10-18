@@ -21,6 +21,7 @@ import {
 import InterviewerCodingTestPanel from "@/components/interviewer/InterviewerCodingTestPanel";
 import InterviewerEvaluationWorkspace from "@/components/interviewer/InterviewerEvaluationWorkspace";
 import InterviewerInterviewPanel from "@/components/interviewer/InterviewerInterviewPanel";
+import RubricScorecardForm from "@/components/interviewer/RubricScorecardForm";
 import InterviewerShortlistActions from "@/components/interviewer/InterviewerShortlistActions";
 import AssessmentScoreReadout, {
   type AssessmentScoreSummary,
@@ -107,6 +108,8 @@ type InterviewerCandidateDetailProps = {
   }>;
   evaluation: EvaluationData | null;
   assessment?: AssessmentScoreSummary | null;
+  rubric?: Array<{ criterion: string; signal: string }>;
+  scorecardSubmitted?: boolean;
 };
 
 export default function InterviewerCandidateDetail({
@@ -118,6 +121,8 @@ export default function InterviewerCandidateDetail({
   codingTests,
   evaluation,
   assessment,
+  rubric = [],
+  scorecardSubmitted = false,
 }: InterviewerCandidateDetailProps) {
   return (
     <div className="space-y-8">
@@ -204,6 +209,13 @@ export default function InterviewerCandidateDetail({
         applicationId={applicationId}
         interviews={interviews}
       />
+      <section className="rounded-xl border border-zinc-200 bg-white p-6">
+        <RubricScorecardForm
+          applicationId={applicationId}
+          rubric={rubric}
+          submitted={scorecardSubmitted}
+        />
+      </section>
 
       <InterviewerCodingTestPanel
         applicationId={applicationId}

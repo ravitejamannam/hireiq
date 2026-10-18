@@ -5,7 +5,7 @@ import {
   RequirementSupportState,
 } from "@prisma/client";
 
-import { computeRequirementAssessments } from "@/lib/candidates/matching/matching-engine-v2";
+import { computeRequirementAssessments, withVerbatimCitation } from "@/lib/candidates/matching/matching-engine-v2";
 import type { MatcherV2Requirement } from "@/lib/candidates/matching/matching-v2-types";
 
 function requirement(
@@ -115,5 +115,36 @@ describe("matcher V2", () => {
     });
 
     expect(rows[0]?.supportState).toBe(RequirementSupportState.UNSUPPORTED);
+  });
+
+  it("stores a non-verbatim meets citation as unknown", () => {
+    const [draft] = computeRequirementAssessments({
+      requirements: [
+        requirement({
+          id: 1,
+          sourceText: "TypeScript",
+          sourceField: "primarySkills",
+          category: JobRequirementCategory.REQUIRED,
+          normalizedValue: "typescript",
+          skillCanonicalKey: "typescript",
+        }),
+      ],
+      claims: [
+        {
+          id: 9,
+          evidenceId: 3,
+          runId: 1,
+          claimType: "SKILL",
+          normalizedValue: "typescript",
+          polarity: "POSITIVE",
+          viaAlias: false,
+        },
+      ],
+    });
+    expect(withVerbatimCitation({
+      draft: draft!,
+      sourceText: "Built services with TypeScript.",
+      quote: "expert in Go",
+    }).supportState).toBe(RequirementSupportState.UNKNOWN);
   });
 });

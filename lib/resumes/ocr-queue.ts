@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { readResume } from "@/lib/resumes/storage";
+import type { ResumeVisionAudit } from "@/lib/resumes/layout-vision";
 import {
   extractResumeText,
   RESUME_TEXT_EXTRACTOR_VERSION,
@@ -114,6 +115,9 @@ async function finishRow(table: OcrTable, id: number, data: FinishData) {
 async function drainTable(
   table: OcrTable,
   limit: number,
+  visionAuditFor?: (
+    row: OcrRow,
+  ) => Promise<Omit<ResumeVisionAudit, "pageCount" | "pageIndex"> | null>,
 ): Promise<{ read: number; unread: number; exhausted: number; claimed: number }> {
   const now = new Date();
   const rows = await table.findMany({
@@ -141,11 +145,13 @@ async function drainTable(
     claimed += 1;
     const attempts = row.ocrAttempts + 1;
     const bytes = await readResume(row.storageKey);
+    const visionAudit = visionAuditFor ? await visionAuditFor(row) : null;
     const extraction = bytes
       ? await extractResumeText(bytes, {
           fileName: row.fileName,
           contentType: row.contentType,
           ocr: "inline",
+          visionAudit,
         })
       : null;
     if (!extraction || !extraction.ok) {
@@ -186,8 +192,33 @@ export async function processPendingResumeOcr(limitOrDeadline: number | { deadli
   };
   while (Date.now() < deadlineAt) {
     const [documents, hosted] = await Promise.all([
-      drainTable(resumeDocuments, 1),
-      drainTable(hostedUploads, 1),
+      drainTable(resumeDocuments, 1, async (row) => {
+        const doc = await prisma.candidateResumeDocument.findUnique({
+          where: { id: row.id },
+          select: { companyId: true, applicationId: true },
+        });
+        if (!doc) return null;
+        return {
+          companyId: doc.companyId,
+          entityType: doc.applicationId ? "Application" : "CandidateResumeDocument",
+          entityId: doc.applicationId ?? row.id,
+          applicationId: doc.applicationId,
+          db: prisma as unknown as ResumeVisionAudit["db"],
+        };
+      }),
+      drainTable(hostedUploads, 1, async (row) => {
+        const upload = await prisma.hostedApplyResumeUpload.findUnique({
+          where: { id: row.id },
+          select: { companyId: true },
+        });
+        if (!upload) return null;
+        return {
+          companyId: upload.companyId,
+          entityType: "HostedApplyResumeUpload",
+          entityId: row.id,
+          db: prisma as unknown as ResumeVisionAudit["db"],
+        };
+      }),
     ]);
     for (const key of ["read", "unread", "exhausted", "claimed"] as const) {
       totals[key] += documents[key] + hosted[key];

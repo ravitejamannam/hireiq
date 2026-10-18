@@ -12,6 +12,7 @@ import { getWebhookDeliveryHealth, listWebhookDeliveries } from "@/lib/jobs/dist
 import ApiTokenManager from "@/components/integrations/ApiTokenManager";
 import WebhookSubscriptionsPanel from "@/components/integrations/WebhookSubscriptionsPanel";
 import RunReconciliationButton from "@/components/integrations/RunReconciliationButton";
+import { calendarNeedsReconnect } from "@/lib/interviews/calendar-sync-service";
 import { prisma } from "@/lib/prisma";
 import { getLatestReconciliationHealth } from "@/lib/jobs/distribution/reconciliation";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
@@ -59,6 +60,12 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
     select: { id: true, name: true, createdAt: true, revokedAt: true, lastUsedAt: true },
   });
 
+  const calendar = await prisma.interviewerCalendarIntegration.findUnique({
+    where: { userId: admin.id },
+    select: { grantedScopes: true },
+  });
+  const reconnectCalendar = Boolean(calendar) && calendarNeedsReconnect(calendar?.grantedScopes);
+
   const [health, deliveries, recon] = await Promise.all([
     getWebhookDeliveryHealth(),
     listWebhookDeliveries(status ? { status } : {}),
@@ -94,16 +101,20 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <section className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-6">
         <h2 className="font-semibold text-zinc-900">Google Calendar</h2>
+        {reconnectCalendar ? (
+          <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="status">
+            Reconnect Google Calendar. This connection is read-only, so HireIQ cannot add a Meet link.
+          </p>
+        ) : null}
         <p className="mt-1 text-sm text-zinc-500">
-          Connect a Google account to auto-generate interview slots from
-          free/busy availability.
+          Connect a Google account to read free/busy time and create the interview events HireIQ books.
         </p>
         <div className="mt-3 flex flex-wrap gap-3">
           <a
             href="/api/integrations/google/connect"
             className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700"
           >
-            Connect Google Calendar
+            {reconnectCalendar ? "Reconnect Google Calendar" : "Connect Google Calendar"}
           </a>
           <Link
             href="/dashboard/integrations/feeds"

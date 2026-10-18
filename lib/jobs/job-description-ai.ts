@@ -1,13 +1,26 @@
 import {
   JobDescriptionAiGenerationStatus,
   JobSpecificationVersionStatus,
+  Prisma,
 } from "@prisma/client";
 
+import {
+  JD_SECTIONS,
+  acceptedJobDescriptionText,
+  mergeJobDescriptionSection,
+  packProposal,
+  parseJobDescriptionControls,
+  parseStoredProposal,
+  type JdControls,
+  type JdSection,
+} from "@/lib/ai/job-description-document";
 import {
   generateJobDescriptionFromProvider,
   getJobDescriptionAiModel,
   getJobDescriptionAiProviderLabel,
+  regenerateJobDescriptionSectionFromProvider,
 } from "@/lib/ai/job-description-generator";
+import type { AiRunScope } from "@/lib/ai/ai-run";
 import {
   JOB_DESCRIPTION_AI_IN_PROGRESS_ERROR,
   JOB_DESCRIPTION_AI_NO_DRAFT_ERROR,
@@ -94,12 +107,46 @@ async function loadDraftOrThrow(jobId: number) {
   return draft;
 }
 
+async function ensureDraftForGeneration(jobId: number) {
+  const existing = await prisma.jobSpecificationVersion.findFirst({
+    where: { jobId, status: JobSpecificationVersionStatus.DRAFT },
+  });
+  if (existing) return existing;
+
+  const published = await prisma.jobSpecificationVersion.findFirst({
+    where: { jobId, status: JobSpecificationVersionStatus.PUBLISHED },
+    orderBy: { versionNumber: "desc" },
+  });
+  const job = await prisma.job.findUniqueOrThrow({ where: { id: jobId } });
+  const source = published ?? job;
+  const latest = await prisma.jobSpecificationVersion.findFirst({
+    where: { jobId },
+    orderBy: { versionNumber: "desc" },
+    select: { versionNumber: true },
+  });
+
+  return prisma.jobSpecificationVersion.create({
+    data: {
+      jobId,
+      versionNumber: (latest?.versionNumber ?? 0) + 1,
+      status: JobSpecificationVersionStatus.DRAFT,
+      createdByUserId: null,
+      structuredPayload:
+        published?.structuredPayload ??
+        ({ schemaVersion: 1, legacy: true } as Prisma.InputJsonValue),
+      ...specFieldsFromRecord(source),
+    },
+  });
+}
+
 export async function generateJobDescriptionForActor(input: {
   jobId: number;
   actor: JobDescriptionAiActor;
+  controls?: unknown;
 }) {
   const job = await loadScopedJob(input);
-  const draft = await loadDraftOrThrow(job.id);
+  const draft = await ensureDraftForGeneration(job.id);
+  const controls = parseJobDescriptionControls(input.controls);
 
   await consumeAuthRateLimit({
     name: "aiJobDescriptionUser",
@@ -138,12 +185,40 @@ export async function generateJobDescriptionForActor(input: {
   });
 
   try {
+    const company = await prisma.company.findUnique({
+      where: { id: job.companyId },
+      select: { name: true, industry: true },
+    });
     const proposal = await generateJobDescriptionFromProvider(
       buildJobDescriptionAiInput({
         ...specFieldsFromRecord(draft),
-        structuredPayload: draft.structuredPayload,
+        structuredPayload: {
+          ...(draft.structuredPayload && typeof draft.structuredPayload === "object"
+            ? (draft.structuredPayload as object)
+            : {}),
+          companyName: company?.name ?? null,
+          companyIndustry: company?.industry ?? null,
+        },
       }),
+      controls,
+      {
+        companyId: job.companyId,
+        entityType: "JobSpecificationVersion",
+        entityId: draft.id,
+        db: prisma as unknown as AiRunScope["db"],
+      },
     );
+    logAiEvent("ai_job_description_completed", {
+      userId: input.actor.userId,
+      jobId: job.id,
+      provider,
+      model,
+      durationMs: proposal.usage.latencyMs,
+      promptTokens: proposal.usage.promptTokens,
+      completionTokens: proposal.usage.completionTokens,
+      cacheHit: proposal.usage.cacheHit,
+      success: true,
+    });
 
     const stored = await prisma.jobSpecificationVersion.updateMany({
       where: {
@@ -152,7 +227,7 @@ export async function generateJobDescriptionForActor(input: {
         aiGenerationStatus: JobDescriptionAiGenerationStatus.GENERATING,
       },
       data: {
-        aiProposedJobDescription: proposal.jobDescription,
+        aiProposedJobDescription: proposal.proposalJson ?? proposal.jobDescription,
         aiGeneratedAt: new Date(),
         aiGenerationStatus: JobDescriptionAiGenerationStatus.READY,
       },
@@ -161,15 +236,6 @@ export async function generateJobDescriptionForActor(input: {
     if (stored.count !== 1) {
       throw new JobDescriptionAiError(JOB_DESCRIPTION_AI_UNCHANGED_ERROR);
     }
-
-    logAiEvent("ai_job_description_completed", {
-      userId: input.actor.userId,
-      jobId: job.id,
-      provider,
-      model,
-      durationMs: Date.now() - startedAt,
-      success: true,
-    });
 
     return prisma.jobSpecificationVersion.findUniqueOrThrow({
       where: { id: draft.id },
@@ -221,7 +287,23 @@ export async function acceptGeneratedJobDescriptionForActor(input: {
     throw new JobDescriptionAiError(JOB_DESCRIPTION_AI_NO_PROPOSAL_ERROR);
   }
 
-  const acceptedDescription = draft.aiProposedJobDescription.trim();
+  const acceptedDescription = acceptedJobDescriptionText(draft.aiProposedJobDescription);
+  const proposal = parseStoredProposal(draft.aiProposedJobDescription);
+  const existingPayload =
+    draft.structuredPayload &&
+    typeof draft.structuredPayload === "object" &&
+    !Array.isArray(draft.structuredPayload)
+      ? (draft.structuredPayload as Record<string, unknown>)
+      : {};
+  const structuredPayload = proposal
+    ? ({
+        ...existingPayload,
+        jdMatcher: {
+          screeningQuestions: proposal.document.screeningQuestions,
+          scoringRubric: proposal.document.scoringRubric,
+        },
+      } as Prisma.InputJsonValue)
+    : undefined;
 
   const updated = await prisma.jobSpecificationVersion.updateMany({
     where: {
@@ -231,6 +313,7 @@ export async function acceptGeneratedJobDescriptionForActor(input: {
     },
     data: {
       jobDescription: acceptedDescription,
+      ...(structuredPayload ? { structuredPayload } : {}),
       aiProposedJobDescription: null,
       aiGeneratedAt: null,
       aiGenerationStatus: JobDescriptionAiGenerationStatus.NONE,
@@ -289,4 +372,78 @@ export async function discardGeneratedJobDescriptionForActor(input: {
   return prisma.jobSpecificationVersion.findUniqueOrThrow({
     where: { id: draft.id },
   });
+}
+
+function sectionValue(section: JdSection, text: string) {
+  if (section === "summary" || section === "hiringProcess") return text;
+  const lines = text
+    .split("\n")
+    .map((line) => line.replace(/^[-*]\s*/, "").trim())
+    .filter(Boolean);
+  if (section === "scoringRubric") {
+    return lines.map((line) => {
+      const [criterion, signal] = line.split(":");
+      return { criterion: criterion.trim(), signal: (signal ?? criterion).trim() };
+    });
+  }
+  return lines;
+}
+
+export async function regenerateJobDescriptionSectionForActor(input: {
+  jobId: number;
+  actor: JobDescriptionAiActor;
+  section: string;
+  instruction: string;
+  controls?: unknown;
+}) {
+  if (!JD_SECTIONS.includes(input.section as JdSection)) {
+    throw new JobDescriptionAiError(JOB_DESCRIPTION_AI_UNCHANGED_ERROR);
+  }
+  const section = input.section as JdSection;
+  const job = await loadScopedJob(input);
+  const draft = await loadDraftOrThrow(job.id);
+  const stored = parseStoredProposal(draft.aiProposedJobDescription);
+  if (!stored) {
+    throw new JobDescriptionAiError(JOB_DESCRIPTION_AI_NO_PROPOSAL_ERROR);
+  }
+
+  const controls: JdControls = parseJobDescriptionControls(input.controls ?? stored.controls);
+  const text = await regenerateJobDescriptionSectionFromProvider({
+    spec: buildJobDescriptionAiInput({
+      ...specFieldsFromRecord(draft),
+      structuredPayload: draft.structuredPayload,
+    }),
+    controls,
+    section,
+    instruction: input.instruction,
+    current: stored.document,
+    scope: {
+      companyId: job.companyId,
+      entityType: "JobSpecificationVersion",
+      entityId: draft.id,
+      db: prisma as unknown as AiRunScope["db"],
+    },
+  });
+  const document = mergeJobDescriptionSection(stored.document, section, sectionValue(section, text));
+  const packed = packProposal({
+    document,
+    source: {
+      title: draft.title,
+      experienceRange: draft.experienceRange,
+      location: draft.location,
+      compensationRange: draft.compensationRange,
+      mustHaveRequirements: draft.mustHaveRequirements,
+      niceToHaveRequirements: draft.niceToHaveRequirements,
+      primarySkills: draft.primarySkills,
+      jobDescription: draft.jobDescription,
+    },
+    controls,
+  });
+
+  await prisma.jobSpecificationVersion.update({
+    where: { id: draft.id },
+    data: { aiProposedJobDescription: JSON.stringify(packed) },
+  });
+
+  return packed;
 }

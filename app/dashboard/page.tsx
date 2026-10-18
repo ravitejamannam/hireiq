@@ -63,6 +63,16 @@ export default async function DashboardPage() {
             What needs a hiring decision, not a dashboard tour.
           </p>
         </div>
+        {user.role === "ADMIN" ? (
+          <span className="flex gap-4">
+            <Link className="text-sm font-semibold text-stone-900 underline" href="/dashboard/fairness">
+              Fairness
+            </Link>
+            <Link className="text-sm font-semibold text-stone-900 underline" href="/dashboard/deletions">
+              Deletion requests
+            </Link>
+          </span>
+        ) : null}
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">

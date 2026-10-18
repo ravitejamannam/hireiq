@@ -13,6 +13,8 @@ import { getActiveBlueprintForApplication, getRubricScoresForEvaluation } from "
 import { getOrMaterializeCandidateProfile } from "@/lib/candidates/candidate-profile-service";
 import { getInterviewerApplicationForJob } from "@/lib/repositories/interviewer-portal-repository";
 import { getApplicationAssessmentSummary } from "@/lib/assessments/assessment-service";
+import { rubricItemsFromPayload } from "@/lib/ai/job-description-document";
+import { prisma } from "@/lib/prisma";
 
 type InterviewerCandidateDetailPageProps = {
   params: Promise<{
@@ -63,6 +65,16 @@ export default async function InterviewerCandidateDetailPage({
     application.candidate.id,
   );
   const assessment = await getApplicationAssessmentSummary(application.id);
+  const published = await prisma.jobSpecificationVersion.findFirst({
+    where: { jobId: requirementId, status: "PUBLISHED" },
+    orderBy: { versionNumber: "desc" },
+    select: { structuredPayload: true },
+  });
+  const rubric = rubricItemsFromPayload(published?.structuredPayload);
+  const mine = evaluation
+    ? await prisma.evaluation.findUnique({ where: { id: evaluation.id }, select: { submittedAt: true } })
+    : null;
+  const scorecardSubmitted = Boolean(mine?.submittedAt);
 
   return (
     <div>
@@ -143,6 +155,8 @@ export default async function InterviewerCandidateDetailPage({
         interviews={application.interviews}
         codingTests={application.codingTests}
         assessment={assessment}
+        rubric={rubric}
+        scorecardSubmitted={scorecardSubmitted}
         evaluation={
           evaluation
             ? {

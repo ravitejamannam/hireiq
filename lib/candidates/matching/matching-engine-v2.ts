@@ -10,6 +10,7 @@ import type {
   RequirementAssessmentDraft,
 } from "@/lib/candidates/matching/matching-v2-types";
 import { MATCH_V2_REASON } from "@/lib/candidates/matching/matching-v2-versions";
+import { gateMeets } from "@/lib/evidence/review-status";
 import { canonicalSkillKey } from "@/lib/ontology/skill-alias";
 
 export { hashIntelligenceSnapshot };
@@ -44,9 +45,11 @@ function isSkillRequirement(requirement: MatcherV2Requirement) {
     (requirement.category === JobRequirementCategory.REQUIRED ||
       requirement.category === JobRequirementCategory.PREFERRED) &&
     Boolean(requirement.normalizedValue) &&
-    (requirement.sourceField === "primarySkills" ||
+    (      requirement.sourceField === "primarySkills" ||
       requirement.sourceField === "mustHaveRequirements" ||
-      requirement.sourceField === "niceToHaveRequirements")
+      requirement.sourceField === "niceToHaveRequirements" ||
+      requirement.sourceField === "screeningQuestions" ||
+      requirement.sourceField === "scoringRubric")
   );
 }
 
@@ -127,6 +130,21 @@ export function computeRequirementAssessments(input: {
       evidenceId: supported.evidenceId,
     };
   });
+}
+
+export function withVerbatimCitation(input: {
+  draft: RequirementAssessmentDraft;
+  sourceText: string;
+  quote: string | null;
+}): RequirementAssessmentDraft {
+  if (input.draft.supportState !== RequirementSupportState.SUPPORTED) return input.draft;
+  const status = gateMeets({ proposed: "MEETS", source: input.sourceText, quote: input.quote });
+  if (status === "MEETS") return input.draft;
+  return {
+    ...input.draft,
+    supportState: RequirementSupportState.UNKNOWN,
+    reasonCode: MATCH_V2_REASON.NO_SUPPORTING_CLAIM,
+  };
 }
 
 export function explainAssessment(input: {

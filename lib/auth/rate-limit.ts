@@ -53,6 +53,9 @@ export const AUTH_RATE_LIMITS = {
   indeedWebhookIp: { windowMs: 15 * 60 * 1000, max: 60 },
   aiCandidateIntelligenceUser: { windowMs: 60 * 60 * 1000, max: 10 },
   aiCandidateIntelligenceCandidate: { windowMs: 60 * 60 * 1000, max: 10 },
+  portalMagicLinkEmail: { windowMs: 60 * 60 * 1000, max: 5 },
+  portalMagicLinkIp: { windowMs: 60 * 60 * 1000, max: 10 },
+  copilotUser: { windowMs: 60 * 60 * 1000, max: 30 },
 } as const;
 
 export type AuthRateLimitName = keyof typeof AUTH_RATE_LIMITS;

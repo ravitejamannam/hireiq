@@ -14,6 +14,8 @@ export type SpecExtractionInput = {
   experienceRange: string | null;
   jobDescription: string | null;
   evaluationCriteria: string | null;
+  screeningQuestions?: string[];
+  rubricCriteria?: string[];
 };
 
 export type RequirementDraft = {

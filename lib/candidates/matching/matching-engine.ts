@@ -15,6 +15,8 @@ import {
   normalizeMatchingText,
   tokenizePrimarySkills,
 } from "@/lib/candidates/matching/skill-tokenizer";
+import { inferredSqlDatabase, parseRequirementChecks, yearsCheckPasses } from "@/lib/jobs/requirement-checks";
+import { resolveSkillAlias } from "@/lib/ontology/skill-alias";
 
 export function hashIntelligenceSnapshot(
   pairs: Array<{ evidenceId: number; runId: number }>,
@@ -76,14 +78,20 @@ export function computeRequirementMatches(input: {
   const rows: RequirementMatchDraft[] = [];
 
   for (const token of tokenizePrimarySkills(input.spec.primarySkills)) {
-    const claim = skillByNormalized.get(token.normalized);
+    const resolved = resolveSkillAlias(token.normalized);
+    const claim =
+      skillByNormalized.get(token.normalized) ??
+      (resolved ? skillByNormalized.get(resolved.canonicalKey) : undefined);
     if (claim) {
       rows.push({
         requirementKey: `primarySkills:${token.normalized}`,
         sourceField: "primarySkills",
         category: CandidateMatchRequirementCategory.SKILL,
         result: CandidateMatchResult.SATISFIED,
-        reasonCode: MATCH_REASON.EXACT_SKILL_MATCH,
+        reasonCode:
+          resolved && resolved.canonicalKey !== token.normalized
+            ? MATCH_REASON.ALIAS_SKILL_MATCH
+            : MATCH_REASON.EXACT_SKILL_MATCH,
         claimId: claim.id,
         evidenceId: claim.evidenceId,
       });
@@ -112,6 +120,19 @@ export function computeRequirementMatches(input: {
         claimId: claim.id,
         evidenceId: claim.evidenceId,
       });
+    } else if (
+      input.spec.profileLocation &&
+      locationText.toLowerCase().includes(input.spec.profileLocation.trim().toLowerCase())
+    ) {
+      rows.push({
+        requirementKey: "location",
+        sourceField: "location",
+        category: CandidateMatchRequirementCategory.LOCATION,
+        result: CandidateMatchResult.SATISFIED,
+        reasonCode: `${MATCH_REASON.FROM_PROFILE}:${input.spec.profileLocation.trim()}`,
+        claimId: null,
+        evidenceId: null,
+      });
     } else {
       rows.push(
         unknownRow(
@@ -123,24 +144,120 @@ export function computeRequirementMatches(input: {
     }
   }
 
-  if (input.spec.mustHaveRequirements?.trim()) {
+  for (const question of input.spec.screeningQuestions ?? []) {
+    const normalizedQuestion = normalizeMatchingText(question);
+    const claim = input.claims.find(
+      (row) =>
+        row.claimType === "SKILL" &&
+        normalizedQuestion.includes(row.normalizedValue),
+    );
     rows.push(
-      unsupportedRow(
-        "mustHaveRequirements",
-        "mustHaveRequirements",
-        CandidateMatchRequirementCategory.MUST_HAVE,
-      ),
+      claim
+        ? {
+            requirementKey: `screeningQuestions:${claim.normalizedValue}`,
+            sourceField: "screeningQuestions",
+            category: CandidateMatchRequirementCategory.SKILL,
+            result: CandidateMatchResult.SATISFIED,
+            reasonCode: MATCH_REASON.EXACT_SKILL_MATCH,
+            claimId: claim.id,
+            evidenceId: claim.evidenceId,
+          }
+        : unknownRow(
+            `screeningQuestions:${normalizeMatchingText(question).slice(0, 80)}`,
+            "screeningQuestions",
+            CandidateMatchRequirementCategory.SKILL,
+          ),
     );
   }
 
-  if (input.spec.niceToHaveRequirements?.trim()) {
-    rows.push(
-      unsupportedRow(
-        "niceToHaveRequirements",
-        "niceToHaveRequirements",
-        CandidateMatchRequirementCategory.NICE_TO_HAVE,
-      ),
-    );
+  for (const criterion of input.spec.rubricCriteria ?? []) {
+    for (const token of tokenizePrimarySkills(criterion)) {
+      const claim = skillByNormalized.get(token.normalized);
+      rows.push(
+        claim
+          ? {
+              requirementKey: `scoringRubric:${token.normalized}`,
+              sourceField: "scoringRubric",
+              category: CandidateMatchRequirementCategory.SKILL,
+              result: CandidateMatchResult.SATISFIED,
+              reasonCode: MATCH_REASON.EXACT_SKILL_MATCH,
+              claimId: claim.id,
+              evidenceId: claim.evidenceId,
+            }
+          : unknownRow(
+              `scoringRubric:${token.normalized}`,
+              "scoringRubric",
+              CandidateMatchRequirementCategory.SKILL,
+            ),
+      );
+    }
+  }
+
+  const resumeText = input.spec.resumeText ?? "";
+  for (const sourceField of ["mustHaveRequirements", "niceToHaveRequirements"] as const) {
+    const category =
+      sourceField === "mustHaveRequirements"
+        ? CandidateMatchRequirementCategory.MUST_HAVE
+        : CandidateMatchRequirementCategory.NICE_TO_HAVE;
+    for (const check of parseRequirementChecks(input.spec[sourceField], sourceField)) {
+      const key = `${sourceField}:${check.kind}:${check.text.slice(0, 60)}`;
+      if (check.kind === "years" && yearsCheckPasses(check, resumeText)) {
+        rows.push({
+          requirementKey: key,
+          sourceField,
+          category,
+          result: CandidateMatchResult.SATISFIED,
+          reasonCode: MATCH_REASON.RESUME_TEXT,
+          claimId: null,
+          evidenceId: null,
+        });
+        continue;
+      }
+      if (check.kind === "skill" && check.skill) {
+        const direct = resumeText.toLowerCase().includes(check.skill.toLowerCase());
+        const inferred = check.skill.toLowerCase() === "sql" ? inferredSqlDatabase(resumeText) : null;
+        if (direct || inferred) {
+          rows.push({
+            requirementKey: key,
+            sourceField,
+            category,
+            result: CandidateMatchResult.SATISFIED,
+            reasonCode: inferred ? `${MATCH_REASON.INFERRED}:${inferred}` : MATCH_REASON.RESUME_TEXT,
+            claimId: null,
+            evidenceId: null,
+          });
+          continue;
+        }
+      }
+      if (
+        check.kind === "prose" &&
+        (input.spec.verifiedProse ?? []).some((line) => line === check.text)
+      ) {
+        rows.push({
+          requirementKey: key,
+          sourceField,
+          category,
+          result: CandidateMatchResult.SATISFIED,
+          reasonCode: MATCH_REASON.RESUME_TEXT,
+          claimId: null,
+          evidenceId: null,
+        });
+        continue;
+      }
+      if (check.kind === "domain" && check.skill && resumeText.toLowerCase().includes(check.skill.toLowerCase())) {
+        rows.push({
+          requirementKey: key,
+          sourceField,
+          category,
+          result: CandidateMatchResult.SATISFIED,
+          reasonCode: MATCH_REASON.RESUME_TEXT,
+          claimId: null,
+          evidenceId: null,
+        });
+        continue;
+      }
+      rows.push(unknownRow(key, sourceField, category));
+    }
   }
 
   return rows;

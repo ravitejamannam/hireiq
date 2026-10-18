@@ -5,6 +5,23 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    files: ["**/*.{ts,tsx,mjs,js}"],
+    ignores: ["lib/ai/gateway.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Literal[value=/api\\.openai\\.com/]",
+          message: "OpenAI HTTP calls belong in lib/ai/gateway.ts.",
+        },
+        {
+          selector: "TemplateElement[value.raw=/api\\.openai\\.com/]",
+          message: "OpenAI HTTP calls belong in lib/ai/gateway.ts.",
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

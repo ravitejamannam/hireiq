@@ -51,6 +51,15 @@ function wordCount(value: string) {
   return value.trim().split(/\s+/).filter(Boolean).length;
 }
 
+function skillMentionedIn(text: string) {
+  const words = text.split(/[^A-Za-z0-9+#.]+/).filter((word) => word.length >= 2);
+  for (const word of words) {
+    const resolved = resolveSkillAlias(word);
+    if (resolved) return resolved;
+  }
+  return null;
+}
+
 function isSkillLike(value: string) {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > 48) {
@@ -100,6 +109,8 @@ export function hashJobIntelligenceInput(input: SpecExtractionInput) {
         experienceRange: input.experienceRange ?? "",
         jobDescription: input.jobDescription ?? "",
         evaluationCriteria: input.evaluationCriteria ?? "",
+        screeningQuestions: input.screeningQuestions ?? [],
+        rubricCriteria: input.rubricCriteria ?? [],
       }),
       "utf8",
     )
@@ -159,6 +170,47 @@ export function extractJobRequirements(
       skillCanonicalKey: null,
       provenance: JOB_INTELLIGENCE_PROVENANCE,
       uncertainty: JobRequirementUncertainty.CERTAIN,
+    });
+  }
+
+  for (const criterion of input.rubricCriteria ?? []) {
+    if (!isSkillLike(criterion)) continue;
+    const resolved = resolveSkillAlias(criterion);
+    const canonical = resolved?.canonicalKey ?? canonicalSkillKey(criterion);
+    pushUnique(rows, seen, {
+      stableKey: `scoringRubric:${canonical}`,
+      sourceField: "scoringRubric",
+      sourceText: criterion,
+      sourceSpanStart: null,
+      sourceSpanEnd: null,
+      category: JobRequirementCategory.REQUIRED,
+      normalizedValue: canonical,
+      skillCanonicalKey: resolved?.canonicalKey ?? null,
+      provenance: JOB_INTELLIGENCE_PROVENANCE,
+      uncertainty: resolved
+        ? JobRequirementUncertainty.CERTAIN
+        : JobRequirementUncertainty.AMBIGUOUS,
+    });
+  }
+
+  for (const question of input.screeningQuestions ?? []) {
+    const resolved = resolveSkillAlias(question) ?? skillMentionedIn(question);
+    if (!resolved && !isSkillLike(question)) continue;
+    const display = resolved ? question : question;
+    const canonical = resolved?.canonicalKey ?? canonicalSkillKey(question);
+    pushUnique(rows, seen, {
+      stableKey: `screeningQuestions:${canonical}`,
+      sourceField: "screeningQuestions",
+      sourceText: display,
+      sourceSpanStart: null,
+      sourceSpanEnd: null,
+      category: JobRequirementCategory.REQUIRED,
+      normalizedValue: canonical,
+      skillCanonicalKey: resolved?.canonicalKey ?? null,
+      provenance: JOB_INTELLIGENCE_PROVENANCE,
+      uncertainty: resolved
+        ? JobRequirementUncertainty.CERTAIN
+        : JobRequirementUncertainty.AMBIGUOUS,
     });
   }
 

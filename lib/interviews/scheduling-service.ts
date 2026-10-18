@@ -46,7 +46,7 @@ export async function createSlotsForJobForAdmin(input: {
   interviewType: unknown;
   slots: unknown;
 }): Promise<{ created: number }> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const jobId = requireInt(input.jobId, "INVALID_JOB_ID");
   const interviewerId = requireInt(input.interviewerId, "INVALID_INTERVIEWER_ID");
@@ -54,9 +54,9 @@ export async function createSlotsForJobForAdmin(input: {
 
   const job = await prisma.job.findFirst({
     where: { id: jobId },
-    select: { id: true, assignedInterviewerId: true },
+    select: { id: true, companyId: true, assignedInterviewerId: true },
   });
-  if (!job) throw new SchedulingError("JOB_NOT_FOUND");
+  if (!job || (admin.companyId != null && job.companyId !== admin.companyId)) throw new SchedulingError("JOB_NOT_FOUND");
 
   // The assigned interviewer owns interviews for this job; publishing
   // slots for anyone else would create orphaned interviews.
@@ -122,14 +122,16 @@ export async function mintBookingInviteForApplication(input: {
   actorIsAdminVerified: true;
   applicationId: unknown;
 }): Promise<{ bookingUrl: string | null; expiresAt: Date }> {
-  await requireAdmin();
+  const admin = await requireAdmin();
 
   const applicationId = requireInt(input.applicationId, "INVALID_APPLICATION_ID");
   const application = await prisma.application.findUnique({
     where: { id: applicationId },
-    select: { id: true, job: { select: { assignedInterviewerId: true } } },
+    select: { id: true, companyId: true, job: { select: { assignedInterviewerId: true } } },
   });
-  if (!application) throw new SchedulingError("APPLICATION_NOT_FOUND");
+  if (!application || (admin.companyId != null && application.companyId !== admin.companyId)) {
+    throw new SchedulingError("APPLICATION_NOT_FOUND");
+  }
   if (!application.job.assignedInterviewerId) {
     throw new SchedulingError("NO_ASSIGNED_INTERVIEWER");
   }
@@ -193,6 +195,91 @@ export async function listOpenSlotsForBooking(rawToken: string): Promise<{
   };
 }
 
+export async function rescheduleBookedSlot(input: {
+  applicationId: number;
+  fromSlotId: number;
+  toSlotId: number;
+}) {
+  const moved = await prisma.$transaction(async (tx) => {
+    const freed = await tx.interviewSlot.updateMany({
+      where: {
+        id: input.fromSlotId,
+        status: InterviewSlotStatus.BOOKED,
+        bookedApplicationId: input.applicationId,
+      },
+      data: { status: InterviewSlotStatus.OPEN, bookedApplicationId: null },
+    });
+    if (freed.count !== 1) throw new SchedulingError("SLOT_UNAVAILABLE");
+    const claimed = await tx.interviewSlot.updateMany({
+      where: { id: input.toSlotId, status: InterviewSlotStatus.OPEN },
+      data: { status: InterviewSlotStatus.BOOKED, bookedApplicationId: input.applicationId },
+    });
+    if (claimed.count !== 1) throw new SchedulingError("SLOT_UNAVAILABLE");
+    const next = await tx.interviewSlot.findUniqueOrThrow({
+      where: { id: input.toSlotId },
+      select: { startAt: true, interviewType: true, durationMinutes: true },
+    });
+    const interview = await tx.interview.findFirst({
+      where: { applicationId: input.applicationId, result: InterviewResult.PENDING },
+      select: { id: true, calendarEventId: true },
+    });
+    await tx.interview.updateMany({
+      where: { applicationId: input.applicationId, result: InterviewResult.PENDING },
+      data: { interviewAt: next.startAt, type: next.interviewType },
+    });
+    if (interview) {
+      await tx.interviewReminder.deleteMany({ where: { interviewId: interview.id, sentAt: null } });
+    }
+    return {
+      startAt: next.startAt,
+      end: new Date(next.startAt.getTime() + next.durationMinutes * 60_000),
+      interviewId: interview?.id ?? null,
+      eventId: interview?.calendarEventId ?? null,
+    };
+  });
+  if (moved.interviewId) {
+    const { queueInterviewReminders } = await import("./interview-reminders");
+    await queueInterviewReminders(moved.interviewId, moved.startAt);
+  }
+  if (moved.eventId) {
+    const owner = await prisma.application.findUnique({
+      where: { id: input.applicationId },
+      select: { job: { select: { assignedInterviewer: { select: { users: { select: { id: true }, take: 1 } } } } } },
+    });
+    const userId = owner?.job.assignedInterviewer?.users[0]?.id;
+    if (userId) {
+      const { updateGoogleMeetEvent } = await import("./calendar-sync-service");
+      await updateGoogleMeetEvent({ userId, eventId: moved.eventId, start: moved.startAt, end: moved.end });
+    }
+  }
+  return moved.startAt;
+}
+
+export async function cancelBookedInterview(applicationId: number) {
+  const interview = await prisma.interview.findFirst({
+    where: { applicationId, result: InterviewResult.PENDING },
+    select: { id: true, calendarEventId: true, application: { select: { job: { select: { assignedInterviewer: { select: { users: { select: { id: true }, take: 1 } } } } } } } },
+  });
+  await prisma.$transaction(async (tx) => {
+    await tx.interviewSlot.updateMany({
+      where: { bookedApplicationId: applicationId, status: InterviewSlotStatus.BOOKED },
+      data: { status: InterviewSlotStatus.OPEN, bookedApplicationId: null },
+    });
+    await tx.interview.updateMany({
+      where: { applicationId, result: InterviewResult.PENDING },
+      data: { result: InterviewResult.CANCELLED },
+    });
+    if (interview) {
+      await tx.interviewReminder.deleteMany({ where: { interviewId: interview.id, sentAt: null } });
+    }
+  });
+  const userId = interview?.application.job.assignedInterviewer?.users[0]?.id;
+  if (userId && interview?.calendarEventId) {
+    const { deleteGoogleMeetEvent } = await import("./calendar-sync-service");
+    await deleteGoogleMeetEvent({ userId, eventId: interview.calendarEventId });
+  }
+}
+
 export async function bookSlotWithToken(input: {
   rawToken: string;
   slotId: unknown;
@@ -210,6 +297,7 @@ export async function bookSlotWithToken(input: {
     where: { id: invite.applicationId },
     select: {
       id: true,
+      emailUnsubscribedAt: true,
       job: {
         select: {
           id: true,
@@ -218,7 +306,7 @@ export async function bookSlotWithToken(input: {
           company: { select: { name: true } },
           assignedInterviewerId: true,
           assignedInterviewer: {
-            select: { name: true, users: { select: { email: true }, take: 1 } },
+            select: { name: true, users: { select: { id: true, email: true }, take: 1 } },
           },
           interviewSlots: {
             where: { id: slotId },
@@ -294,6 +382,32 @@ export async function bookSlotWithToken(input: {
       console.error("[scheduling] booking notification failed", notificationError);
     }
 
+    try {
+      const { queueInterviewReminders } = await import("./interview-reminders");
+      const { createGoogleMeetEvent } = await import("./calendar-sync-service");
+      await queueInterviewReminders(result.id, slot.startAt);
+      const userId = application.job.assignedInterviewer?.users?.[0]?.id;
+      if (userId) {
+        const end = new Date(slot.startAt.getTime() + slot.durationMinutes * 60_000);
+        const created = await createGoogleMeetEvent({
+          userId,
+          summary: `Interview: ${application.job.title}`,
+          start: slot.startAt,
+          end,
+          attendees: [application.job.assignedInterviewer?.users?.[0]?.email ?? ""].filter(Boolean),
+          requestId: `hireiq-interview-${result.id}`,
+        });
+        if (created) {
+          await prisma.interview.update({
+            where: { id: result.id },
+            data: { calendarEventId: created.eventId, meetUrl: created.meetUrl },
+          });
+        }
+      }
+    } catch (calendarError) {
+      console.error("[scheduling] calendar event failed", calendarError);
+    }
+
     // T111: candidate confirmation + interviewer alert via Resend.
     try {
       const { deliverBookingConfirmation } = await import(
@@ -311,6 +425,7 @@ export async function bookSlotWithToken(input: {
         },
       });
       const delivery = await deliverBookingConfirmation({
+        candidateUnsubscribed: Boolean(application.emailUnsubscribedAt),
         interviewerEmail:
           application.job.assignedInterviewer?.users?.[0]?.email ?? null,
         interviewerName:

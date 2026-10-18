@@ -2,6 +2,9 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
+/** Stores a DSAR erasure must cover: database rows, resume files, and retrieval indexes. */
+export const CANDIDATE_ERASURE_STORES = ["database", "files", "retrieval-indexes"] as const;
+
 export const CANDIDATE_DELETION_REFUSED =
   "This candidate has associated records. Ordinary deletion is unavailable.";
 

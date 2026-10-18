@@ -29,13 +29,110 @@ if [ -z "${BASE:-}" ]; then
   echo "BASE is required. Set it to the dedicated E2E server, not the existing port-4000 server." >&2
   exit 1
 fi
+if [ -z "${AZ_ADMIN_EMAIL:-}" ] || [ -z "${AZ_ADMIN_PASSWORD:-}" ]; then
+  echo "AZ_ADMIN_EMAIL and AZ_ADMIN_PASSWORD are required for the A-Z admin login." >&2
+  exit 1
+fi
 PASS=0; FAIL=0
+CREATED_CLAIM=""
+cleanup_created_rows() {
+  if [ -z "${CREATED_CLAIM:-}" ]; then
+    return 0
+  fi
+  CLAIM="$CREATED_CLAIM" DB="$DB" node --input-type=module << 'EOF'
+import { execFileSync } from "node:child_process";
+import { hashSecureToken } from "/Users/ravitejamannam/Developer/hireiq/lib/auth/secure-token.ts";
+const db = process.env.DB;
+const claim = process.env.CLAIM;
+if (!db || !claim) process.exit(0);
+const hash = hashSecureToken(claim);
+function q(sql) {
+  return execFileSync("psql", [db, "-t", "-A", "-c", sql], { encoding: "utf8" }).trim();
+}
+function residue(message) {
+  console.error(message);
+}
+const uploads = q(`SELECT id::text || '|' || COALESCE("hostedApplySubmissionId"::text, '') FROM "HostedApplyResumeUpload" WHERE "claimTokenHash" = '${hash}'`);
+const lines = uploads ? uploads.split("\n").filter(Boolean) : [];
+if (lines.length !== 1) {
+  residue("Cleanup left residue: resume claim did not match exactly one upload.");
+  process.exit(0);
+}
+const [uploadId, submissionId] = lines[0].split("|");
+if (!submissionId) {
+  q(`DELETE FROM "HostedApplyResumeUpload" WHERE id = ${Number(uploadId)} AND "claimTokenHash" = '${hash}' AND "hostedApplySubmissionId" IS NULL`);
+  process.exit(0);
+}
+const events = q(`SELECT id::text || '|' || COALESCE("applicationId"::text, '') || '|' || COALESCE("candidateId"::text, '') FROM "ApplicationIngestionEvent" WHERE "hostedApplySubmissionId" = ${Number(submissionId)}`);
+const eventLines = events ? events.split("\n").filter(Boolean) : [];
+if (eventLines.length !== 1) {
+  residue(`Cleanup left residue: submission ${submissionId} is not tied to exactly one ingestion event.`);
+  process.exit(0);
+}
+const [eventId, applicationId, candidateId] = eventLines[0].split("|");
+if (!applicationId || !candidateId) {
+  residue(`Cleanup left residue: ingestion event ${eventId} has no application or candidate.`);
+  process.exit(0);
+}
+const otherApps = q(`SELECT count(*) FROM "Application" WHERE "candidateId" = ${Number(candidateId)} AND id <> ${Number(applicationId)}`);
+if (otherApps !== "0") {
+  residue(`Cleanup left residue: candidate ${candidateId} has other applications.`);
+  process.exit(0);
+}
+q(`DELETE FROM "AssessmentAnswer" WHERE "attemptId" IN (SELECT id FROM "AssessmentAttempt" WHERE "applicationId" = ${Number(applicationId)})`);
+q(`DELETE FROM "AssessmentAttempt" WHERE "applicationId" = ${Number(applicationId)}`);
+q(`DELETE FROM "AssessmentInvite" WHERE "applicationId" = ${Number(applicationId)}`);
+q(`DELETE FROM "CandidateEvidence" WHERE "applicationId" = ${Number(applicationId)}`);
+q(`DELETE FROM "CandidateResumeDocument" WHERE "applicationId" = ${Number(applicationId)}`);
+q(`UPDATE "HostedApplyResumeUpload" SET "hostedApplySubmissionId" = NULL WHERE id = ${Number(uploadId)}`);
+q(`DELETE FROM "ApplicationIngestionEvent" WHERE id = ${Number(eventId)} AND "hostedApplySubmissionId" = ${Number(submissionId)}`);
+q(`DELETE FROM "HostedApplySubmission" WHERE id = ${Number(submissionId)}`);
+q(`DELETE FROM "HostedApplyResumeUpload" WHERE id = ${Number(uploadId)} AND "claimTokenHash" = '${hash}'`);
+q(`DELETE FROM "Application" WHERE id = ${Number(applicationId)}`);
+q(`DELETE FROM "Candidate" WHERE id = ${Number(candidateId)} AND NOT EXISTS (SELECT 1 FROM "Application" WHERE "candidateId" = ${Number(candidateId)})`);
+EOF
+}
+trap cleanup_created_rows EXIT
 check() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); echo "  ✓ $1"; else FAIL=$((FAIL+1)); echo "  ✗ $1 [got: $2 | want: $3]"; fi }
 q() { psql "$DB" -t -A -c "$1"; }
 
 echo "════ SECTION 1: PUBLIC RAIL ════"
-psql "$DB" -c 'DELETE FROM "AuthRateLimit";' > /dev/null
-TOKEN=$(q 'SELECT split_part("applyUrlSnapshot", '"'"'/apply/'"'"', 2) FROM "JobDistribution" WHERE "applyUrlSnapshot" IS NOT NULL LIMIT 1;')
+HOSTED_COUNT=$(q 'SELECT count(*) FROM "JobDistribution" WHERE "companyId" = 1 AND "jobId" = 3 AND "applyMode" = '"'"'HIREIQ_HOSTED'"'"' AND "status" = '"'"'PUBLISHED'"'"' AND "applyUrlSnapshot" IS NOT NULL;')
+if [ "$HOSTED_COUNT" != "1" ]; then
+  echo "Job 3 must have exactly one published hosted apply link. Found ${HOSTED_COUNT:-0}." >&2
+  exit 1
+fi
+TOKEN=$(q 'SELECT split_part("applyUrlSnapshot", '"'"'/apply/'"'"', 2) FROM "JobDistribution" WHERE "companyId" = 1 AND "jobId" = 3 AND "applyMode" = '"'"'HIREIQ_HOSTED'"'"' AND "status" = '"'"'PUBLISHED'"'"' AND "applyUrlSnapshot" IS NOT NULL;')
+if [ -z "${TOKEN//[[:space:]]/}" ] || [[ "$TOKEN" == */* ]]; then
+  echo "Job 3 hosted apply link does not contain a single apply token." >&2
+  exit 1
+fi
+SNAPSHOT=$(q 'SELECT "applyUrlSnapshot" FROM "JobDistribution" WHERE "companyId" = 1 AND "jobId" = 3 AND "applyMode" = '"'"'HIREIQ_HOSTED'"'"' AND "status" = '"'"'PUBLISHED'"'"' AND "applyUrlSnapshot" IS NOT NULL;')
+STORED_HASH=$(q 'SELECT t."tokenHash" FROM "ApplyToken" t JOIN "JobDistribution" d ON d.id = t."distributionId" WHERE d."companyId" = 1 AND d."jobId" = 3 AND d."applyMode" = '"'"'HIREIQ_HOSTED'"'"' AND d.status = '"'"'PUBLISHED'"'"' AND t."revokedAt" IS NULL;')
+if ! BASE="$BASE" SNAPSHOT="$SNAPSHOT" TOKEN="$TOKEN" STORED_HASH="$STORED_HASH" node --input-type=module << 'EOF'
+import { hashSecureToken } from "/Users/ravitejamannam/Developer/hireiq/lib/auth/secure-token.ts";
+const base = new URL(process.env.BASE);
+const snapshot = new URL(process.env.SNAPSHOT);
+const hashes = (process.env.STORED_HASH || "").split("\n").filter(Boolean);
+if (snapshot.origin !== base.origin) process.exit(2);
+if (hashes.length !== 1) process.exit(3);
+if (hashSecureToken(process.env.TOKEN) !== hashes[0]) process.exit(4);
+EOF
+then
+  echo "Job 3 hosted apply link does not match BASE or its unrevoked token." >&2
+  exit 1
+fi
+unset SNAPSHOT STORED_HASH
+OWNER_OK=$(q 'SELECT count(*) FROM "User" u WHERE lower(u.email) = '"'"'owner.nimbus@hireiq.local'"'"' AND u.role = '"'"'CLIENT'"'"' AND u."disabledAt" IS NULL AND u."emailVerifiedAt" IS NOT NULL AND EXISTS (SELECT 1 FROM "OrganizationMember" m JOIN "Company" c ON c.id = m."companyId" WHERE m."userId" = u.id AND m.status = '"'"'ACTIVE'"'"' AND m."companyId" = u."companyId");')
+if [ "$OWNER_OK" != "1" ]; then
+  echo "owner.nimbus@hireiq.local is missing or not an enabled verified client with an active company membership." >&2
+  exit 1
+fi
+INTERVIEWER_OK=$(q 'SELECT count(*) FROM "User" u JOIN "Interviewer" i ON i.id = u."interviewerId" WHERE lower(u.email) = '"'"'interviewer.arjun@hireiq.local'"'"' AND u.role = '"'"'INTERVIEWER'"'"' AND u."disabledAt" IS NULL;')
+if [ "$INTERVIEWER_OK" != "1" ]; then
+  echo "interviewer.arjun@hireiq.local is missing or not an enabled interviewer with a profile." >&2
+  exit 1
+fi
 CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/apply/$TOKEN")
 check "apply page loads" "$CODE" "200"
 
@@ -51,6 +148,9 @@ printf '%s\n' \
 UP=$(curl -s -X POST "$BASE/api/apply/$TOKEN/resume" -H "Origin: $BASE" -F "file=@/tmp/az-resume.txt")
 STATUS=$(echo "$UP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('parseStatus',''))" 2>/dev/null)
 CLAIM=$(echo "$UP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('resumeClaim',''))" 2>/dev/null)
+if [ -n "$CLAIM" ]; then
+  CREATED_CLAIM="$CLAIM"
+fi
 check "resume pre-upload PARSED" "$STATUS" "PARSED"
 [ -n "$CLAIM" ]; check "claim issued" "$([ -n "$CLAIM" ] && echo yes || echo no)" "yes"
 
@@ -106,7 +206,7 @@ check "public job soft-404 fixed" "$J404" "404"
 echo "════ SECTION 3: ROLES ════"
 JAR=/tmp/az-admin.txt; rm -f $JAR
 CSRF=$(curl -s -c $JAR "$BASE/api/auth/csrf" | python3 -c "import sys,json;print(json.load(sys.stdin)['csrfToken'])")
-curl -s -b $JAR -c $JAR -X POST "$BASE/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$CSRF" --data-urlencode "email=${ADMIN_EMAIL:-admin@hireiq.local}" --data-urlencode "password=${ADMIN_PASSWORD}" -o /dev/null
+curl -s -b $JAR -c $JAR -X POST "$BASE/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "csrfToken=$CSRF" --data-urlencode "email=${AZ_ADMIN_EMAIL}" --data-urlencode "password=${AZ_ADMIN_PASSWORD}" -o /dev/null
 SESS=$(curl -s -b $JAR "$BASE/api/auth/session" | python3 -c "import sys,json;print(json.load(sys.stdin).get('user',{}).get('role','NONE'))")
 check "ADMIN session role" "$SESS" "ADMIN"
 for u in "/dashboard/calibration" "/dashboard/assessment-bank" "/dashboard/integrations" "/dashboard/integrations/feeds" "/dashboard/requirements/1/blueprint"; do

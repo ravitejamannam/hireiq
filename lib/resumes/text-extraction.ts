@@ -11,7 +11,11 @@
 
 import { getOpenAiApiKey } from "@/lib/ai/job-description-generator";
 import { betterExtraction, columnJumbleShare, scoreExtraction, textLooksColumnJumbled, type ExtractionQuality } from "@/lib/resumes/extraction-quality";
-import { transcribeResumePage } from "@/lib/resumes/layout-vision";
+import {
+  applicationOptedOutOfAi,
+  transcribeResumePage,
+  type ResumeVisionAudit,
+} from "@/lib/resumes/layout-vision";
 
 export const RESUME_TEXT_EXTRACTOR_VERSION = "4";
 
@@ -50,6 +54,8 @@ export type ResumeFileHint = {
    * skip leaves a text-free PDF as OCR_DEFERRED so the upload can return.
    */
   ocr?: "inline" | "skip";
+  /** Present when the caller has a company id and a Prisma client. */
+  visionAudit?: Omit<ResumeVisionAudit, "pageCount" | "pageIndex"> | null;
 };
 
 const IMAGE_EXTENSIONS = new Set([
@@ -235,10 +241,28 @@ async function extractFromPdf(
           .filter((data): data is Uint8Array => data instanceof Uint8Array && data.byteLength > 0)
           .slice(0, OCR_MAX_PAGES);
         const pages: string[] = [];
-        for (const image of images) {
-          if (control.aborted) break;
-          const visual = await transcribeResumePage(image);
-          if (visual) pages.push(visual);
+        const auditBase = hint.visionAudit ?? null;
+        const optedOut =
+          auditBase !== null && (await applicationOptedOutOfAi(auditBase.db, auditBase.applicationId));
+        if (optedOut && auditBase) {
+          await transcribeResumePage(images[0] ?? new Uint8Array(), {
+            ...auditBase,
+            pageCount: images.length,
+            pageIndex: 0,
+          });
+        } else {
+          for (let pageIndex = 0; pageIndex < images.length; pageIndex += 1) {
+            if (control.aborted) break;
+            const image = images[pageIndex];
+            if (!image) continue;
+            const visual = await transcribeResumePage(
+              image,
+              auditBase
+                ? { ...auditBase, pageCount: images.length, pageIndex }
+                : null,
+            );
+            if (visual) pages.push(visual);
+          }
         }
         if (pages.length > 0) best = remember(best, pages.join("\n\n"), "vision");
       }

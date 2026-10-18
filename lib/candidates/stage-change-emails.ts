@@ -5,6 +5,8 @@ import {
   sendOutboundEmail,
 } from "@/lib/communication/email-transport";
 import { prisma } from "@/lib/prisma";
+import { maySendCandidateEmail } from "@/lib/portal/candidate-portal";
+import { executeWorkflow } from "@/lib/workflow/engine";
 
 /**
  * Candidate stage-change emails (T117).
@@ -120,6 +122,28 @@ export async function notifyCandidateOfStageChange(
   newStatus: ApplicationPipelineStatus,
 ): Promise<void> {
   if (!NOTIFIABLE_STAGES.has(newStatus)) return;
+  const application = await prisma.application.findUnique({
+    where: { id: applicationId },
+    select: { emailUnsubscribedAt: true },
+  });
+  const kind = newStatus === "SHORTLISTED" ? "stage" : "decision";
+  if (!maySendCandidateEmail({ unsubscribed: Boolean(application?.emailUnsubscribedAt), kind })) return;
+  const workflow = executeWorkflow(
+    {
+      id: 0,
+      version: 1,
+      trigger: "STAGE_CHANGE",
+      condition: { status: newStatus },
+      action: { type: "EMAIL", templateId: "stage-change" },
+    },
+    {
+      trigger: "STAGE_CHANGE",
+      status: newStatus,
+      humanConfirmed: true,
+      sendsInWindow: 0,
+    },
+  );
+  if (workflow.outcome === "BLOCKED") return;
 
   try {
     const contact = await resolveCandidateContact(applicationId);

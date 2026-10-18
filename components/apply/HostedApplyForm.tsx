@@ -88,6 +88,7 @@ export default function HostedApplyForm({
   const [coverLetter, setCoverLetter] = useState("");
   const [draft, setDraft] = useState<StructuredProfileDraft>(emptyStructuredDraft);
   const [consent, setConsent] = useState(false);
+  const [futureRoles, setFutureRoles] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -181,6 +182,7 @@ export default function HostedApplyForm({
             ok?: boolean;
             resumeClaim?: string;
             fileName?: string;
+            message?: string;
             error?: string;
             parseStatus?: string;
             parseErrorCode?: string | null;
@@ -205,7 +207,7 @@ export default function HostedApplyForm({
         | null;
       if (!response.ok || !body?.ok || !body.resumeClaim) {
         setResumeState("error");
-        setFormError(integrityFreeResumeError(body?.error));
+        setFormError(body?.message || integrityFreeResumeError(body?.error));
         return;
       }
       setResumeClaim(body.resumeClaim);
@@ -248,7 +250,7 @@ export default function HostedApplyForm({
     switch (code) {
       case "UNSUPPORTED_FILE_TYPE":
       case "UNSUPPORTED_FORMAT":
-        return "Upload a PDF, DOCX, or TXT resume. Images and other files are not accepted.";
+        return "Upload a PDF, Word (.docx), or plain text file. Photos, older Word .doc files, and zip archives are not accepted.";
       case "LEGACY_DOC_UNSUPPORTED":
         return "Older Word .doc files are not supported. Save the resume as PDF or DOCX and upload that.";
       case "FILE_TOO_LARGE":
@@ -294,6 +296,7 @@ export default function HostedApplyForm({
           experienceYears: experienceYears || null,
           coverLetter: coverLetter || null,
           consent,
+          futureRolesConsent: futureRoles,
           resumeClaim,
           photoClaim,
           roleTitle: draft.roleTitle || null,
@@ -665,6 +668,16 @@ export default function HostedApplyForm({
             application
             <FieldError message={errors.consent} />
           </span>
+        </label>
+        <label className="flex items-start gap-2.5 text-sm text-zinc-700">
+          <input
+            type="checkbox"
+            checked={futureRoles}
+            onChange={(event) => setFutureRoles(event.target.checked)}
+            disabled={pending}
+            className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <span>Also consider me for future roles at this company. This is optional and starts off.</span>
         </label>
 
         <button

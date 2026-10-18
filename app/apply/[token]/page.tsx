@@ -6,6 +6,7 @@ import HostedApplyForm from "@/components/apply/HostedApplyForm";
 import JobPostingDetail from "@/components/jobs/JobPostingDetail";
 import { HostedApplyError } from "@/lib/apply/hosted-apply-errors";
 import type { PublicHostedApplyPage } from "@/lib/apply/public-page";
+import { listKnockoutsForApplyToken } from "@/lib/apply/knockout-questions";
 import { resolvePublicHostedApply } from "@/lib/apply/hosted-apply-service";
 import { resolveJobPostingView } from "@/lib/jobs/job-posting-view";
 import {
@@ -104,6 +105,8 @@ export default async function HostedApplyPage({ params }: ApplyPageProps) {
     );
   }
 
+  const knockouts = await listKnockoutsForApplyToken(token);
+
   return (
     <main className="min-h-screen bg-[#F7F4EE]">
       <div className="mx-auto max-w-6xl px-6 py-10">
@@ -146,6 +149,7 @@ export default async function HostedApplyPage({ params }: ApplyPageProps) {
             <HostedApplyForm
               token={token}
               expectsAssessment={page.roleCategory != null}
+              knockouts={knockouts}
             />
           </div>
         </section>

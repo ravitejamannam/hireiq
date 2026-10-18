@@ -1,0 +1,1 @@
+ALTER TABLE "Interview" ADD COLUMN "noShow" BOOLEAN NOT NULL DEFAULT false;

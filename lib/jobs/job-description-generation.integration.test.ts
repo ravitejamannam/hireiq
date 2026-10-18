@@ -13,6 +13,7 @@ import { JobValidationError } from "@/lib/validation/job-validation";
 import { prisma } from "@/lib/prisma";
 
 const MARKER = `gen-${process.pid}-${Date.now()}`;
+const ACTOR_USER_ID = 1_000_000_000 + (process.pid % 100_000) * 1_000 + (Date.now() % 1_000);
 
 describe("job description generation", () => {
   const companyIds: number[] = [];
@@ -77,7 +78,7 @@ describe("job description generation", () => {
         niceToHaveRequirements: "GraphQL",
       },
     });
-    const actor = { userId: 1, companyId: company.id, isAdmin: false };
+    const actor = { userId: ACTOR_USER_ID, companyId: company.id, isAdmin: false };
 
     setJobDescriptionGeneratorForTests(async () => ({ jobDescription: "   " }));
     await expect(generateJobDescriptionForActor({ jobId: job.id, actor })).rejects.toBeInstanceOf(
@@ -120,7 +121,7 @@ describe("job description generation", () => {
     await expect(
       acceptGeneratedJobDescriptionForActor({
         jobId: job.id,
-        actor: { userId: 1, companyId: company.id + 99, isAdmin: false },
+        actor: { userId: ACTOR_USER_ID, companyId: company.id + 99, isAdmin: false },
       }),
     ).rejects.toBeInstanceOf(JobValidationError);
 
@@ -137,5 +138,48 @@ describe("job description generation", () => {
       mustHaveRequirements: "TypeScript",
       niceToHaveRequirements: "GraphQL",
     });
+  });
+
+  it("creates a draft from the published specification before generating", async () => {
+    const company = await prisma.company.create({
+      data: {
+        name: `${MARKER} published`,
+        industry: "Test",
+        employees: 1,
+        publicSlug: `${MARKER}-pub`.toLowerCase().replace(/[^a-z0-9-]/g, ""),
+      },
+    });
+    companyIds.push(company.id);
+    const job = await prisma.job.create({
+      data: {
+        title: `${MARKER} published role`,
+        status: JobStatus.OPEN,
+        companyId: company.id,
+        jobDescription: "Published body",
+        mustHaveRequirements: "Go",
+      },
+    });
+    await prisma.jobSpecificationVersion.create({
+      data: {
+        jobId: job.id,
+        versionNumber: 1,
+        status: JobSpecificationVersionStatus.PUBLISHED,
+        publishedAt: new Date(),
+        title: `${MARKER} published role`,
+        jobDescription: "Published body",
+        mustHaveRequirements: "Go",
+      },
+    });
+    setJobDescriptionGeneratorForTests(async () => ({
+      jobDescription: "Drafted from the published specification.",
+    }));
+    const generated = await generateJobDescriptionForActor({
+      jobId: job.id,
+      actor: { userId: ACTOR_USER_ID, companyId: company.id, isAdmin: false },
+    });
+    expect(generated.status).toBe("DRAFT");
+    expect(generated.versionNumber).toBe(2);
+    expect(generated.mustHaveRequirements).toBe("Go");
+    expect(generated.aiGenerationStatus).toBe("READY");
   });
 });

@@ -18,6 +18,7 @@ const roleCategoryOptions = [
   { value: "SALES", label: "Sales" },
   { value: "DESIGN", label: "Design" },
   { value: "FINANCE", label: "Finance" },
+  { value: "GRADUATE", label: "Graduate Trainee" },
 ] as const satisfies ReadonlyArray<{ value: RoleCategory; label: string }>;
 
 type FormState = {

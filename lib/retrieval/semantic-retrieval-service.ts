@@ -10,6 +10,7 @@ import {
   requireAdmin,
 } from "@/lib/auth/authorization";
 import { executeRunJobIntelligence } from "@/lib/jobs/intelligence/job-intelligence-service";
+import { optedOutCandidateIds } from "@/lib/ai/opt-out";
 import { ONTOLOGY_VERSION } from "@/lib/ontology/skill-alias-catalog";
 import { prisma } from "@/lib/prisma";
 import {
@@ -37,7 +38,7 @@ import {
   hashEvidenceSnapshot,
 } from "@/lib/retrieval/lexical-engine";
 import { buildLexicalQuery, hashLexicalQuery } from "@/lib/retrieval/lexical-query";
-import type { LexicalApplicationDocument } from "@/lib/retrieval/lexical-retrieval-types";
+import type { LexicalApplicationDocument, LexicalEvidenceDocument } from "@/lib/retrieval/lexical-retrieval-types";
 import {
   embeddingCacheKey,
   loadOrCreateRetrievalEmbeddings,
@@ -87,6 +88,11 @@ import {
   validateSemanticRetrievalLimit,
   validateSemanticRetrievalSpecificationId,
 } from "@/lib/validation/semantic-retrieval-validation";
+
+async function evidenceEligibleForEmbedding(companyId: number, rows: LexicalEvidenceDocument[]) {
+  const blocked = await optedOutCandidateIds(companyId, rows.map((row) => row.candidateId));
+  return rows.filter((row) => !blocked.has(row.candidateId));
+}
 
 function notFound(): never {
   throw new SemanticRetrievalError(
@@ -248,7 +254,7 @@ export async function executeRunSemanticRetrieval(input: {
 
   const queryText = redactRetrievalText(buildSemanticJobQueryText(query));
   const queryHash = hashLexicalQuery(query);
-  const eligibleEvidence = collectEligibleEvidence(documents);
+  const eligibleEvidence = await evidenceEligibleForEmbedding(companyId, collectEligibleEvidence(documents));
   const embeddingRequests = [
     ...(queryText
       ? [

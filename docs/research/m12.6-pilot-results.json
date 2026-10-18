@@ -1,0 +1,157 @@
+{
+  "label": ["RESEARCH_ONLY", "NOT_RECRUITER_OUTCOMES", "NOT_M14_DATASET"],
+  "artifact": "m12.6-pilot-results",
+  "supersedes": null,
+  "sourceManifest": "docs/research/m12.3-pilot-manifest.json",
+  "sourceManifestUnchanged": true,
+  "protocol": "v1-human-relevance",
+  "note": "Factual record of four M12 judgments collected in the M12.4 pilot. Agreement is not M14 eligibility. No winner is chosen for a disagreement.",
+  "companyId": 1,
+  "jobId": 1,
+  "jobSpecificationVersionId": 1,
+  "specificationStatus": "PUBLISHED",
+  "retrievalJoins": {
+    "role": "research-side temporal join only; not stored on the judgment rows",
+    "runs": [
+      {
+        "method": "M8",
+        "runId": 1,
+        "jobSpecificationVersionId": 1,
+        "completedAt": "2026-10-07T08:09:21.235Z"
+      },
+      {
+        "method": "M9",
+        "runId": 1,
+        "jobSpecificationVersionId": 1,
+        "completedAt": "2026-10-07T08:09:58.749Z"
+      },
+      {
+        "method": "M10",
+        "runId": 1,
+        "jobSpecificationVersionId": 1,
+        "completedAt": "2026-10-07T08:20:50.423Z"
+      }
+    ],
+    "cutoff": "Each run completedAt is before each judgment createdAt below."
+  },
+  "applications": [
+    {
+      "applicationId": 5,
+      "labelOutcome": "AGREEMENT",
+      "datasetEligibility": "INELIGIBLE",
+      "eligibilityReason": "Labels agree and hashes match, but the frozen M12.3 manifest does not record these judgment ids, evidence 10, or a blind-surface confirmation. Agreement is not automatic eligibility.",
+      "evidence": [
+        {
+          "evidenceId": 6,
+          "applicationId": 5,
+          "currentlyEligible": true,
+          "storedHashMatchesCurrent": true,
+          "contentSha256": "b78a58d9ddb4881de2d148f6f56847a90faf0212cb2d3cf43bba7459c9212366"
+        },
+        {
+          "evidenceId": 7,
+          "applicationId": 5,
+          "currentlyEligible": true,
+          "storedHashMatchesCurrent": true,
+          "contentSha256": "70764d612efb79c26b7904945cea357f8811874712432ad6b5919ebe81748e9c"
+        },
+        {
+          "evidenceId": 10,
+          "applicationId": null,
+          "candidateId": 5,
+          "companyId": 1,
+          "currentlyEligible": true,
+          "storedHashMatchesCurrent": true,
+          "contentSha256": "55b68ae388c4eb2bcd2257af1e2bcf05ca49281edf3371ae9d799aae8230d2f4",
+          "manifestNote": "Omitted from the M12.3 manifest because that inventory listed only rows whose applicationId was 5 or 7. M12 also treats evidence with a null applicationId as eligible when it is the same company and candidate, not revoked, and not superseded. This row meets that rule. The evidence row was not changed."
+        }
+      ],
+      "judgments": [
+        {
+          "judgmentId": 21,
+          "reviewerUserId": 2,
+          "reviewerRole": "CLIENT",
+          "label": "RELEVANT",
+          "createdAt": "2026-10-14T06:21:53.480Z",
+          "companyId": 1,
+          "jobId": 1,
+          "applicationId": 5,
+          "jobSpecificationVersionId": 1,
+          "protocolVersion": "v1-human-relevance",
+          "supersededById": null
+        },
+        {
+          "judgmentId": 23,
+          "reviewerUserId": 3,
+          "reviewerRole": "CLIENT",
+          "label": "RELEVANT",
+          "createdAt": "2026-10-14T06:25:19.040Z",
+          "companyId": 1,
+          "jobId": 1,
+          "applicationId": 5,
+          "jobSpecificationVersionId": 1,
+          "protocolVersion": "v1-human-relevance",
+          "supersededById": null
+        }
+      ]
+    },
+    {
+      "applicationId": 7,
+      "labelOutcome": "UNRESOLVED_DISAGREEMENT",
+      "datasetEligibility": "INELIGIBLE",
+      "eligibilityReason": "The two current labels differ and neither judgment is superseded. No adjudication judgment exists. No winning label is recorded.",
+      "evidence": [
+        {
+          "evidenceId": 11,
+          "applicationId": 7,
+          "currentlyEligible": true,
+          "storedHashMatchesCurrent": true,
+          "contentSha256": "b78a58d9ddb4881de2d148f6f56847a90faf0212cb2d3cf43bba7459c9212366"
+        },
+        {
+          "evidenceId": 12,
+          "applicationId": 7,
+          "currentlyEligible": true,
+          "storedHashMatchesCurrent": true,
+          "contentSha256": "70764d612efb79c26b7904945cea357f8811874712432ad6b5919ebe81748e9c"
+        }
+      ],
+      "judgments": [
+        {
+          "judgmentId": 22,
+          "reviewerUserId": 2,
+          "reviewerRole": "CLIENT",
+          "label": "RELEVANT",
+          "createdAt": "2026-10-14T06:22:14.761Z",
+          "companyId": 1,
+          "jobId": 1,
+          "applicationId": 7,
+          "jobSpecificationVersionId": 1,
+          "protocolVersion": "v1-human-relevance",
+          "supersededById": null
+        },
+        {
+          "judgmentId": 24,
+          "reviewerUserId": 3,
+          "reviewerRole": "CLIENT",
+          "label": "NOT_RELEVANT",
+          "createdAt": "2026-10-14T06:25:32.713Z",
+          "companyId": 1,
+          "jobId": 1,
+          "applicationId": 7,
+          "jobSpecificationVersionId": 1,
+          "protocolVersion": "v1-human-relevance",
+          "supersededById": null
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "blindCollectionPage": "NOT_VERIFIED",
+    "blindCollectionReason": "The database does not record which page was open. The existence of the blind route is not proof it was used.",
+    "distinctHumanOperators": "OPERATOR_CONFIRMED",
+    "distinctHumanOperatorsReason": "The M12.5 request states that the operator reports two different humans. The database only shows two Client accounts, user 2 and user 3. Account ids are not proof of two people.",
+    "adjudicationPerformed": false,
+    "m14Dataset": false
+  }
+}

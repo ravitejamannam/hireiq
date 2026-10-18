@@ -72,6 +72,11 @@ export type MatchingSpecInput = {
   location: string | null;
   mustHaveRequirements: string | null;
   niceToHaveRequirements: string | null;
+  screeningQuestions?: string[];
+  rubricCriteria?: string[];
+  resumeText?: string | null;
+  profileLocation?: string | null;
+  verifiedProse?: string[];
 };
 
 export type RequirementMatchDraft = {

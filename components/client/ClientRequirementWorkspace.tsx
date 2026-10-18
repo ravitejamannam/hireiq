@@ -18,6 +18,10 @@ import {
 } from "@/components/client/client-labels";
 import ClientRequirementCandidates from "@/components/client/ClientRequirementCandidates";
 import ClientRequirementNav from "@/components/client/ClientRequirementNav";
+import JobDescriptionAiPanel from "@/components/client/JobDescriptionAiPanel";
+import RequirementApprovalPanel, {
+  type RequirementApprovalRow,
+} from "@/components/client/RequirementApprovalPanel";
 import JobDistributionPanel from "@/components/client/JobDistributionPanel";
 import type { ClientCandidateCardData } from "@/components/client/ClientCandidateCard";
 import JobPostingDetail from "@/components/jobs/JobPostingDetail";
@@ -82,6 +86,7 @@ type ClientRequirementWorkspaceProps = {
   distributions: SafeJobDistribution[];
   assessmentLeaderboard?: AssessmentLeaderboardPage | null;
   hiringDesk?: RequirementHiringDesk | null;
+  requirementRows?: RequirementApprovalRow[];
 };
 
 function lifecycleGuidance(lifecycle: RequirementLifecycle) {
@@ -138,6 +143,7 @@ export default function ClientRequirementWorkspace({
   distributions,
   assessmentLeaderboard,
   hiringDesk,
+  requirementRows = [],
 }: ClientRequirementWorkspaceProps) {
   const [section, setSection] = useState<"overview" | "candidates">(
     initialSection,
@@ -202,6 +208,15 @@ export default function ClientRequirementWorkspace({
               />
             </div>
           ) : null}
+
+          <JobDescriptionAiPanel
+            jobId={requirement.id}
+            currentJobDescription={requirement.jobDescription}
+            aiProposedJobDescription={requirement.aiProposedJobDescription}
+            aiGenerationStatus={requirement.aiGenerationStatus}
+          />
+
+          <RequirementApprovalPanel jobId={requirement.id} rows={requirementRows} />
 
           <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-6">
             <JobPostingDetail

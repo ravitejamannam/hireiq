@@ -69,7 +69,10 @@ export async function POST(
       return NextResponse.json({ ok: false, error: error.message }, { status: 429, headers: NO_STORE });
     }
     if (error instanceof HostedResumeError) {
-      return NextResponse.json({ ok: false, error: error.code }, { status: 400, headers: NO_STORE });
+      const message = error.code === "UNSUPPORTED_FILE_TYPE"
+        ? "Upload a PDF, Word (.docx), or plain text file. Photos, older Word .doc files, and zip archives are not accepted."
+        : error.code;
+      return NextResponse.json({ ok: false, error: error.code, message }, { status: 400, headers: NO_STORE });
     }
     console.error("[hosted-resume] upload failed", error);
     return NextResponse.json({ ok: false, error: "UPLOAD_FAILED" }, { status: 500, headers: NO_STORE });

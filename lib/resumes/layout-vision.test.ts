@@ -1,34 +1,88 @@
-import { mkdir } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { textLooksColumnJumbled } from "@/lib/resumes/extraction-quality";
-import { LABELLED_RESUME_DIR, recall, scoreLabelledResumes } from "@/lib/resumes/labelled-fixtures";
+import { transcribeResumePage } from "@/lib/resumes/layout-vision";
 
-describe("textLooksColumnJumbled", () => {
-  it("flags a page that came back as many short lines", () => {
-    const jumbled = Array.from({ length: 16 }, (_, index) => (index % 2 === 0 ? "React" : "2019")).join("\n");
-    expect(textLooksColumnJumbled(jumbled)).toBe(true);
+const image = new Uint8Array([1, 2, 3, 4]);
+
+function audit(optedOut: boolean) {
+  const created: unknown[] = [];
+  return {
+    created,
+    scope: {
+      companyId: 9,
+      entityType: "Application",
+      entityId: 44,
+      applicationId: 44,
+      pageCount: 2,
+      pageIndex: 0,
+      db: {
+        application: {
+          findUnique: async () => ({ aiEvaluationOptOut: optedOut }),
+        },
+        aIRun: {
+          create: async ({ data }: { data: unknown }) => {
+            created.push(data);
+            return data;
+          },
+        },
+      },
+    },
+  };
+}
+
+describe("transcribeResumePage", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
-  it("leaves a normal paragraph resume alone", () => {
-    const prose = "Software engineer at Example Co. Built hiring systems for three years.\n".repeat(8);
-    expect(textLooksColumnJumbled(prose)).toBe(false);
-  });
-});
+  it("does not call the vision model when the application opted out", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { created, scope } = audit(true);
 
-describe("labelled resume fixtures", () => {
-  it("counts every labelled job and skill, not just the first", () => {
-    expect(recall(["Software Engineer", "Analyst"], ["Software Engineer"])).toBe(0.5);
-    expect(recall(["React", "SQL"], ["React", "SQL"])).toBe(1);
-    expect(recall([], ["React"])).toBeNull();
+    const text = await transcribeResumePage(image, scope);
+
+    expect(text).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(created).toHaveLength(0);
   });
 
-  it("scores the redacted files when they exist", async () => {
-    await mkdir(LABELLED_RESUME_DIR, { recursive: true });
-    const result = await scoreLabelledResumes();
-    expect(result.count).toBeGreaterThanOrEqual(0);
-    if (result.count > 0) {
-      expect(result.accuracy.titles === null || typeof result.accuracy.titles === "number").toBe(true);
-    }
+  it("persists an AIRun when evaluation is allowed", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "Jane Doe\nEngineer" } }],
+          usage: { prompt_tokens: 11, completion_tokens: 4 },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { created, scope } = audit(false);
+
+    const text = await transcribeResumePage(image, scope);
+
+    expect(text).toBe("Jane Doe\nEngineer");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({
+      companyId: 9,
+      feature: "resume_vision",
+      entityType: "Application",
+      entityId: 44,
+      modelId: "gpt-4o-mini",
+      promptVersion: "resume-vision-1",
+      reviewerAction: "PENDING",
+      promptTokens: 11,
+      completionTokens: 4,
+      outputJson: { pageCount: 2, pageIndex: 0, textLength: "Jane Doe\nEngineer".length, error: null },
+    });
+    const output = JSON.stringify((created[0] as { outputJson: unknown }).outputJson);
+    expect(output).not.toContain("Jane Doe");
+    const stored = created[0] as { inputHash: string };
+    expect(stored.inputHash).toMatch(/^[a-f0-9]{64}$/);
   });
 });

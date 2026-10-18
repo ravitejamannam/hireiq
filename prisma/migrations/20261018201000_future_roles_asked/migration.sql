@@ -1,0 +1,1 @@
+ALTER TABLE "Candidate" ADD COLUMN IF NOT EXISTS "futureRolesAskedAt" TIMESTAMP(3);

@@ -79,6 +79,7 @@ export async function getPublishedSpecForJobIntelligence(
       experienceRange: true,
       jobDescription: true,
       evaluationCriteria: true,
+      structuredPayload: true,
       job: { select: { id: true, companyId: true } },
     },
   });

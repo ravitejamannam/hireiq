@@ -32,6 +32,21 @@ describe("heuristicResumeFields", () => {
     });
   });
 
+  it("reads an Indeed title line, the company line under it, and an Indian degree", () => {
+    const source = [
+      "Work Experience",
+      "Senior Consultant",
+      "Northwind Labs",
+      "January 2019 to March 2022",
+      "Education",
+      "B.Sc. in Computer Science",
+    ].join("\n");
+    const fields = heuristicResumeFields(source);
+    expect(fields?.experience[0]?.title.value).toBe("Senior Consultant");
+    expect(fields?.experience[0]?.organization?.value).toBe("Northwind Labs");
+    expect(fields?.education.some((row) => row.credential.value === "B.Sc")).toBe(true);
+  });
+
   it("does not invent a name or change the source text", () => {
     const source = "skills: nothing written as a person\nworked somewhere";
     const snapshot = source;

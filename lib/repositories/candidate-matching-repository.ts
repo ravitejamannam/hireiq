@@ -66,6 +66,7 @@ export type MatchingApplicationRow = {
   candidate: {
     id: number;
     companyId: number;
+    location: string | null;
   };
 };
 
@@ -79,6 +80,7 @@ export type MatchingSpecRow = {
   location: string | null;
   mustHaveRequirements: string | null;
   niceToHaveRequirements: string | null;
+  structuredPayload?: unknown;
 };
 
 export type MatchingEvidenceRow = {
@@ -139,7 +141,7 @@ export async function getApplicationForMatching(
         select: { id: true, companyId: true, title: true },
       },
       candidate: {
-        select: { id: true, companyId: true },
+        select: { id: true, companyId: true, location: true },
       },
     },
   });
@@ -160,7 +162,7 @@ export async function getApplicationForMatching(
         select: { id: true, companyId: true, title: true },
       },
       candidate: {
-        select: { id: true, companyId: true },
+        select: { id: true, companyId: true, location: true },
       },
     },
   });
@@ -182,6 +184,7 @@ export async function getSpecificationForMatching(
       location: true,
       mustHaveRequirements: true,
       niceToHaveRequirements: true,
+      structuredPayload: true,
     },
   });
 }

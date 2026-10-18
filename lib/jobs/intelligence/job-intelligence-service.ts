@@ -19,6 +19,7 @@ import {
   JOB_INTELLIGENCE_SPEC_NOT_PUBLISHED,
   JobIntelligenceError,
 } from "@/lib/jobs/intelligence/job-intelligence-errors";
+import { matcherSignalsFromPayload } from "@/lib/ai/job-description-document";
 import {
   extractJobRequirements,
   hashJobIntelligenceInput,
@@ -137,6 +138,7 @@ export async function executeRunJobIntelligence(input: {
     );
   }
 
+  const signals = matcherSignalsFromPayload(spec.structuredPayload);
   const extractionInput = {
     title: spec.title,
     primarySkills: spec.primarySkills,
@@ -146,6 +148,8 @@ export async function executeRunJobIntelligence(input: {
     experienceRange: spec.experienceRange,
     jobDescription: spec.jobDescription,
     evaluationCriteria: spec.evaluationCriteria,
+    screeningQuestions: signals.screeningQuestions,
+    rubricCriteria: signals.rubricCriteria,
   };
   const inputHash = hashJobIntelligenceInput(extractionInput);
   const key: JobIntelligenceIdempotencyKey = {

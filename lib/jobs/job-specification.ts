@@ -8,6 +8,7 @@ import {
 
 import { AssessmentError } from "@/lib/assessments/assessment-errors";
 import { snapshotAssessmentQuestionIds } from "@/lib/assessments/assessment-snapshot";
+import { parseRequirementChecks } from "@/lib/jobs/requirement-checks";
 import { prisma } from "@/lib/prisma";
 import { getPrismaErrorCode } from "@/lib/prisma-error";
 import {
@@ -299,6 +300,16 @@ export async function upsertDraftSpecification(input: {
 
   const db = input.db ?? prisma;
   const fields = specFieldsFromRecord(input.fields);
+  const requirementChecks = [
+    ...parseRequirementChecks(fields.mustHaveRequirements, "mustHaveRequirements"),
+    ...parseRequirementChecks(fields.niceToHaveRequirements, "niceToHaveRequirements"),
+  ];
+  const structuredPayload = {
+    ...(input.structuredPayload && typeof input.structuredPayload === "object" && !Array.isArray(input.structuredPayload)
+      ? input.structuredPayload
+      : { schemaVersion: 1, legacy: true }),
+    requirementChecks,
+  } as Prisma.InputJsonValue;
   const existing = await loadDraft(db, input.jobId);
 
   if (existing) {
@@ -327,9 +338,7 @@ export async function upsertDraftSpecification(input: {
       data: {
         ...fields,
         createdByUserId: input.createdByUserId ?? existing.createdByUserId,
-        ...(input.structuredPayload
-          ? { structuredPayload: input.structuredPayload }
-          : {}),
+        structuredPayload,
       },
     });
 
@@ -353,7 +362,7 @@ export async function upsertDraftSpecification(input: {
       versionNumber: await nextVersionNumber(db, input.jobId),
       status: JobSpecificationVersionStatus.DRAFT,
       createdByUserId: input.createdByUserId ?? null,
-      structuredPayload: input.structuredPayload ?? LEGACY_STRUCTURED_PAYLOAD,
+      structuredPayload,
       ...fields,
     },
   });
@@ -381,6 +390,26 @@ export async function publishDraftSpecification(input: {
   });
 
   const draft = await loadDraft(input.db, input.jobId);
+  if (draft) {
+    const attached = await input.db.jobRequirement.count({
+      where: { jobSpecificationVersionId: draft.id },
+    });
+    if (attached > 0) {
+      const approved = await input.db.jobRequirement.count({
+        where: {
+          jobSpecificationVersionId: draft.id,
+          approvalStatus: "APPROVED",
+          requirementType: "REQUIRED",
+          evidenceType: { not: null },
+        },
+      });
+      if (approved < 1) {
+        throw new Error(
+          "Publish needs at least one approved required item with an evidence type.",
+        );
+      }
+    }
+  }
   const canonical = draft ? specFieldsFromRecord(draft) : specFieldsFromRecord(job);
   const completed = validateJobRequirementCompletion(canonical);
 
@@ -444,6 +473,11 @@ export async function publishDraftSpecification(input: {
       where: { id: draft.id },
     });
   }
+
+  const publishedJobId = input.jobId;
+  queueMicrotask(() => {
+    void import("@/lib/talent/rediscovery-service").then((mod) => mod.runTalentRediscovery({ jobId: publishedJobId }).catch(() => undefined));
+  });
 
   return published;
 }

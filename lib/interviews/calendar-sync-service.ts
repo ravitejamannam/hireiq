@@ -25,7 +25,17 @@ import {
 const AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const FREEBUSY_URL = "https://www.googleapis.com/calendar/v3/freeBusy";
-const SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+export const CALENDAR_OAUTH_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.freebusy",
+  "https://www.googleapis.com/auth/calendar.events",
+].join(" ");
+
+const SCOPE = CALENDAR_OAUTH_SCOPES;
+
+/** Connections saved before event-write scope cannot create Meet links. */
+export function calendarNeedsReconnect(grantedScopes: string | null | undefined) {
+  return !grantedScopes?.includes("https://www.googleapis.com/auth/calendar.events");
+}
 
 export class CalendarSyncError extends Error {
   readonly code: string;
@@ -209,6 +219,102 @@ export function proposeSlotsFromFreeBusy(input: {
   }
 
   return proposals.filter((p) => p.startAt.getTime() > Date.now());
+}
+
+export function googleMeetEventBody(input: {
+  summary: string;
+  start: Date;
+  end: Date;
+  attendees: string[];
+  requestId: string;
+}) {
+  return {
+    summary: input.summary,
+    start: { dateTime: input.start.toISOString(), timeZone: "Asia/Kolkata" },
+    end: { dateTime: input.end.toISOString(), timeZone: "Asia/Kolkata" },
+    attendees: input.attendees.filter(Boolean).map((email) => ({ email })),
+    conferenceData: {
+      createRequest: {
+        requestId: input.requestId,
+        conferenceSolutionKey: { type: "hangoutsMeet" },
+      },
+    },
+  };
+}
+
+export async function createGoogleMeetEvent(input: {
+  userId: number;
+  summary: string;
+  start: Date;
+  end: Date;
+  attendees: string[];
+  requestId: string;
+}): Promise<{ eventId: string; meetUrl: string | null } | null> {
+  let token: string;
+  try {
+    token = await validAccessToken(input.userId);
+  } catch {
+    return null;
+  }
+  const response = await fetch(
+    "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all",
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(googleMeetEventBody(input)),
+    },
+  );
+  if (!response.ok) return null;
+  const json = (await response.json()) as {
+    id?: string;
+    hangoutLink?: string;
+    conferenceData?: { entryPoints?: Array<{ uri?: string }> };
+  };
+  if (!json.id) return null;
+  return {
+    eventId: json.id,
+    meetUrl: json.hangoutLink ?? json.conferenceData?.entryPoints?.find((entry) => entry.uri)?.uri ?? null,
+  };
+}
+
+export async function updateGoogleMeetEvent(input: {
+  userId: number;
+  eventId: string;
+  start: Date;
+  end: Date;
+}) {
+  let token: string;
+  try {
+    token = await validAccessToken(input.userId);
+  } catch {
+    return false;
+  }
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(input.eventId)}?sendUpdates=all`,
+    {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        start: { dateTime: input.start.toISOString(), timeZone: "Asia/Kolkata" },
+        end: { dateTime: input.end.toISOString(), timeZone: "Asia/Kolkata" },
+      }),
+    },
+  );
+  return response.ok;
+}
+
+export async function deleteGoogleMeetEvent(input: { userId: number; eventId: string }) {
+  let token: string;
+  try {
+    token = await validAccessToken(input.userId);
+  } catch {
+    return false;
+  }
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(input.eventId)}?sendUpdates=all`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+  );
+  return response.ok || response.status === 404;
 }
 
 /** Query Google freeBusy and persist generated OPEN slots for a job. */

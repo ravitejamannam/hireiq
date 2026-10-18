@@ -35,6 +35,7 @@ import {
   acceptGeneratedJobDescriptionForActor,
   discardGeneratedJobDescriptionForActor,
   generateJobDescriptionForActor,
+  regenerateJobDescriptionSectionForActor,
 } from "@/lib/jobs/job-description-ai";
 import { requirementCreateFailureMessage } from "@/lib/jobs/requirement-create-errors";
 import { createPostedRequirementForCompany } from "@/lib/jobs/posted-requirement";
@@ -420,15 +421,35 @@ export async function assignInterviewerToJob(
   return job;
 }
 
-export async function generateJobDescription(jobId: number) {
+export async function generateJobDescription(jobId: number, controls?: unknown) {
   const actor = await requireJobDescriptionAiActor();
   const validatedJobId = validateJobId(jobId);
   const version = await generateJobDescriptionForActor({
     jobId: validatedJobId,
     actor,
+    controls,
   });
   revalidateClientRequirementPaths(validatedJobId);
   return version;
+}
+
+export async function regenerateJobDescriptionSection(
+  jobId: number,
+  section: string,
+  instruction: string,
+  controls?: unknown,
+) {
+  const actor = await requireJobDescriptionAiActor();
+  const validatedJobId = validateJobId(jobId);
+  const proposal = await regenerateJobDescriptionSectionForActor({
+    jobId: validatedJobId,
+    actor,
+    section,
+    instruction,
+    controls,
+  });
+  revalidateClientRequirementPaths(validatedJobId);
+  return proposal;
 }
 
 export async function acceptGeneratedJobDescription(jobId: number) {

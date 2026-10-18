@@ -167,7 +167,7 @@ export async function listApplicationsForJobRanking(
   db: Db = prisma,
 ): Promise<RankingApplicationRow[]> {
   return db.application.findMany({
-    where: { jobId, companyId },
+    where: { jobId, companyId, aiEvaluationOptOut: false },
     select: {
       id: true,
       companyId: true,

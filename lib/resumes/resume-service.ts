@@ -14,6 +14,8 @@ import {
   persistAfterResumeExtract,
   releaseReplacedResumeObject,
 } from "@/lib/resumes/resume-upload-cleanup";
+import type { ResumeVisionAudit } from "@/lib/resumes/layout-vision";
+import { analyseParsedCandidate } from "@/lib/resumes/analyse-after-parse";
 import {
   extractResumeText,
   RESUME_TEXT_EXTRACTOR_VERSION,
@@ -187,6 +189,13 @@ export async function uploadResumeForAdmin(input: {
         fileName,
         contentType: typeof input.file.type === "string" ? input.file.type : undefined,
         ocr: "skip",
+        visionAudit: {
+          companyId: candidate.companyId,
+          entityType: applicationId ? "Application" : "Candidate",
+          entityId: applicationId ?? candidateId,
+          applicationId,
+          db: prisma as unknown as ResumeVisionAudit["db"],
+        },
       }),
     persist: async (extraction) => {
   // Dedup semantics (§42): identical content that already PARSED is a
@@ -276,7 +285,14 @@ export async function uploadResumeForAdmin(input: {
     },
   });
 
-  if (owned.kind === "duplicate") return owned.response;
+  if (owned.kind === "duplicate") {
+    await analyseParsedCandidate({
+      candidateId,
+      companyId: candidate.companyId,
+      applicationId,
+    }).catch((error) => console.error("[analyse] after duplicate parse", error));
+    return owned.response;
+  }
   const { extraction, document, replacedKey } = owned;
   if (replacedKey) {
     await releaseReplacedResumeObject({
@@ -326,6 +342,12 @@ export async function uploadResumeForAdmin(input: {
       createdAt: document.createdAt,
     });
   }
+
+  await analyseParsedCandidate({
+    candidateId,
+    companyId: candidate.companyId,
+    applicationId,
+  }).catch((error) => console.error("[analyse] after parse", error));
 
   return {
     id: document.id,

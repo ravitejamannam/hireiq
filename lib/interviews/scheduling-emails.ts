@@ -26,6 +26,8 @@ export type BookingEmailInput = {
   companyName: string;
   scheduledAt: Date;
   durationMinutes: number;
+  meetUrl?: string | null;
+  candidateUnsubscribed?: boolean;
 };
 
 function fmt(date: Date): string {
@@ -57,6 +59,7 @@ export function buildBookingEmails(
       `When: ${when}`,
       `Duration: ${input.durationMinutes} minutes`,
       `Interviewer: ${input.interviewerName}`,
+      input.meetUrl ? `Google Meet: ${input.meetUrl}` : "",
       ``,
       `Good luck!`,
       `— HireIQ on behalf of ${input.companyName}`,
@@ -111,6 +114,7 @@ export async function deliverBookingConfirmation(
   let outcome: "SENT" | "PROVIDER_NOT_CONFIGURED" | "MISSING_RECIPIENT" | "PROVIDER_ERROR" =
     input.candidateEmail.trim() ? "SENT" : "MISSING_RECIPIENT";
   const emails = buildBookingEmails(input);
+  if (input.candidateUnsubscribed) emails.splice(0, 1);
 
   const order = [emails[0], emails[1]];
   for (const email of order) {

@@ -111,6 +111,11 @@ export async function executeRunDeterministicIntelligence(input: {
       INTELLIGENCE_EVIDENCE_SUPERSEDED,
     );
   }
+  const { assertAIEvaluationAllowed } = await import("@/lib/ai/opt-out");
+  await assertAIEvaluationAllowed({
+    candidateId: evidence.candidateId,
+    companyId: evidence.companyId,
+  });
 
   const key: IntelligenceRunKey = {
     companyId: evidence.companyId,

@@ -82,7 +82,11 @@ export async function loadOrCreateRetrievalEmbeddings(input: {
     return vectors;
   }
 
-  const embedded = await embedRetrievalTexts(missing.map((row) => row.text));
+  const embedded = await embedRetrievalTexts(missing.map((row) => row.text), {
+    companyId: input.identity.companyId,
+    entityType: "Company",
+    entityId: input.identity.companyId,
+  });
   if (
     embedded.provider !== input.identity.modelProvider ||
     embedded.model !== input.identity.modelName ||

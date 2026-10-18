@@ -22,6 +22,7 @@ import { getClientApplicationsForRequirement } from "@/lib/repositories/applicat
 import { getJobById } from "@/lib/repositories/job-repository";
 import { getAssessmentLeaderboardForJob } from "@/lib/assessments/assessment-service";
 import { getRequirementHiringDesk } from "@/lib/hiring/requirement-desk";
+import { prisma } from "@/lib/prisma";
 
 type ClientRequirementDetailPageProps = {
   params: Promise<{
@@ -108,6 +109,18 @@ export default async function ClientRequirementDetailPage({
     },
   );
 
+  const requirementRows = await prisma.jobRequirement.findMany({
+    where: { jobId: requirementId, companyId: client.companyId },
+    orderBy: { displayOrder: "asc" },
+    select: {
+      id: true,
+      sourceText: true,
+      requirementType: true,
+      evidenceType: true,
+      approvalStatus: true,
+    },
+  });
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center gap-4">
@@ -178,6 +191,7 @@ export default async function ClientRequirementDetailPage({
         distributions={distributions}
         assessmentLeaderboard={assessmentLeaderboard}
         hiringDesk={hiringDesk}
+        requirementRows={requirementRows}
       />
     </div>
   );

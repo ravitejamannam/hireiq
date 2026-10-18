@@ -32,6 +32,11 @@ export const SKILL_CONCEPT_CATALOG: CatalogConcept[] = [
   { canonicalKey: "mysql", displayName: "MySQL", aliases: ["mysql"] },
   { canonicalKey: "golang", displayName: "Go", aliases: ["go", "golang"] },
   {
+    canonicalKey: "redis",
+    displayName: "Redis",
+    aliases: ["redis"],
+  },
+  {
     canonicalKey: "kubernetes",
     displayName: "Kubernetes",
     aliases: ["kubernetes", "k8s"],

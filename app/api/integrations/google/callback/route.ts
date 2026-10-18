@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { encryptCredentialSecret } from "@/lib/crypto/credential-encryption";
+import { CALENDAR_OAUTH_SCOPES } from "@/lib/interviews/calendar-sync-service";
 
 export const dynamic = "force-dynamic";
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -66,12 +67,14 @@ export async function GET(request: Request) {
         accessTokenEnc: encryptCredentialSecret(tokens.access_token),
         refreshTokenEnc: encryptCredentialSecret(tokens.refresh_token),
         expiresAt: new Date(Date.now() + Math.min(tokens.expires_in ?? 3600, 3000) * 1000),
+        grantedScopes: CALENDAR_OAUTH_SCOPES,
       },
       create: {
         userId,
         accessTokenEnc: encryptCredentialSecret(tokens.access_token),
         refreshTokenEnc: encryptCredentialSecret(tokens.refresh_token),
         expiresAt: new Date(Date.now() + Math.min(tokens.expires_in ?? 3600, 3000) * 1000),
+        grantedScopes: CALENDAR_OAUTH_SCOPES,
       },
     });
 

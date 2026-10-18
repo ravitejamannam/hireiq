@@ -8,4 +8,6 @@ export async function register() {
 
   const { assertProductionEnv } = await import("@/lib/production/assert-env");
   assertProductionEnv();
+  const { assertAuditLogTriggers } = await import("@/lib/audit/assert-audit-trigger");
+  await assertAuditLogTriggers();
 }

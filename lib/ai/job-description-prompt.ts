@@ -4,7 +4,9 @@ import {
 } from "@/lib/ai/job-description-output";
 import type { JobSpecificationScalarFields } from "@/lib/jobs/job-specification";
 
-export const JOB_DESCRIPTION_PROMPT_VERSION = "v1";
+import type { JdControls, JdSection } from "@/lib/ai/job-description-document";
+
+export const JOB_DESCRIPTION_PROMPT_VERSION = "v2";
 
 export type JobDescriptionAiInput = JobSpecificationScalarFields & {
   structuredPayload: unknown;
@@ -53,13 +55,30 @@ If a section has no source information, omit the section rather than fabricating
 
 Preferred sections when source data exists: Overview, Responsibilities, Required Qualifications, Preferred Qualifications, Evaluation/Success Expectations.
 
-Produce only the requested structured output: { "jobDescription": string }.
-Do not change any field except the generated jobDescription text.
-Do not expose internal HireIQ information.`;
+Return the JSON schema fields only. screeningQuestions and scoringRubric must be derived from the supplied must-have skills so a resume matcher can reuse them.
 
-export function buildJobDescriptionUserPayload(input: JobDescriptionAiInput) {
+Do not invent salary, perks, headcount, tech stack, or company facts. If compensation, location, or benefits were not supplied, return null or an empty list for those fields.
+
+Do not expose internal HireIQ information.
+
+The controls.length value is mandatory and describes the rendered description, which is what gets published. short means about 80 to 120 words. standard means about 140 to 180 words. detailed means about 200 words, not a 400-word essay. Do not ignore length and write the same short summary for every setting.`;
+
+export function buildJobDescriptionUserPayload(
+  input: JobDescriptionAiInput,
+  controls?: JdControls,
+  section?: { key: JdSection; instruction: string },
+) {
   const payload = {
     promptVersion: JOB_DESCRIPTION_PROMPT_VERSION,
+    controls: controls ?? null,
+    lengthInstruction: controls
+      ? controls.length === "short"
+        ? "Rendered description must be about 80 to 120 words."
+        : controls.length === "detailed"
+          ? "Rendered description must be about 200 words."
+          : "Rendered description must be about 140 to 180 words."
+      : null,
+    rewriteSection: section ?? null,
     hiringRequirements: {
       title: input.title,
       roleCategory: input.roleCategory,

@@ -17,12 +17,14 @@ import {
 import {
   CandidateIntelligenceError,
   INTELLIGENCE_AI_IN_PROGRESS,
+  INTELLIGENCE_AI_OPT_OUT,
   INTELLIGENCE_EVIDENCE_REVOKED,
   INTELLIGENCE_EVIDENCE_SUPERSEDED,
   INTELLIGENCE_INTERNAL_ERROR,
   INTELLIGENCE_NOT_FOUND,
   INTELLIGENCE_UNCHANGED_ERROR,
 } from "@/lib/candidates/intelligence/intelligence-errors";
+import { AiEvaluationOptOutError, assertAIEvaluationAllowed } from "@/lib/ai/opt-out";
 import {
   extractClaimsFromEvidenceText,
   getCandidateIntelligenceAiModel,
@@ -298,6 +300,21 @@ export async function executeGenerateCandidateIntelligence(input: {
     );
   }
 
+  try {
+    await assertAIEvaluationAllowed({
+      candidateId: evidence.candidateId,
+      companyId: evidence.companyId,
+    });
+  } catch (error) {
+    if (error instanceof AiEvaluationOptOutError) {
+      throw new CandidateIntelligenceError(
+        "Candidate opted out of AI evaluation.",
+        INTELLIGENCE_AI_OPT_OUT,
+      );
+    }
+    throw error;
+  }
+
   const provider = getCandidateIntelligenceAiProviderLabel();
   const model = getCandidateIntelligenceAiModel();
   const key = currentRunKey(evidence, provider, model);
@@ -349,7 +366,15 @@ export async function executeGenerateCandidateIntelligence(input: {
   }
 
   try {
-    const claims = await extractClaimsFromEvidenceText(inlineText);
+    const claims = await extractClaimsFromEvidenceText(inlineText, {
+      optedOut: false,
+      scope: {
+        companyId: evidence.companyId,
+        entityType: "CandidateEvidence",
+        entityId: evidence.id,
+        db: prisma as never,
+      },
+    });
     return completeRunWithClaims({
       runId: run.id,
       key,

@@ -25,6 +25,8 @@ export type AuthUser = {
   role: PortalRole;
   companyId: number | null;
   interviewerId: number | null;
+  /** True only for a platform operator: admin, no company, and never a company member. */
+  platformOperator?: boolean;
 };
 
 const authUserSelect = {
@@ -47,6 +49,12 @@ function denyResource(): never {
   throw new AuthorizationError("Resource not found.");
 }
 
+export function deniesCrossCompany(user: AuthUser, resourceCompanyId: number) {
+  if (user.platformOperator) return false;
+  if (user.companyId == null) return true;
+  return user.companyId !== resourceCompanyId;
+}
+
 function toAuthUser(user: UserAuthorizationRow): AuthUser {
   return {
     id: user.id,
@@ -55,6 +63,7 @@ function toAuthUser(user: UserAuthorizationRow): AuthUser {
     role: user.role,
     companyId: user.companyId,
     interviewerId: user.interviewerId,
+    platformOperator: user.platformOperator === true,
   };
 }
 
@@ -78,41 +87,45 @@ export function assertClientEmailVerified(emailVerifiedAt: Date | null) {
 export async function hydrateAuthUser(
   user: UserAuthorizationRow,
 ): Promise<UserAuthorizationRow> {
-  if (user.role !== PortalRole.CLIENT) {
-    return user;
-  }
-
   const memberships = await prisma.organizationMember.findMany({
-    where: {
-      userId: user.id,
-      status: "ACTIVE",
-    },
-    select: {
-      companyId: true,
-    },
+    where: { userId: user.id },
+    select: { companyId: true, status: true },
   });
+  const active = memberships.filter((row) => row.status === "ACTIVE");
+  const activeCompanies = new Set(active.map((row) => row.companyId));
 
-  if (memberships.length > 1) {
+  if (activeCompanies.size > 1) {
     throw new AuthorizationError("Unauthorized.");
   }
 
-  const membership = memberships[0];
+  const activeCompanyId = active[0]?.companyId ?? null;
 
-  if (!membership) {
-    return {
-      ...user,
-      companyId: null,
-    };
+  if (user.role === PortalRole.ADMIN) {
+    if (activeCompanyId != null) {
+      return { ...user, companyId: activeCompanyId, platformOperator: false };
+    }
+    if (user.companyId != null) {
+      return { ...user, platformOperator: false };
+    }
+    if (memberships.length > 0) {
+      return { ...user, companyId: null, platformOperator: false };
+    }
+    return { ...user, companyId: null, platformOperator: true };
   }
 
-  if (user.companyId !== membership.companyId) {
+  if (user.role !== PortalRole.CLIENT) {
+    return { ...user, platformOperator: false };
+  }
+
+  if (activeCompanyId == null) {
+    return { ...user, companyId: null, platformOperator: false };
+  }
+
+  if (user.companyId != null && user.companyId !== activeCompanyId) {
     throw new AuthorizationError("Unauthorized.");
   }
 
-  return {
-    ...user,
-    companyId: membership.companyId,
-  };
+  return { ...user, companyId: activeCompanyId, platformOperator: false };
 }
 
 async function loadSessionUser(): Promise<UserAuthorizationRow> {
@@ -368,6 +381,7 @@ export function assertJobAccessible(
   job: { companyId: number; assignedInterviewerId: number | null },
 ) {
   if (user.role === PortalRole.ADMIN) {
+    if (deniesCrossCompany(user, job.companyId)) denyResource();
     return;
   }
 
@@ -389,8 +403,11 @@ export function assertJobAccessible(
 }
 
 export function jobScopeWhere(user: AuthUser): Prisma.JobWhereInput {
-  if (user.role === PortalRole.ADMIN) {
+  if (user.platformOperator) {
     return {};
+  }
+  if (user.role === PortalRole.ADMIN) {
+    return user.companyId == null ? { id: -1 } : { companyId: user.companyId };
   }
 
   if (user.role === PortalRole.CLIENT) {

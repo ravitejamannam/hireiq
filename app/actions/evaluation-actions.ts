@@ -674,3 +674,47 @@ function translateEvaluationQuestionDeleteError(error: unknown) {
 
   return new Error("Unable to delete evaluation question.");
 }
+
+export async function submitRubricScorecard(input: {
+  applicationId: number;
+  scores: Array<{ criterion: string; score: number }>;
+  notes?: string | null;
+}) {
+  const interviewer = await requireInterviewerPortal();
+  const scores = input.scores.length > 0 ? input.scores : [{ criterion: "Overall", score: Number.NaN }];
+  if (scores.some((row) => !Number.isInteger(row.score) || row.score < 1 || row.score > 5)) {
+    throw new Error("Score each item from 1 to 5.");
+  }
+  const application = await prisma.application.findFirst({
+    where: { id: input.applicationId, job: { assignedInterviewerId: interviewer.interviewerId } },
+    select: { id: true },
+  });
+  if (!application) throw new AuthorizationError();
+  const now = new Date();
+  const overall = Math.round(scores.reduce((sum, row) => sum + row.score, 0) / scores.length);
+  await prisma.evaluation.upsert({
+    where: {
+      applicationId_interviewerId: {
+        applicationId: application.id,
+        interviewerId: interviewer.interviewerId,
+      },
+    },
+    create: {
+      applicationId: application.id,
+      interviewerId: interviewer.interviewerId,
+      overallScore: overall,
+      scorecard: scores,
+      notes: input.notes?.trim() || null,
+      submittedAt: now,
+      evaluatedAt: now,
+    },
+    update: {
+      overallScore: overall,
+      scorecard: scores,
+      notes: input.notes?.trim() || null,
+      submittedAt: now,
+      evaluatedAt: now,
+    },
+  });
+  revalidatePath(`/interviewer/requirements`);
+}

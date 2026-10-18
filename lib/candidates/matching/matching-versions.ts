@@ -1,4 +1,4 @@
-export const MATCHER_VERSION = "v1";
+export const MATCHER_VERSION = "v1-and-split";
 export const REQUIREMENT_PARSE_VERSION = "v1";
 export const ALIAS_MAP_VERSION = "none";
 
@@ -11,6 +11,9 @@ export const MATCH_REASON = {
   REQUIREMENT_UNSUPPORTED: "REQUIREMENT_UNSUPPORTED",
   NO_PUBLISHED_SPEC: "NO_PUBLISHED_SPEC",
   ALIAS_SKILL_MATCH: "ALIAS_SKILL_MATCH",
+  FROM_PROFILE: "FROM_PROFILE",
+  RESUME_TEXT: "RESUME_TEXT",
+  INFERRED: "INFERRED",
 } as const;
 
 export type MatchReasonCode = (typeof MATCH_REASON)[keyof typeof MATCH_REASON];

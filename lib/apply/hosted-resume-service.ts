@@ -10,6 +10,7 @@ import {
   storeResume,
 } from "@/lib/resumes/storage";
 import { abandonNewResumeObject } from "@/lib/resumes/resume-upload-cleanup";
+import type { ResumeVisionAudit } from "@/lib/resumes/layout-vision";
 import {
   extractResumeText,
   RESUME_TEXT_EXTRACTOR_VERSION,
@@ -131,6 +132,12 @@ export async function storePendingHostedResume(input: {
       fileName,
       contentType: typeof input.contentType === "string" ? input.contentType : undefined,
       ocr: "skip",
+      visionAudit: {
+        companyId: tokenRow.distribution.companyId,
+        entityType: "Job",
+        entityId: tokenRow.distribution.jobId,
+        db: prisma as unknown as ResumeVisionAudit["db"],
+      },
     });
   } catch (error) {
     await abandonNewResumeObject(stored.storageKey, error);
@@ -175,7 +182,15 @@ export async function storePendingHostedResume(input: {
     },
     suggest: async () => {
       const suggestion = extraction.ok
-        ? suggestionFromFields((await proposeResumeFields(extraction.text)) ?? {
+        ? suggestionFromFields((await proposeResumeFields(extraction.text, {
+            optedOut: false,
+            scope: {
+              companyId: tokenRow.distribution.companyId,
+              entityType: "Job",
+              entityId: tokenRow.distribution.jobId,
+              db: prisma as never,
+            },
+          })) ?? {
             fullName: null,
             email: null,
             phone: null,

@@ -538,4 +538,32 @@ export const ASSESSMENT_BANK_QUESTIONS: AssessmentBankQuestionSeed[] = [
     weight: 1,
     skillTag: "accounting",
   },
+  {
+    roleCategory: "GRADUATE",
+    sortOrder: 1,
+    prompt: "A graduate trainee is usually expected to...",
+    choices: [
+      "Already lead a department",
+      "Learn the work while contributing to a team",
+      "Skip written communication",
+      "Ignore instructions from a manager",
+    ],
+    correctIndex: 1,
+    weight: 1,
+    skillTag: "learning",
+  },
+  {
+    roleCategory: "GRADUATE",
+    sortOrder: 2,
+    prompt: "Which is a clear way to describe a college project?",
+    choices: [
+      "What you did, what changed, and what you learned",
+      "Only the team size",
+      "The office address",
+      "A list of hobbies",
+    ],
+    correctIndex: 0,
+    weight: 1,
+    skillTag: "communication",
+  },
 ];
