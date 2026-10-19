@@ -41,6 +41,7 @@ import {
   getApplications,
   getClientApplicationsForRequirement,
 } from "@/lib/repositories/application-repository";
+import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
 
 const MARKER = `mail-${process.pid}-${Date.now()}`;
@@ -59,7 +60,7 @@ describe("email delivery status", () => {
     const where = { companyId: { in: companyIds } };
     await prisma.billingLineItem.deleteMany({ where: { billingRecord: where } });
     await prisma.billingRecord.deleteMany({ where });
-    await prisma.auditLog.deleteMany({ where });
+    await deleteAuditLogsForTests(where);
     await prisma.outcomeEvent.deleteMany({ where });
     await prisma.notification.deleteMany({ where });
     await prisma.interview.deleteMany({ where: { application: where } });

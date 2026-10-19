@@ -62,7 +62,7 @@ export async function GET(request: Request) {
     }
 
     await prisma.interviewerCalendarIntegration.upsert({
-      where: { userId },
+      where: { userId_provider: { userId, provider: "GOOGLE" } },
       update: {
         accessTokenEnc: encryptCredentialSecret(tokens.access_token),
         refreshTokenEnc: encryptCredentialSecret(tokens.refresh_token),

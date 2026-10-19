@@ -33,6 +33,7 @@ import { getJobById } from "@/lib/repositories/job-repository";
 import { AuthorizationError } from "@/lib/auth/authorization";
 import { ApplicationValidationError } from "@/lib/validation/application-validation";
 import { OrganizationMembershipError } from "@/lib/validation/organization-membership-validation";
+import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
 
 const MARKER = `iso-${process.pid}-${Date.now()}`;
@@ -66,7 +67,7 @@ describe("tenant isolation boundaries", () => {
     const companyIds = ids.companies;
     if (companyIds.length === 0) return;
     await prisma.outcomeEvent.deleteMany({ where: { companyId: { in: companyIds } } });
-    await prisma.auditLog.deleteMany({ where: { companyId: { in: companyIds } } });
+    await deleteAuditLogsForTests({ companyId: { in: companyIds } });
     await prisma.evaluation.deleteMany({
       where: { application: { companyId: { in: companyIds } } },
     });

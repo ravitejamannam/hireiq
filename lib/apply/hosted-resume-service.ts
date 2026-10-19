@@ -10,12 +10,10 @@ import {
   storeResume,
 } from "@/lib/resumes/storage";
 import { abandonNewResumeObject } from "@/lib/resumes/resume-upload-cleanup";
-import type { ResumeVisionAudit } from "@/lib/resumes/layout-vision";
-import {
-  extractResumeText,
-  RESUME_TEXT_EXTRACTOR_VERSION,
-} from "@/lib/resumes/text-extraction";
-import { proposeResumeFields, suggestionFromFields, type ResumeFormSuggestion } from "@/lib/resumes/resume-field-extractor";
+import { RESUME_TEXT_EXTRACTOR_VERSION } from "@/lib/resumes/text-extraction";
+import { scheduleBackgroundWork } from "@/lib/communication/schedule-background";
+import { finishHostedResumeParse } from "@/lib/resumes/resume-parse-job";
+import type { ResumeFormSuggestion } from "@/lib/resumes/resume-field-extractor";
 import type { Prisma } from "@prisma/client";
 import { generateSecureToken, hashSecureToken } from "@/lib/auth/secure-token";
 import { createEvidence } from "@/lib/repositories/candidate-evidence-repository";
@@ -90,7 +88,7 @@ export async function storePendingHostedResume(input: {
   resumeClaim: string;
   fileName: string;
   sizeBytes: number;
-  parseStatus: "PARSED" | "FAILED";
+  parseStatus: "PARSING" | "READY" | "FAILED";
   parseErrorCode: string | null;
   extractedPreview: string | null;
   suggestion: ResumeFormSuggestion | null;
@@ -126,94 +124,49 @@ export async function storePendingHostedResume(input: {
     extension,
   );
   const stored = await storeResume(storageKey, input.bytes);
-  let extraction: Awaited<ReturnType<typeof extractResumeText>>;
+  const generated = generateSecureToken();
+  let uploadId = 0;
   try {
-    extraction = await extractResumeText(input.bytes, {
-      fileName,
-      contentType: typeof input.contentType === "string" ? input.contentType : undefined,
-      ocr: "skip",
-      visionAudit: {
+    const created = await prisma.hostedApplyResumeUpload.create({
+      data: {
+        distributionId: tokenRow.distribution.id,
+        jobId: tokenRow.distribution.jobId,
         companyId: tokenRow.distribution.companyId,
-        entityType: "Job",
-        entityId: tokenRow.distribution.jobId,
-        db: prisma as unknown as ResumeVisionAudit["db"],
+        applyTokenHash,
+        hostedApplySubmissionId: null,
+        claimTokenHash: generated.tokenHash,
+        storageKey: stored.storageKey,
+        fileName,
+        contentType:
+          extension === "pdf"
+            ? "application/pdf"
+            : extension === "docx"
+              ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              : "text/plain",
+        sizeBytes: stored.sizeBytes,
+        contentSha256: stored.contentSha256,
+        parseStatus: HostedResumeParseStatus.PARSING,
+        expiresAt: new Date(Date.now() + CLAIM_TTL_HOURS * 60 * 60 * 1000),
       },
+      select: { id: true },
     });
+    uploadId = created.id;
   } catch (error) {
     await abandonNewResumeObject(stored.storageKey, error);
     throw error;
   }
-  const generated = generateSecureToken();
-
-  return finishHostedResumeUpload({
-    storageKey: stored.storageKey,
-    insert: async () => {
-      await prisma.hostedApplyResumeUpload.create({
-        data: {
-          distributionId: tokenRow.distribution.id,
-          jobId: tokenRow.distribution.jobId,
-          companyId: tokenRow.distribution.companyId,
-          applyTokenHash,
-          hostedApplySubmissionId: null,
-          claimTokenHash: generated.tokenHash,
-          storageKey: stored.storageKey,
-          fileName,
-          contentType:
-            extension === "pdf"
-              ? "application/pdf"
-              : extension === "docx"
-                ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                : "text/plain",
-          sizeBytes: stored.sizeBytes,
-          contentSha256: stored.contentSha256,
-          parseStatus: extraction.ok
-            ? HostedResumeParseStatus.PARSED
-            : HostedResumeParseStatus.FAILED,
-          extractedText: extraction.ok ? extraction.text : null,
-          extractorVersion: extraction.ok ? RESUME_TEXT_EXTRACTOR_VERSION : null,
-          parseErrorCode: extraction.ok
-            ? extraction.quality.needsReview
-              ? "LOW_QUALITY"
-              : null
-            : extraction.errorCode,
-          expiresAt: new Date(Date.now() + CLAIM_TTL_HOURS * 60 * 60 * 1000),
-        },
-      });
-    },
-    suggest: async () => {
-      const suggestion = extraction.ok
-        ? suggestionFromFields((await proposeResumeFields(extraction.text, {
-            optedOut: false,
-            scope: {
-              companyId: tokenRow.distribution.companyId,
-              entityType: "Job",
-              entityId: tokenRow.distribution.jobId,
-              db: prisma as never,
-            },
-          })) ?? {
-            fullName: null,
-            email: null,
-            phone: null,
-            skills: [],
-            experience: [],
-            education: [],
-            certifications: [],
-            projects: [],
-          })
-        : null;
-      return {
-        resumeClaim: generated.rawToken,
-        fileName,
-        sizeBytes: stored.sizeBytes,
-        parseStatus: extraction.ok ? "PARSED" as const : "FAILED" as const,
-        parseErrorCode: extraction.ok ? extraction.quality.needsReview ? "LOW_QUALITY" : null : extraction.errorCode,
-        extractedPreview: extraction.ok ? extraction.text.slice(0, 400) : null,
-        suggestion: suggestion && (suggestion.fullName || suggestion.email || suggestion.phone || suggestion.experiences.length || suggestion.education.length || suggestion.projects.length || suggestion.certifications.length || suggestion.skills.length)
-          ? suggestion
-          : null,
-      };
-    },
-  });
+  if (process.env.HIREIQ_SKIP_RESUME_PARSE !== "1") {
+    scheduleBackgroundWork(() => finishHostedResumeParse(uploadId));
+  }
+  return {
+    resumeClaim: generated.rawToken,
+    fileName,
+    sizeBytes: stored.sizeBytes,
+    parseStatus: "PARSING" as const,
+    parseErrorCode: null,
+    extractedPreview: null,
+    suggestion: null,
+  };
 }
 
 /**
@@ -294,9 +247,10 @@ export async function claimPendingResumeInIngestion(
     data: { claimedAt: new Date() },
   });
 
-  const lowQuality =
-    pending.parseStatus === HostedResumeParseStatus.PARSED &&
-    pending.parseErrorCode === "LOW_QUALITY";
+  const ready =
+    pending.parseStatus === HostedResumeParseStatus.PARSED ||
+    pending.parseStatus === HostedResumeParseStatus.READY;
+  const lowQuality = ready && pending.parseErrorCode === "LOW_QUALITY";
 
   await tx.candidateResumeDocument.create({
     data: {
@@ -308,17 +262,19 @@ export async function claimPendingResumeInIngestion(
       contentType: pending.contentType,
       sizeBytes: pending.sizeBytes,
       contentSha256: pending.contentSha256,
-      parseStatus:
-        pending.parseStatus === HostedResumeParseStatus.PARSED ? "PARSED" : "FAILED",
+      parseStatus: ready
+        ? "READY"
+        : pending.parseStatus === HostedResumeParseStatus.PARSING
+          ? "PARSING"
+          : "FAILED",
       extractedText: pending.extractedText,
-      extractorVersion:
-        pending.parseStatus === HostedResumeParseStatus.PARSED
-          ? RESUME_TEXT_EXTRACTOR_VERSION
-          : null,
+      extractorVersion: ready ? RESUME_TEXT_EXTRACTOR_VERSION : null,
+      fieldSuggestion: pending.fieldSuggestion ?? undefined,
+      fieldsNeedReview: pending.fieldsNeedReview,
       parseErrorCode: lowQuality
         ? "LOW_QUALITY"
-        : pending.parseStatus === HostedResumeParseStatus.PARSED
-          ? null
+        : ready
+          ? pending.parseErrorCode
           : pending.parseErrorCode,
       ocrAttempts: pending.ocrAttempts,
       createdAt: pending.createdAt,
@@ -326,12 +282,7 @@ export async function claimPendingResumeInIngestion(
   });
 
   // Evidence only from clean extracted text. Low-quality text stays on the document.
-  if (
-    pending.parseStatus === HostedResumeParseStatus.PARSED &&
-    !lowQuality &&
-    pending.extractedText &&
-    pending.extractedText.trim()
-  ) {
+  if (ready && !lowQuality && !pending.fieldsNeedReview && pending.extractedText && pending.extractedText.trim()) {
     await createEvidence({
       companyId: input.companyId,
       candidateId: input.candidateId,
@@ -346,4 +297,29 @@ export async function claimPendingResumeInIngestion(
       createdAt: pending.createdAt,
     }, tx);
   }
+}
+
+export async function readHostedResumeParse(input: { applyTokenRaw: string; resumeClaim: string }) {
+  const applyTokenHash = hashSecureToken(input.applyTokenRaw);
+  const claimHash = hashSecureToken(input.resumeClaim.trim());
+  const pending = await prisma.hostedApplyResumeUpload.findUnique({
+    where: { claimTokenHash: claimHash },
+  });
+  if (!pending || pending.applyTokenHash !== applyTokenHash || pending.expiresAt.getTime() < Date.now()) {
+    return null;
+  }
+  const suggestion = pending.fieldSuggestion as ResumeFormSuggestion | null;
+  const parseStatus =
+    pending.parseStatus === HostedResumeParseStatus.FAILED
+      ? "FAILED"
+      : pending.parseStatus === HostedResumeParseStatus.PARSING
+        ? "PARSING"
+        : "READY";
+  return {
+    parseStatus,
+    parseErrorCode: pending.parseErrorCode,
+    fieldsNeedReview: pending.fieldsNeedReview,
+    extractedPreview: pending.extractedText ? pending.extractedText.slice(0, 400) : null,
+    suggestion,
+  } as const;
 }

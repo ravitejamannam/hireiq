@@ -5,7 +5,10 @@ import { acceptResumeFields, type ResumeFields } from "@/lib/resumes/resume-fiel
 import { canonicalDegree } from "@/lib/resumes/degree-canonical";
 import { canonicalEmployer } from "@/lib/resumes/employer-aliases";
 import { mineResumeSpans } from "@/lib/resumes/resume-span-miner";
+import { recordExtractionUsage } from "@/lib/resumes/extraction-meter";
 import { canonicalSkill } from "@/lib/resumes/skill-canonical";
+import { isResumeSkillPhrase } from "@/lib/resumes/skill-phrase";
+import { skillLabelTokens } from "@/lib/resumes/fixture-score";
 
 const FIELD_INSTRUCTIONS = `Extract resume fields as JSON. Use null when a value is not written in the resume.
 Every value must include a quote copied exactly from the resume. Do not add keys.
@@ -23,7 +26,35 @@ MCA
 Osmania University
 Treat B.Tech, BTech, and Bachelor of Technology as the degree. Do not put the college in the credential field.
 
-Extract every employer listed, including earlier roles and roles without dates. A job may be a header such as "Associate consultant@SAP labs", a line such as "fresher job Accenture", or an older block further down the page. Do not stop after the most recent role.
+Skills are any ability written on the resume, in any line of work: software, civil, electrical, site, accounting, or a trade. Copy the skill words from the resume. Do not skip a skill because it is not a programming tool, and do not add a skill that is not written.
+A skill must be a short noun phrase of at most five words naming a tool, method, trade, language, standard, or piece of equipment. Do not return a sentence, a job title, a personality trait, or a fragment.
+Extract every skill in a list, inside a project description, and on either column of a two-column page. Do not stop after a few and do not summarize. A comma, slash, bullet, or new line separates skills. If a heading such as Languages, Tools, or Software comes before a colon, the skills are the words after the colon. Leave years of experience out of the value. Do not return a degree name as a skill.
+
+Extract every employer listed, including earlier roles and roles without dates. A job may be a header such as "Associate consultant@SAP labs", a line such as "fresher job Accenture", a sentence such as "working at Acme", "Writer for Greymeter.com", or "worked as a designer in M/s. Acme", or an older block further down the page. A line like "Trainer-Finacle-Infosys" contains both the role and the employer. The employer is the organization. A client or a site is not the employer. A trailing dash is not part of the name. Do not stop after the most recent role. The title is the line above the company, the role under the person's name before the city, or the role words before the company in a hyphenated header.
+Examples from real resumes:
+"WORK EXPERIENCE
+NIIT -
+2016 to 2016"
+The employer is NIIT. A company line that is only a name and a dash still counts.
+"System engineer
+Bengaluru, Karnataka"
+The title is System engineer. It sits under the name, before the city.
+"Global Production Support Lead, - Infosys Ltd (Technology Lead) - HSBC"
+The title is Global Production Support Lead. The employer is Infosys Ltd. HSBC is the client.
+"Was Online Content Writer for Greymeter.com"
+The title is Online Content Writer. The employer is Greymeter.com.
+"Technical Consultant
+Oracle -
+October 2015 to Present"
+The title is Technical Consultant. The employer is Oracle.
+"Imgeeyaul Ansari
+java developer
+Pune, Maharashtra - Email me on Indeed"
+The title is java developer. It is the line under the name and above the city.
+"WORK EXPERIENCE
+Consultant
+Neudesic (Vendor @ Microsoft)"
+The title is Consultant. It is the line under WORK EXPERIENCE, above the employer.
 Shape:
 {"fullName":{"value":"","quote":""}|null,"email":{"value":"","quote":""}|null,"phone":{"value":"","quote":""}|null,"skills":[{"value":"","quote":""}],"experience":[{"title":{"value":"","quote":""},"organization":{"value":"","quote":""}|null,"startDate":{"value":"","quote":""}|null,"endDate":{"value":"","quote":""}|null}],"education":[{"credential":{"value":"","quote":""},"institution":{"value":"","quote":""}|null}],"certifications":[{"value":"","quote":""}],"projects":[{"name":{"value":"","quote":""}}]}`;
 
@@ -288,13 +319,31 @@ function dedupedQuoted(fields: Array<{ value: string; quote: string }>) {
   const seen = new Set<string>();
   const out: Array<{ value: string; quote: string }> = [];
   for (const field of fields) {
+    if (!isResumeSkillPhrase(field.value)) continue;
     const value = canonicalSkill(field.value);
     const key = value.toLowerCase();
-    if (seen.has(key)) continue;
+    if (!isResumeSkillPhrase(value) || seen.has(key)) continue;
     seen.add(key);
     out.push({ ...field, value });
   }
   return out;
+}
+
+/** Split tools named inside a skill or project quote the model already grounded. */
+function expandQuotedSkills(fields: ResumeFields, source: string): ResumeFields {
+  const extra: Array<{ value: string; quote: string }> = [];
+  const spans = [
+    ...fields.skills.map((skill) => skill.quote),
+    ...fields.projects.map((project) => project.name.quote),
+  ];
+  for (const span of spans) {
+    if (!span || !source.includes(span)) continue;
+    for (const token of skillLabelTokens(span)) {
+      if (!source.includes(token)) continue;
+      extra.push({ value: token, quote: token });
+    }
+  }
+  return { ...fields, skills: [...fields.skills, ...extra] };
 }
 
 function normalizeResumeFields(fields: ResumeFields): ResumeFields {
@@ -312,6 +361,225 @@ function normalizeResumeFields(fields: ResumeFields): ResumeFields {
       return degree ? { ...school, credential: { ...school.credential, value: degree } } : school;
     }),
   };
+}
+
+const SKILL_LIST_PROMPT = `List every tool, method, trade, language, standard, and piece of equipment written in the resume, including inside project lines and either column. Each skill is at most five words. Copy a quote from the resume for each one. Do not include job titles, degrees, personality traits, or duty sentences.`;
+
+const SKILL_LIST_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["skills"],
+  properties: { skills: { type: "array", items: { type: "object", additionalProperties: false, required: ["value", "quote"], properties: { value: { type: "string" }, quote: { type: "string" } } } } },
+} as const;
+
+async function listSkillsFromModel(
+  source: string,
+  key: string,
+  model: string,
+  guard?: ResumeFieldGuard,
+): Promise<Array<{ value: string; quote: string }>> {
+  try {
+    const outcome = await runGuardedCompletion({
+      optedOut: false,
+      scope: guard?.scope,
+      request: {
+        feature: "resume_fields",
+        model,
+        promptVersion: "resume-skills-1",
+        system: SKILL_LIST_PROMPT,
+        user: source.slice(0, 12_000),
+        schemaName: "resume_skill_list",
+        schema: SKILL_LIST_SCHEMA,
+        timeoutMs: 45_000,
+        maxRetries: 0,
+        apiKey: key,
+      },
+    });
+    if (outcome.result) {
+      recordExtractionUsage({
+        feature: "resume_fields",
+        model: outcome.result.model,
+        promptTokens: outcome.result.promptTokens ?? 0,
+        completionTokens: outcome.result.completionTokens ?? 0,
+      });
+    }
+    const parsed = outcome.result?.parsed as { skills?: Array<{ value?: string; quote?: string }> } | undefined;
+    const skills = Array.isArray(parsed?.skills) ? parsed.skills : [];
+    return skills.flatMap((skill) => {
+      const value = typeof skill.value === "string" ? skill.value.trim() : "";
+      const quote = typeof skill.quote === "string" ? skill.quote.trim() : "";
+      if (!value || !quote || !source.includes(quote) || !isResumeSkillPhrase(value)) return [];
+      return [{ value, quote }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function dateRangeCount(text: string) {
+  const matches = text.match(
+    /\b(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+)?(?:19|20)\d{2}\s+(?:to|–|-)\s+(?:present|till date|current|(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+)?(?:19|20)\d{2})/gi,
+  );
+  return matches?.length ?? 0;
+}
+
+const ROLE_LIST_PROMPT = `List every job. A title may sit under the name before the city, on the line above a company, or before the company in a hyphenated header. A line that is only "NIIT -" is an employer. "Lead - Infosys Ltd - HSBC" means the employer is Infosys Ltd and HSBC is the client. "Writer for Greymeter.com" means the employer is Greymeter.com. Copy quotes from the resume.`;
+
+const ROLE_LIST_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["experience"],
+  properties: {
+    experience: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "organization"],
+        properties: {
+          title: {
+            anyOf: [
+              { type: "object", additionalProperties: false, required: ["value", "quote"], properties: { value: { type: "string" }, quote: { type: "string" } } },
+              { type: "null" },
+            ],
+          },
+          organization: {
+            anyOf: [
+              { type: "object", additionalProperties: false, required: ["value", "quote"], properties: { value: { type: "string" }, quote: { type: "string" } } },
+              { type: "null" },
+            ],
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+async function listRolesFromModel(
+  source: string,
+  key: string,
+  model: string,
+  guard?: ResumeFieldGuard,
+): Promise<ResumeFields["experience"]> {
+  try {
+    const outcome = await runGuardedCompletion({
+      optedOut: false,
+      scope: guard?.scope,
+      request: {
+        feature: "resume_fields",
+        model,
+        promptVersion: "resume-roles-1",
+        system: ROLE_LIST_PROMPT,
+        user: source.slice(0, 12_000),
+        schemaName: "resume_role_list",
+        schema: ROLE_LIST_SCHEMA,
+        timeoutMs: 45_000,
+        maxRetries: 0,
+        apiKey: key,
+      },
+    });
+    if (outcome.result) {
+      recordExtractionUsage({
+        feature: "resume_fields",
+        model: outcome.result.model,
+        promptTokens: outcome.result.promptTokens ?? 0,
+        completionTokens: outcome.result.completionTokens ?? 0,
+      });
+    }
+    const parsed = outcome.result?.parsed as {
+      experience?: Array<{ title?: { value?: string; quote?: string } | null; organization?: { value?: string; quote?: string } | null }>;
+    };
+    const roles = Array.isArray(parsed?.experience) ? parsed.experience : [];
+    return roles.flatMap((role) => {
+      const titleValue = role.title?.value?.trim() ?? "";
+      const titleQuote = role.title?.quote?.trim() ?? "";
+      const orgValue = role.organization?.value?.trim() ?? "";
+      const orgQuote = role.organization?.quote?.trim() ?? "";
+      const titleOk = Boolean(titleValue && titleQuote && source.includes(titleQuote));
+      const orgOk = Boolean(orgValue && orgQuote && source.includes(orgQuote));
+      if (!titleOk && !orgOk) return [];
+      return [
+        {
+          title: titleOk ? { value: titleValue, quote: titleQuote } : { value: orgValue, quote: orgQuote },
+          organization: orgOk ? { value: orgValue, quote: orgQuote } : null,
+          startDate: null,
+          endDate: null,
+        },
+      ];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function acceptableTitleLine(line: string) {
+  const text = line.trim();
+  if (text.length < 2 || text.length > 70) return false;
+  if (/[.!?]$/.test(text)) return false;
+  if (/email me on indeed|indeed\.com|willing to relocate/i.test(text)) return false;
+  return text.split(/\s+/).length <= 10;
+}
+
+function blankBack(lines: string[], index: number) {
+  let cursor = index;
+  while (cursor >= 0 && !lines[cursor]?.trim()) cursor -= 1;
+  return cursor;
+}
+
+/** Title under the name, or the first line under WORK EXPERIENCE. Quotes are those lines. */
+export function rolesFromResumeHeadings(source: string): ResumeFields["experience"] {
+  const lines = source.split("\n");
+  const roles: ResumeFields["experience"] = [];
+  const push = (titleLine: string, orgLine?: string) => {
+    const split = titleLine.split(/\s+-\s+/);
+    const title = (split[0] ?? "").trim();
+    const inlineOrg = split.slice(1).join(" - ").trim();
+    if (!acceptableTitleLine(title) || !source.includes(title)) return;
+    const org = (inlineOrg || orgLine || "").replace(/\s+-\s+.*$/, "").replace(/\s*-\s*$/, "").trim();
+    roles.push({
+      title: { value: title, quote: title },
+      organization: org && source.includes(org) ? { value: org, quote: org } : null,
+      startDate: null,
+      endDate: null,
+    });
+  };
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/email me on indeed/i.test(lines[index] ?? "")) continue;
+    let cursor = blankBack(lines, index - 1);
+    if (cursor < 0) continue;
+    const maybeCity = lines[cursor]?.trim() ?? "";
+    if (/,/.test(maybeCity) || maybeCity === "-" || /^-\s/.test(maybeCity)) {
+      cursor = blankBack(lines, cursor - 1);
+    }
+    if (cursor >= 0) push(lines[cursor]?.trim() ?? "");
+  }
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/^(work experience|professional experience)$/i.test(lines[index]?.trim() ?? "")) continue;
+    let titleAt = index + 1;
+    while (titleAt < lines.length && !lines[titleAt]?.trim()) titleAt += 1;
+    if (titleAt >= lines.length) continue;
+    const titleLine = lines[titleAt]?.trim() ?? "";
+    if (!acceptableTitleLine(titleLine)) continue;
+    let orgAt = titleAt + 1;
+    while (orgAt < lines.length && !lines[orgAt]?.trim()) orgAt += 1;
+    const orgLine = lines[orgAt]?.trim() ?? "";
+    const orgOk = orgLine && orgLine.length <= 60 && !/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|education)\b/i.test(orgLine);
+    push(titleLine, orgOk ? orgLine : undefined);
+  }
+  return roles;
+}
+
+function employersBesideTitles(
+  roles: ResumeFields["experience"],
+  source: string,
+): ResumeFields["experience"] {
+  return roles.map((role) => {
+    if (role.organization) return role;
+    const match = role.title.quote.match(/[-–]\s*([A-Z][A-Za-z0-9.& ]{2,48}?)(?:\s*[-–,(]|$)/);
+    const name = match?.[1]?.trim().replace(/\s*[-–]+\s*$/, "");
+    if (!name || name.length < 3 || !source.includes(name)) return role;
+    return { ...role, organization: { value: name, quote: name } };
+  });
 }
 
 const QUOTED = {
@@ -374,12 +642,24 @@ export type ResumeFieldGuard = {
   scope?: AiRunScope | null;
 };
 
-async function fieldsFromModel(source: string, guard?: ResumeFieldGuard): Promise<ResumeFields | null> {
-  if (guard?.optedOut) return null;
+export type ResumeModelFailure =
+  | "NO_API_KEY"
+  | "EMPTY_RESPONSE"
+  | "INVALID_SHAPE"
+  | "UNGROUNDED_QUOTE"
+  | "TIMEOUT"
+  | "MODEL_ERROR";
+
+async function fieldsFromModel(
+  source: string,
+  guard?: ResumeFieldGuard,
+): Promise<{ ok: true; fields: ResumeFields } | { ok: false; reason: ResumeModelFailure }> {
+  if (guard?.optedOut) return { ok: false, reason: "NO_API_KEY" };
   const key = getOpenAiApiKey();
-  if (!key) return null;
+  if (!key) return { ok: false, reason: "NO_API_KEY" };
   const model = process.env.OPENAI_RESUME_FIELDS_MODEL?.trim() || "gpt-4o-mini";
-  const timeoutMs = source.length > 6_000 ? 28_000 : 12_000;
+  const timeoutMs = 45_000;
+  let lastFailure: ResumeModelFailure = "MODEL_ERROR";
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const outcome = await runGuardedCompletion({
@@ -388,7 +668,7 @@ async function fieldsFromModel(source: string, guard?: ResumeFieldGuard): Promis
         request: {
           feature: "resume_fields",
           model,
-          promptVersion: "resume-fields-3",
+          promptVersion: "resume-fields-9",
           system: FIELD_INSTRUCTIONS,
           user: source.slice(0, 12_000),
           schemaName: "resume_fields",
@@ -398,28 +678,84 @@ async function fieldsFromModel(source: string, guard?: ResumeFieldGuard): Promis
           apiKey: key,
         },
       });
-      const accepted = acceptResumeFields(outcome.result?.parsed, source);
-      if (!accepted.ok) return null;
-      return normalizeResumeFields(accepted.fields);
+      const result = outcome.result;
+      if (result) {
+        recordExtractionUsage({
+          feature: "resume_fields",
+          model: result.model,
+          promptTokens: result.promptTokens ?? 0,
+          completionTokens: result.completionTokens ?? 0,
+        });
+      }
+      if (!result?.parsed) {
+        lastFailure = "EMPTY_RESPONSE";
+        continue;
+      }
+      const accepted = acceptResumeFields(result.parsed, source);
+      if (!accepted.ok) return { ok: false, reason: accepted.reason };
+      const listed = await listSkillsFromModel(source, key, model, guard);
+      let experience = [
+        ...employersBesideTitles(accepted.fields.experience, source),
+        ...rolesFromResumeHeadings(source),
+      ];
+      if (experience.length < dateRangeCount(source)) {
+        const extraRoles = await listRolesFromModel(source, key, model, guard);
+        const seen = new Set(experience.map((role) => role.title.quote.toLowerCase()));
+        experience = [
+          ...experience,
+          ...extraRoles.filter((role) => !seen.has(role.title.quote.toLowerCase())),
+        ];
+      }
+      const merged = {
+        ...accepted.fields,
+        skills: [...accepted.fields.skills, ...listed],
+        experience,
+      };
+      return { ok: true, fields: normalizeResumeFields(expandQuotedSkills(merged, source)) };
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       const timedOut = /timeout|aborted|abort/i.test(message);
+      lastFailure = timedOut ? "TIMEOUT" : "MODEL_ERROR";
       if (attempt === 0 && timedOut) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         continue;
       }
-      return null;
+      return { ok: false, reason: lastFailure };
     }
   }
-  return null;
+  return { ok: false, reason: lastFailure };
+}
+
+export type ResumeFieldSource = "model" | "unreviewed";
+
+const EMPTY_FIELDS: ResumeFields = {
+  fullName: null,
+  email: null,
+  phone: null,
+  skills: [],
+  experience: [],
+  education: [],
+  certifications: [],
+  projects: [],
+};
+
+export async function proposeResumeFieldsDetailed(
+  source: string,
+  guard?: ResumeFieldGuard,
+): Promise<{ fields: ResumeFields; source: ResumeFieldSource; modelFailure: ResumeModelFailure | null }> {
+  if (guard?.optedOut) {
+    return { fields: EMPTY_FIELDS, source: "unreviewed", modelFailure: "NO_API_KEY" };
+  }
+  const modelled = await fieldsFromModel(source, guard);
+  if (modelled.ok) return { fields: modelled.fields, source: "model", modelFailure: null };
+  return { fields: EMPTY_FIELDS, source: "unreviewed", modelFailure: modelled.reason };
 }
 
 export async function proposeResumeFields(
   source: string,
   guard?: ResumeFieldGuard,
 ): Promise<ResumeFields | null> {
-  if (guard?.optedOut) return heuristicResumeFields(source);
-  return (await fieldsFromModel(source, guard)) ?? heuristicResumeFields(source);
+  return (await proposeResumeFieldsDetailed(source, guard)).fields;
 }
 
 export type ResumeFormSuggestion = {

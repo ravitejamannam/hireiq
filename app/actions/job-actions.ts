@@ -412,7 +412,9 @@ export async function assignInterviewerToJob(
     });
     const lead = leadAssignmentAllowed({
       requireQualifiedLead: existingJob.company.requireQualifiedLead,
-      record: training,
+      record: training
+        ? { ...training, qualifiedAt: training.qualifiedAt ? training.qualifiedAt.toISOString() : null }
+        : null,
       jobCompanyId: existingJob.companyId,
       interviewerCompanyId: existingJob.companyId,
     });

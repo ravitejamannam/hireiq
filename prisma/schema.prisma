@@ -1073,7 +1073,9 @@ model CandidateIdentityDecision {
 /// re-run; parse failures retain the stored file for retry.
 enum ResumeParseStatus {
   PENDING
+  PARSING
   PARSED
+  READY
   FAILED
 }
 
@@ -1089,6 +1091,9 @@ model CandidateResumeDocument {
   contentSha256    String
   parseStatus      ResumeParseStatus @default(PENDING)
   extractedText    String?
+  /// Model field suggestion. Empty when parsing failed or needs review.
+  fieldSuggestion  Json?
+  fieldsNeedReview Boolean           @default(false)
   extractorVersion String?
   parseErrorCode   String?
   ocrAttempts      Int               @default(0)
@@ -1780,6 +1785,7 @@ model Application {
   withdrawReason String?
   emailUnsubscribedAt DateTime?
   candidateTimeZone String?
+  futureRolesConsent Boolean @default(false)
   whatsAppOptInAt DateTime?
 
   candidate Candidate @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
@@ -2553,7 +2559,9 @@ model InterviewBookingInvite {
 /// Promoted into CandidateResumeDocument (+ RESUME_DOCUMENT evidence) inside
 /// the ingestion transaction once the application is created.
 enum HostedResumeParseStatus {
+  PARSING
   PARSED
+  READY
   FAILED
 }
 
@@ -2572,6 +2580,8 @@ model HostedApplyResumeUpload {
   contentSha256            String
   parseStatus              HostedResumeParseStatus
   extractedText            String?
+  fieldSuggestion          Json?
+  fieldsNeedReview         Boolean                  @default(false)
   extractorVersion         String?
   parseErrorCode           String?
   ocrAttempts              Int                      @default(0)

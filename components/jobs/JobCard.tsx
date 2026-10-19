@@ -71,6 +71,7 @@ const roleCategoryLabels: Record<RoleCategory, string> = {
   SALES: "Sales",
   DESIGN: "Design",
   FINANCE: "Finance",
+  GRADUATE: "Graduate",
 };
 
 const interviewerCategoryLabels: Record<InterviewerCategory, string> = {

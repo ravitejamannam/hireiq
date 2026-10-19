@@ -33,6 +33,7 @@ import {
   updateInterview,
 } from "@/app/actions/interview-actions";
 import { AuthorizationError } from "@/lib/auth/authorization";
+import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
 
 const MARKER = `evidence-${process.pid}-${Date.now()}`;
@@ -52,7 +53,7 @@ describe("interview and coding-test writes", () => {
     await prisma.interview.deleteMany({
       where: { application: { companyId: { in: companyIds } } },
     });
-    await prisma.auditLog.deleteMany({ where: { companyId: { in: companyIds } } });
+    await deleteAuditLogsForTests({ companyId: { in: companyIds } });
     await prisma.codingTest.deleteMany({
       where: { application: { companyId: { in: companyIds } } },
     });

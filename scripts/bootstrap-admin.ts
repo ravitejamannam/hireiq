@@ -12,7 +12,7 @@ import "dotenv/config";
 
 import { PortalRole } from "@prisma/client";
 
-import { hashPassword } from "../lib/auth/password";
+import { hashPassword, verifyPassword } from "../lib/auth/password";
 import { prisma } from "../lib/prisma";
 import {
   UserValidationError,
@@ -59,6 +59,25 @@ async function bootstrapAdmin() {
   });
 
   if (existing) {
+    const stored = await prisma.user.findUnique({
+      where: { email },
+      select: { passwordHash: true, emailVerifiedAt: true },
+    });
+    const matches = stored ? await verifyPassword(passwordRaw, stored.passwordHash) : false;
+    if (!matches) {
+      await prisma.user.update({
+        where: { email },
+        data: {
+          passwordHash: await hashPassword(passwordRaw),
+          passwordChangedAt: new Date(),
+          emailVerifiedAt: stored?.emailVerifiedAt ?? new Date(),
+        },
+      });
+      console.log(
+        `Admin password updated to ADMIN_PASSWORD (${existing.email}). The previous hash did not match.`,
+      );
+      return;
+    }
     console.log(
       `Admin bootstrap skipped: user already exists (${existing.email}, role=${existing.role}).`,
     );

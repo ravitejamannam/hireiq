@@ -99,7 +99,7 @@ export default function HostedApplyForm({
   const [certificationReview, setCertificationReview] = useState<string[]>([]);
   const [resumeNotice, setResumeNotice] = useState<string | null>(null);
   const [resumeState, setResumeState] = useState<
-    "idle" | "uploading" | "ready" | "error"
+    "idle" | "uploading" | "parsing" | "ready" | "error"
   >("idle");
   const [photoClaim, setPhotoClaim] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -167,6 +167,67 @@ export default function HostedApplyForm({
     }
   }
 
+  function applyResumeSuggestion(body: {
+    parseStatus?: string;
+    parseErrorCode?: string | null;
+    fieldsNeedReview?: boolean;
+    extractedPreview?: string | null;
+    suggestion?: {
+      fullName: string | null;
+      email: string | null;
+      phone: string | null;
+      skills: string[];
+      experiences: Array<{ title: string; company: string; startDate: string; endDate: string; tenure: string }>;
+      education: Array<{ credential: string; institution: string }>;
+      projects: Array<{ name: string }>;
+      certifications?: string[];
+    } | null;
+  }) {
+    setResumePreview(body.extractedPreview ?? null);
+    setResumeNotice(
+      body.parseStatus === "FAILED"
+        ? integrityFreeResumeError(body.parseErrorCode ?? undefined)
+        : body.fieldsNeedReview || body.parseErrorCode === "NEEDS_REVIEW"
+          ? "We read this file. Check the fields below; some could not be filled automatically."
+          : body.parseErrorCode === "LOW_QUALITY"
+            ? "We read this file, but the text looks incomplete. Check it below and fill in anything missing in your profile."
+            : null,
+    );
+    const suggestion = body.suggestion;
+    if (!suggestion) return;
+    if (suggestion.fullName) setName((current) => current || suggestion.fullName || "");
+    if (suggestion.email) setEmail((current) => current || suggestion.email || "");
+    if (suggestion.phone) setPhone((current) => current || suggestion.phone || "");
+    if (suggestion.experiences.length > 0 || suggestion.education.length > 0 || suggestion.projects.length > 0) {
+      setDraft((current) => fillEmptyProfileFromSuggestion(current, {
+        ...suggestion,
+        skills: suggestion.skills ?? [],
+        certifications: suggestion.certifications ?? [],
+      }));
+    }
+    const certifications = certificationReviewList(suggestion.certifications);
+    if (certifications.length > 0) {
+      setCertificationReview((current) => (current.some((value) => value.trim()) ? current : certifications));
+    }
+  }
+
+  async function pollResumeParse(applyToken: string, claim: string) {
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const response = await fetch(
+        `/api/apply/${encodeURIComponent(applyToken)}/resume/status?claim=${encodeURIComponent(claim)}`,
+      );
+      const body = (await response.json().catch(() => null)) as
+        | { ok?: boolean; parseStatus?: string }
+        | null;
+      if (!response.ok || !body?.ok || body.parseStatus === "PARSING") continue;
+      applyResumeSuggestion(body as Parameters<typeof applyResumeSuggestion>[0]);
+      setResumeState(body.parseStatus === "FAILED" ? "error" : "ready");
+      return;
+    }
+    setResumeNotice("Still reading the resume. You can keep typing and submit without waiting.");
+  }
+
   async function onResumeSelected(file: File) {
     setResumeState("uploading");
     setFormError(null);
@@ -212,33 +273,12 @@ export default function HostedApplyForm({
       }
       setResumeClaim(body.resumeClaim);
       setResumeName(body.fileName ?? file.name);
-      setResumePreview(body.extractedPreview ?? null);
-      setResumeNotice(
-        body.parseStatus === "FAILED"
-          ? integrityFreeResumeError(body.parseErrorCode ?? undefined)
-          : body.parseErrorCode === "LOW_QUALITY"
-            ? "We read this file, but the text looks incomplete. Check it below and fill in anything missing in your profile."
-            : null,
-      );
-      const suggestion = body.suggestion;
-      if (suggestion) {
-        if (suggestion.fullName) setName((current) => current || suggestion.fullName || "");
-        if (suggestion.email) setEmail((current) => current || suggestion.email || "");
-        if (suggestion.phone) setPhone((current) => current || suggestion.phone || "");
-        if (suggestion.experiences.length > 0 || suggestion.education.length > 0 || suggestion.projects.length > 0) {
-          setDraft((current) => fillEmptyProfileFromSuggestion(current, {
-            ...suggestion,
-            skills: suggestion.skills ?? [],
-            certifications: suggestion.certifications ?? [],
-          }));
-        }
-        const certifications = certificationReviewList(suggestion.certifications);
-        if (certifications.length > 0) {
-          setCertificationReview((current) =>
-            current.some((value) => value.trim()) ? current : certifications,
-          );
-        }
+      if (body.parseStatus === "PARSING") {
+        setResumeState("parsing");
+        void pollResumeParse(token, body.resumeClaim);
+        return;
       }
+      applyResumeSuggestion(body);
       setResumeState("ready");
     } catch {
       setResumeState("error");
@@ -517,7 +557,9 @@ export default function HostedApplyForm({
               ? "Replace resume"
               : resumeState === "uploading"
                 ? "Uploading…"
-                : "Upload resume"}
+                : resumeState === "parsing"
+                  ? "Reading your resume…"
+                  : "Upload resume"}
           </span>
           <input
             type="file"
@@ -531,6 +573,9 @@ export default function HostedApplyForm({
           />
         </label>
       </div>
+      {resumeState === "parsing" ? (
+        <p className="text-sm text-zinc-600" role="status">Reading your resume… You can keep filling the form.</p>
+      ) : null}
       {resumeState === "ready" ? (
         <div className="space-y-2">
           <p className="text-sm font-medium text-emerald-700">✓ {resumeName} attached</p>

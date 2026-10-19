@@ -44,6 +44,7 @@ import {
 import { AuthorizationError } from "@/lib/auth/authorization";
 import { executeAttachRecruiterTextualEvidence } from "@/lib/candidates/evidence-capture/evidence-capture-service";
 import { executeRunMatcherV2 } from "@/lib/candidates/matching/matching-v2-service";
+import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
 
 const MARKER = `life-${process.pid}-${Date.now()}`;
@@ -65,7 +66,7 @@ describe("hiring lifecycle", () => {
       where: { billingRecord: where },
     });
     await prisma.billingRecord.deleteMany({ where });
-    await prisma.auditLog.deleteMany({ where });
+    await deleteAuditLogsForTests(where);
     await prisma.outcomeEvent.deleteMany({ where });
     await prisma.notification.deleteMany({ where });
     await prisma.requirementAssessment.deleteMany({ where });

@@ -79,6 +79,6 @@ describe("matching UNKNOWN ≠ false", () => {
     expect(go?.result).toBe(CandidateMatchResult.SATISFIED);
     expect(postgres?.result).toBe(CandidateMatchResult.UNKNOWN);
     expect(location?.result).toBe(CandidateMatchResult.UNKNOWN);
-    expect(mustHave?.result).toBe(CandidateMatchResult.UNSUPPORTED);
+    expect(mustHave?.result).toBe(CandidateMatchResult.UNKNOWN);
   });
 });

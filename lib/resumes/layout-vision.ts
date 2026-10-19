@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { AiRunScope } from "@/lib/ai/ai-run";
 import { postOpenAi } from "@/lib/ai/gateway";
 import { getOpenAiApiKey } from "@/lib/ai/job-description-generator";
+import { recordExtractionUsage } from "@/lib/resumes/extraction-meter";
 import { withAIRun } from "@/lib/ai/run";
 
 const VISION_PROMPT =
@@ -126,6 +127,12 @@ export async function transcribeResumePage(
           usage?: { prompt_tokens?: number; completion_tokens?: number };
         };
         const text = body.choices?.[0]?.message?.content?.trim() || null;
+        recordExtractionUsage({
+          feature: "resume_vision",
+          model,
+          promptTokens: body.usage?.prompt_tokens ?? 0,
+          completionTokens: body.usage?.completion_tokens ?? 0,
+        });
         return {
           value: text,
           promptTokens: body.usage?.prompt_tokens ?? null,

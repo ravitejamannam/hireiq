@@ -38,6 +38,7 @@ const roleCategoryLabels: Record<RoleCategory, string> = {
   SALES: "Sales",
   DESIGN: "Design",
   FINANCE: "Finance",
+  GRADUATE: "Graduate",
 };
 
 export type ClientRequirementWorkspaceData = {

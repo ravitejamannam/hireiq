@@ -27,22 +27,6 @@ export function hashIntelligenceSnapshot(
   return createHash("sha256").update(lines.join("\n"), "utf8").digest("hex");
 }
 
-function unsupportedRow(
-  requirementKey: string,
-  sourceField: string,
-  category: CandidateMatchRequirementCategory,
-): RequirementMatchDraft {
-  return {
-    requirementKey,
-    sourceField,
-    category,
-    result: CandidateMatchResult.UNSUPPORTED,
-    reasonCode: MATCH_REASON.REQUIREMENT_UNSUPPORTED,
-    claimId: null,
-    evidenceId: null,
-  };
-}
-
 function unknownRow(
   requirementKey: string,
   sourceField: string,

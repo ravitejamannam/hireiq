@@ -45,7 +45,7 @@ const applicationId = one(
   `SELECT id FROM "Application" WHERE "companyId" = ${foreignCompany} ORDER BY id LIMIT 1`,
 )[0];
 const interviewerId = one(
-  `SELECT "assignedInterviewerId" FROM "Job" WHERE "companyId" = ${foreignCompany} AND "assignedInterviewerId" IS NOT NULL ORDER BY id LIMIT 1`,
+  `SELECT i.id FROM "Interviewer" i WHERE EXISTS (SELECT 1 FROM "Job" j WHERE j."assignedInterviewerId" = i.id AND j."companyId" = ${foreignCompany}) AND NOT EXISTS (SELECT 1 FROM "Job" j WHERE j."assignedInterviewerId" = i.id AND j."companyId" = 1) ORDER BY i.id LIMIT 1`,
 )[0];
 const billingId = one(
   `SELECT id FROM "BillingRecord" WHERE "companyId" = ${foreignCompany} ORDER BY id LIMIT 1`,
@@ -135,8 +135,11 @@ for (const path of paths) {
     continue;
   }
   const location = response.headers.get("location") ?? "";
-  console.log(`${String(response.status).padEnd(8)} ${path}${location ? ` -> ${location}` : ""}`);
-  if (response.status === 200) leaks += 1;
+  const body = response.status === 200 ? await response.text() : "";
+  const hidden = body.includes("This page could not be found") || body.includes("NEXT_HTTP_ERROR_FALLBACK");
+  const shown = response.status === 200 && !hidden;
+  console.log(`${String(hidden ? "404*" : response.status).padEnd(8)} ${path}${location ? ` -> ${location}` : ""}`);
+  if (shown) leaks += 1;
 }
 console.log(`routes ${paths.length} http 200 ${leaks} timeouts ${timeouts}`);
 if (leaks > 0) process.exit(1);

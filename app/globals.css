@@ -140,7 +140,15 @@ html[data-theme="dark"] body {
   color: #f4f2ed;
 }
 
-html[data-theme="dark"] .bg-white {
+html[data-theme="dark"] [class*="bg-zinc-50"],
+html[data-theme="dark"] [class*="bg-zinc-100"],
+html[data-theme="dark"] [class*="bg-stone-50"],
+html[data-theme="dark"] [class*="bg-stone-100"] {
+  background-color: #1c1916;
+}
+
+html[data-theme="dark"] .bg-white,
+html[data-theme="dark"] [class*="bg-white"] {
   background-color: #211d19;
 }
 
@@ -166,6 +174,7 @@ html[data-theme="dark"] .bg-zinc-100 {
 }
 
 html[data-theme="dark"] .bg-\[\#FBF9F4\],
+html[data-theme="dark"] .bg-\[\#FBF9F4\]\/85,
 html[data-theme="dark"] .bg-\[\#FBF9F4\]\/95,
 html[data-theme="dark"] .bg-\[\#F7F4EE\] {
   background-color: #14110e;

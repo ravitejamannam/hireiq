@@ -32,7 +32,7 @@ import {
   SourcingDatabaseSource,
 } from "@prisma/client";
 
-import { hashPassword } from "../lib/auth/password";
+import { hashPassword, verifyPassword } from "../lib/auth/password";
 import {
   storePendingHostedResume,
 } from "../lib/apply/hosted-resume-service";
@@ -54,6 +54,7 @@ import {
 import {
   DEMO_COMPANIES,
   DEMO_INTERVIEWERS,
+  HARBOR_ONLY_INTERVIEWER,
   PIPELINE_PACK,
   demoApplicant,
   rolesForCompany,
@@ -84,6 +85,24 @@ async function main() {
     throw error;
   }
   const passwordHash = await hashPassword(passwordRaw);
+  const adminEmail = (process.env.ADMIN_EMAIL || "admin@hireiq.local").trim().toLowerCase();
+  const adminPassword = process.env.ADMIN_PASSWORD || passwordRaw;
+  const adminHash = adminPassword === passwordRaw ? passwordHash : await hashPassword(adminPassword);
+  const adminUser = await prisma.user.findUnique({
+    where: { email: adminEmail },
+    select: { id: true, passwordHash: true },
+  });
+  if (adminUser && !(await verifyPassword(adminPassword, adminUser.passwordHash))) {
+    await prisma.user.update({
+      where: { id: adminUser.id },
+      data: {
+        passwordHash: adminHash,
+        passwordChangedAt: new Date(),
+        emailVerifiedAt: new Date(),
+      },
+    });
+    console.log(`✓ ${adminEmail} password set to ADMIN_PASSWORD (stored hash did not match)`);
+  }
 
   await upsertAssessmentBank(prisma);
   console.log("✓ assessment bank");
@@ -99,7 +118,14 @@ async function main() {
     });
     interviewerIds[iv.email] = await linkInterviewerProfile(iv.email);
   }
-  console.log("✓ interviewers:", DEMO_INTERVIEWERS.length);
+  await ensureUser({
+    email: HARBOR_ONLY_INTERVIEWER.email,
+    name: HARBOR_ONLY_INTERVIEWER.name,
+    passwordHash,
+    role: "INTERVIEWER",
+  });
+  interviewerIds[HARBOR_ONLY_INTERVIEWER.email] = await linkInterviewerProfile(HARBOR_ONLY_INTERVIEWER.email);
+  console.log("✓ interviewers:", DEMO_INTERVIEWERS.length + 1);
   await seedPublishedInterviewerProfiles(interviewerIds);
   console.log("✓ interviewer profiles published");
 
@@ -134,7 +160,10 @@ async function main() {
     const roles = rolesForCompany(def);
     for (let jobIndex = 0; jobIndex < roles.length; jobIndex += 1) {
       const role = roles[jobIndex]!;
-      const interviewer = DEMO_INTERVIEWERS[jobIndex % DEMO_INTERVIEWERS.length]!;
+      const interviewer =
+        def.slug === "harbor" && jobIndex === roles.length - 1
+          ? HARBOR_ONLY_INTERVIEWER
+          : DEMO_INTERVIEWERS[jobIndex % DEMO_INTERVIEWERS.length]!;
       const interviewerId = interviewerIds[interviewer.email]!;
       const posted = await ensureJob(company.id, ownerUser.id, roleToJobFields(role, interviewerId));
       const distribution = await ensureHostedDistribution(posted.job.id, posted.specVersionId);
@@ -311,7 +340,7 @@ async function linkInterviewerProfile(userEmail: string): Promise<number> {
   });
   if (user.interviewerId) return user.interviewerId;
 
-  const iv = DEMO_INTERVIEWERS.find((i) => i.email === userEmail);
+  const iv = [...DEMO_INTERVIEWERS, HARBOR_ONLY_INTERVIEWER].find((i) => i.email === userEmail);
   if (!iv) throw new Error(`No fixture interviewer for ${userEmail}`);
 
   let interviewer = await prisma.interviewer.findFirst({
@@ -337,7 +366,7 @@ async function linkInterviewerProfile(userEmail: string): Promise<number> {
 async function seedPublishedInterviewerProfiles(
   interviewerIds: Record<string, number>,
 ) {
-  for (const iv of DEMO_INTERVIEWERS) {
+  for (const iv of [...DEMO_INTERVIEWERS, HARBOR_ONLY_INTERVIEWER]) {
     const interviewerId = interviewerIds[iv.email];
     if (!interviewerId) continue;
     const profile = interviewerProfileData(iv);

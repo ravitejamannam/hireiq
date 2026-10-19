@@ -13,6 +13,7 @@ import {
   tokenUsable,
   type AssessmentItem,
 } from "@/lib/assessments/generated-assessment";
+import { writeAuditLog } from "@/lib/audit/write-audit-log";
 import { generateSecureToken, hashSecureToken } from "@/lib/auth/secure-token";
 import { prisma } from "@/lib/prisma";
 

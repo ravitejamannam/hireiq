@@ -1,9 +1,7 @@
-import { CandidateEvidenceOrigin, CandidateEvidenceSourceType } from "@prisma/client";
+import { ResumeParseStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
-import { createEvidence } from "@/lib/repositories/candidate-evidence-repository";
-import { hashEvidenceInlineTextOrNull } from "@/lib/candidates/evidence/evidence-hash";
 import {
   buildResumeStorageKey,
   ResumeStorageError,
@@ -11,22 +9,16 @@ import {
 } from "@/lib/resumes/storage";
 import {
   discardUnattachedResumeObject,
-  persistAfterResumeExtract,
   releaseReplacedResumeObject,
 } from "@/lib/resumes/resume-upload-cleanup";
-import type { ResumeVisionAudit } from "@/lib/resumes/layout-vision";
-import { analyseParsedCandidate } from "@/lib/resumes/analyse-after-parse";
-import {
-  extractResumeText,
-  RESUME_TEXT_EXTRACTOR_VERSION,
-} from "@/lib/resumes/text-extraction";
+import { scheduleBackgroundWork } from "@/lib/communication/schedule-background";
+import { finishCandidateResumeParse, resumeParseIsReady } from "@/lib/resumes/resume-parse-job";
 
 /**
  * Resume upload for existing candidates (T97 / constitution §29).
  *
- * Flow: validate → store binary (object storage) → extract text
- * (versioned, fail-closed) → CandidateResumeDocument row →
- * CandidateEvidence(sourceType=RESUME_DOCUMENT) with the extracted text.
+ * Flow: validate → store binary → row with status PARSING → return.
+ * Text extraction and field reading run after the response.
  *
  * Guarantees:
  * - Binaries never touch PostgreSQL (§29).
@@ -181,183 +173,91 @@ export async function uploadResumeForAdmin(input: {
 
   const storageKey = buildResumeStorageKey(candidate.companyId, candidateId, extension);
   const stored = await storeResume(storageKey, input.file.bytes);
+  const contentType =
+    extension === "pdf"
+      ? "application/pdf"
+      : extension === "docx"
+        ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        : "text/plain";
 
-  const owned = await persistAfterResumeExtract({
-    storageKey: stored.storageKey,
-    extract: () =>
-      extractResumeText(input.file.bytes, {
-        fileName,
-        contentType: typeof input.file.type === "string" ? input.file.type : undefined,
-        ocr: "skip",
-        visionAudit: {
-          companyId: candidate.companyId,
-          entityType: applicationId ? "Application" : "Candidate",
-          entityId: applicationId ?? candidateId,
-          applicationId,
-          db: prisma as unknown as ResumeVisionAudit["db"],
-        },
-      }),
-    persist: async (extraction) => {
-  // Dedup semantics (§42): identical content that already PARSED is a
-  // duplicate and returns the existing record. A prior FAILED parse never
-  // blocks retry — the row is updated in place with fresh parse results.
   const existing = await prisma.candidateResumeDocument.findFirst({
-    where: {
-      companyId: candidate.companyId,
-      contentSha256: stored.contentSha256,
-    },
+    where: { companyId: candidate.companyId, contentSha256: stored.contentSha256 },
   });
-
-  if (existing && existing.parseStatus === "PARSED") {
+  if (existing && resumeParseIsReady(existing.parseStatus)) {
     await discardUnattachedResumeObject(stored.storageKey);
     return {
-      kind: "duplicate" as const,
-      response: {
       id: existing.id,
       fileName: existing.fileName,
       contentType: existing.contentType,
       sizeBytes: existing.sizeBytes,
-      parseStatus: existing.parseStatus,
-      parseErrorCode: null,
+      parseStatus: "READY",
+      parseErrorCode: existing.parseErrorCode,
       createdAt: existing.createdAt,
-      hasEvidenceText: true,
-    },
+      hasEvidenceText: Boolean(existing.extractedText),
     };
   }
 
-  const document = existing
-    ? await prisma.candidateResumeDocument.update({
+  let documentId = existing?.id ?? 0;
+  try {
+    if (existing) {
+      await prisma.candidateResumeDocument.update({
         where: { id: existing.id },
         data: {
           storageKey: stored.storageKey,
           fileName,
-          contentType:
-        extension === "pdf"
-          ? "application/pdf"
-          : extension === "docx"
-            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            : "text/plain",
+          contentType,
           sizeBytes: stored.sizeBytes,
-          parseStatus: extraction.ok ? "PARSED" : "FAILED",
-          extractedText: extraction.ok ? extraction.text : null,
-          extractorVersion: extraction.ok ? RESUME_TEXT_EXTRACTOR_VERSION : null,
-          parseErrorCode: extraction.ok
-            ? extraction.quality.needsReview
-              ? "LOW_QUALITY"
-              : null
-            : extraction.errorCode,
-          uploadedByUserId: input.actorUserId,
+          parseStatus: ResumeParseStatus.PARSING,
+          extractedText: null,
+          parseErrorCode: null,
+          fieldsNeedReview: false,
+          fieldSuggestion: undefined,
           applicationId,
+          uploadedByUserId: input.actorUserId,
         },
-      })
-    : await prisma.candidateResumeDocument.create({
+      });
+      documentId = existing.id;
+    } else {
+      const created = await prisma.candidateResumeDocument.create({
         data: {
           companyId: candidate.companyId,
           candidateId,
           applicationId,
           storageKey: stored.storageKey,
           fileName,
-          contentType:
-        extension === "pdf"
-          ? "application/pdf"
-          : extension === "docx"
-            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            : "text/plain",
+          contentType,
           sizeBytes: stored.sizeBytes,
           contentSha256: stored.contentSha256,
-          parseStatus: extraction.ok ? "PARSED" : "FAILED",
-          extractedText: extraction.ok ? extraction.text : null,
-          extractorVersion: extraction.ok ? RESUME_TEXT_EXTRACTOR_VERSION : null,
-          parseErrorCode: extraction.ok
-            ? extraction.quality.needsReview
-              ? "LOW_QUALITY"
-              : null
-            : extraction.errorCode,
+          parseStatus: ResumeParseStatus.PARSING,
           uploadedByUserId: input.actorUserId,
         },
+        select: { id: true },
       });
-    return {
-      kind: "saved" as const,
-      extraction,
-      document,
-      replacedKey: existing ? existing.storageKey : null,
-    };
-    },
-  });
-
-  if (owned.kind === "duplicate") {
-    await analyseParsedCandidate({
-      candidateId,
-      companyId: candidate.companyId,
-      applicationId,
-    }).catch((error) => console.error("[analyse] after duplicate parse", error));
-    return owned.response;
+      documentId = created.id;
+    }
+  } catch (error) {
+    await discardUnattachedResumeObject(stored.storageKey);
+    throw error;
   }
-  const { extraction, document, replacedKey } = owned;
-  if (replacedKey) {
+  if (existing?.storageKey && existing.storageKey !== stored.storageKey) {
     await releaseReplacedResumeObject({
-      previousKey: replacedKey,
+      previousKey: existing.storageKey,
       currentKey: stored.storageKey,
       stillReferenced: resumeStorageKeyStillReferenced,
     });
   }
-
-  if (!extraction.ok) {
-    return {
-      id: document.id,
-      fileName: document.fileName,
-      contentType: document.contentType,
-      sizeBytes: document.sizeBytes,
-      parseStatus: document.parseStatus,
-      parseErrorCode: document.parseErrorCode,
-      createdAt: document.createdAt,
-      hasEvidenceText: false,
-    };
+  if (process.env.HIREIQ_SKIP_RESUME_PARSE !== "1") {
+    scheduleBackgroundWork(() => finishCandidateResumeParse(documentId));
   }
-
-  // Evidence is created once per document: if a previous FAILED attempt
-  // somehow left evidence behind, skip rather than duplicate.
-  const existingEvidence = await prisma.candidateEvidence.findFirst({
-    where: {
-      candidateId,
-      companyId: candidate.companyId,
-      sourceType: CandidateEvidenceSourceType.RESUME_DOCUMENT,
-      inlineText: extraction.text,
-    },
-    select: { id: true },
-  });
-
-  if (!existingEvidence) {
-    await createEvidence({
-      companyId: candidate.companyId,
-      candidateId,
-      applicationId,
-      sourceType: CandidateEvidenceSourceType.RESUME_DOCUMENT,
-      origin: CandidateEvidenceOrigin.RECRUITER_ENTERED,
-      ingestionEventId: null,
-      hostedApplySubmissionId: null,
-      actorUserId: input.actorUserId,
-      inlineText: extraction.text,
-      contentSha256: hashEvidenceInlineTextOrNull(extraction.text),
-      createdAt: document.createdAt,
-    });
-  }
-
-  await analyseParsedCandidate({
-    candidateId,
-    companyId: candidate.companyId,
-    applicationId,
-  }).catch((error) => console.error("[analyse] after parse", error));
-
   return {
-    id: document.id,
-    fileName: document.fileName,
-    contentType: document.contentType,
-    sizeBytes: document.sizeBytes,
-    parseStatus: document.parseStatus,
-    parseErrorCode: document.parseErrorCode,
-    createdAt: document.createdAt,
-    hasEvidenceText: true,
+    id: documentId,
+    fileName,
+    contentType,
+    sizeBytes: stored.sizeBytes,
+    parseStatus: "PARSING",
+    parseErrorCode: null,
+    createdAt: existing?.createdAt ?? new Date(),
+    hasEvidenceText: false,
   };
 }
 
@@ -379,6 +279,7 @@ export function resumeParseStatusNote(code: string | null): string | null {
     return "Scan saved. Reading it can take a while.";
   }
   if (code === "LOW_QUALITY") return "Text was extracted, but it looks incomplete.";
+  if (code === "NEEDS_REVIEW") return "The file was read. Check the fields; some could not be filled automatically.";
   return code;
 }
 

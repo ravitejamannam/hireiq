@@ -1,0 +1,10 @@
+ALTER TYPE "ResumeParseStatus" ADD VALUE IF NOT EXISTS 'PARSING';
+ALTER TYPE "ResumeParseStatus" ADD VALUE IF NOT EXISTS 'READY';
+ALTER TYPE "HostedResumeParseStatus" ADD VALUE IF NOT EXISTS 'PARSING';
+ALTER TYPE "HostedResumeParseStatus" ADD VALUE IF NOT EXISTS 'READY';
+
+ALTER TABLE "CandidateResumeDocument" ADD COLUMN IF NOT EXISTS "fieldSuggestion" JSONB;
+ALTER TABLE "CandidateResumeDocument" ADD COLUMN IF NOT EXISTS "fieldsNeedReview" BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE "HostedApplyResumeUpload" ADD COLUMN IF NOT EXISTS "fieldSuggestion" JSONB;
+ALTER TABLE "HostedApplyResumeUpload" ADD COLUMN IF NOT EXISTS "fieldsNeedReview" BOOLEAN NOT NULL DEFAULT false;

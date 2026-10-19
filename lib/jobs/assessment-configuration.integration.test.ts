@@ -56,6 +56,17 @@ describe("assessment configuration on client post", () => {
   });
 
   it("requires an active question in the selected category and retries the same key", async () => {
+    const parkedDesign = await prisma.assessmentBankQuestion.findMany({
+      where: { roleCategory: RoleCategory.DESIGN, active: true },
+      select: { id: true },
+    });
+    if (parkedDesign.length > 0) {
+      await prisma.assessmentBankQuestion.updateMany({
+        where: { id: { in: parkedDesign.map((row) => row.id) } },
+        data: { active: false },
+      });
+    }
+    try {
     const existingDesign = await prisma.assessmentBankQuestion.count({
       where: { roleCategory: RoleCategory.DESIGN, active: true },
     });
@@ -134,5 +145,13 @@ describe("assessment configuration on client post", () => {
         where: { jobId: posted.id, status: "PUBLISHED" },
       }),
     ).toBe(1);
+    } finally {
+      if (parkedDesign.length > 0) {
+        await prisma.assessmentBankQuestion.updateMany({
+          where: { id: { in: parkedDesign.map((row) => row.id) } },
+          data: { active: true },
+        });
+      }
+    }
   });
 });

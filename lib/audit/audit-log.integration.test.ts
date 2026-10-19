@@ -30,6 +30,7 @@ import {
 } from "@/app/actions/organization-actions";
 import { getAuditLogPage } from "@/lib/audit/audit-log";
 import { AuthorizationError } from "@/lib/auth/authorization";
+import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
 
 const MARKER = `audit-${process.pid}-${Date.now()}`;
@@ -44,7 +45,7 @@ describe("audit log", () => {
 
   afterAll(async () => {
     if (companyIds.length === 0) return;
-    await prisma.auditLog.deleteMany({ where: { companyId: { in: companyIds } } });
+    await deleteAuditLogsForTests({ companyId: { in: companyIds } });
     await prisma.outcomeEvent.deleteMany({ where: { companyId: { in: companyIds } } });
     await prisma.billingLineItem.deleteMany({
       where: { billingRecord: { companyId: { in: companyIds } } },

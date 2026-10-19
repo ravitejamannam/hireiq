@@ -112,4 +112,80 @@ describe("acceptResumeFields", () => {
       ),
     ).toEqual({ ok: false, reason: "UNGROUNDED_QUOTE" });
   });
+
+  it("drops one ungrounded skill and blank dates without discarding the resume", () => {
+    const result = acceptResumeFields(
+      {
+        fullName: null,
+        email: null,
+        phone: null,
+        skills: [
+          { value: "Engineer", quote: "Engineer" },
+          { value: "Invented", quote: "Not written" },
+        ],
+        experience: [
+          {
+            title: { value: "Engineer", quote: "Engineer" },
+            organization: { value: "Analytical Engines", quote: "Analytical Engines" },
+            startDate: { value: "", quote: "" },
+            endDate: { value: " ", quote: " " },
+          },
+        ],
+        education: [],
+        certifications: [],
+        projects: [],
+      },
+      "Ada Lovelace\nEngineer at Analytical Engines",
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.fields.skills.map((skill) => skill.value)).toEqual(["Engineer"]);
+    expect(result.fields.experience[0]?.startDate).toBeNull();
+    expect(result.fields.experience[0]?.organization?.quote).toBe("Analytical Engines");
+  });
+
+  it("accepts a quote that only differs by line breaks", () => {
+    const result = acceptResumeFields(
+      {
+        fullName: null,
+        email: null,
+        phone: null,
+        skills: [{ value: "site supervision", quote: "site supervision" }],
+        experience: [],
+        education: [],
+        certifications: [],
+        projects: [],
+      },
+      "Skills\nsite\nsupervision\nfor civil works",
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.fields.skills[0]?.quote).toBe("site\nsupervision");
+  });
+
+  it("accepts a quote that uses straight quotes when the resume uses curly quotes", () => {
+    const result = acceptResumeFields(
+      {
+        fullName: null,
+        email: null,
+        phone: null,
+        skills: [],
+        experience: [
+          {
+            title: { value: "Engineer", quote: "Engineer" },
+            organization: { value: "Dolphin Innovative Service", quote: '"Dolphin Innovative Service"' },
+            startDate: null,
+            endDate: null,
+          },
+        ],
+        education: [],
+        certifications: [],
+        projects: [],
+      },
+      "Worked at \u201cDolphin Innovative Service\u201d as an Engineer",
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.fields.experience[0]?.organization?.value).toBe("Dolphin Innovative Service");
+  });
 });

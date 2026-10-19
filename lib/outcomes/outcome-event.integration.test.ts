@@ -19,6 +19,7 @@ import {
   commitApplicationStatusChange,
   commitOfferDecision,
 } from "@/lib/outcomes/outcome-event-writes";
+import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
 
 const MARKER = `m13-${process.pid}-${Date.now()}`;
@@ -75,7 +76,12 @@ async function world(label: string) {
 afterAll(async () => {
   if (companyIds.length === 0) return;
   await prisma.outcomeEvent.deleteMany({ where: { companyId: { in: companyIds } } });
-  await prisma.auditLog.deleteMany({ where: { companyId: { in: companyIds } } });
+  await deleteAuditLogsForTests({
+    OR: [
+      { companyId: { in: companyIds } },
+      { actor: { email: { startsWith: MARKER } } },
+    ],
+  });
   await prisma.billingLineItem.deleteMany({
     where: { application: { companyId: { in: companyIds } } },
   });

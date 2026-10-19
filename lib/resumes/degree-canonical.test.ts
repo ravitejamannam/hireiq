@@ -18,5 +18,7 @@ describe("Indian degree and employer names", () => {
     expect(canonicalEmployer("Tata Consultancy Services")).toBe("TCS");
     expect(employersMatch("TCS", "Tata Consultancy Services Ltd")).toBe(true);
     expect(employersMatch("Infosys Ltd", "Infosys Limited")).toBe(true);
+    expect(canonicalEmployer("LTI")).toBe("LTIMindtree");
+    expect(canonicalEmployer("Peekay Buildtech")).toBeNull();
   });
 });

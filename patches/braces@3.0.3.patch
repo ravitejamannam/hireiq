@@ -1,0 +1,15 @@
+diff --git a/index.js b/index.js
+index d222c13b579d2d476dc26d692219dbaee1665b88..b05e1e76f0489e77035272f29204df91e9e95778 100644
+--- a/index.js
++++ b/index.js
+@@ -21,6 +21,10 @@ const parse = require('./lib/parse');
+ 
+ const braces = (input, options = {}) => {
+   let output = [];
++  if (typeof input === 'string') {
++    const opens = input.split('{').length - 1;
++    if (input.length > 100000 || opens > 25) return [input];
++  }
+ 
+   if (Array.isArray(input)) {
+     for (const pattern of input) {

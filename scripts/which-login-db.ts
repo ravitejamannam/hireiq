@@ -1,7 +1,21 @@
-import { config } from "dotenv";
+import { readFileSync } from "node:fs";
 
-const envFile = config({ path: ".env" }).parsed ?? {};
-const localFile = config({ path: ".env.local" }).parsed ?? {};
+function parseEnv(path: string) {
+  const out: Record<string, string> = {};
+  try {
+    for (const line of readFileSync(path, "utf8").split("\n")) {
+      if (!line || line.startsWith("#") || !line.includes("=")) continue;
+      const index = line.indexOf("=");
+      out[line.slice(0, index)] = line.slice(index + 1).trim().replace(/^"|"$/g, "");
+    }
+  } catch {
+    return out;
+  }
+  return out;
+}
+
+const envFile = parseEnv(".env");
+const localFile = parseEnv(".env.local");
 
 function dbName(value: string | undefined) {
   if (!value) return null;

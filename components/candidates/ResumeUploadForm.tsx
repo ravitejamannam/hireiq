@@ -17,16 +17,42 @@ export default function ResumeUploadForm({
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
+  async function pollRecruiterParse(documentId: number, fileName: string) {
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const response = await fetch(`/api/resumes/${documentId}/status`);
+      const body = (await response.json().catch(() => null)) as
+        | { ok?: boolean; parseStatus?: string; fieldsNeedReview?: boolean }
+        | null;
+      if (!response.ok || !body?.ok || body.parseStatus === "PARSING") continue;
+      setMessage({
+        ok: body.parseStatus !== "FAILED",
+        text:
+          body.parseStatus === "FAILED"
+            ? `${fileName} could not be read.`
+            : body.fieldsNeedReview
+              ? `${fileName} was read. Some fields need review.`
+              : `${fileName} is ready.`,
+      });
+      return;
+    }
+  }
+
   function onSubmit(formData: FormData) {
     setMessage(null);
     startTransition(async () => {
       const result = await uploadCandidateResume(candidateId, applicationId ?? null, formData);
       if (result.ok) {
-        setMessage({
-          ok: true,
-          text: `${result.document.fileName} uploaded — ${result.document.parseStatus.toLowerCase()}.`,
-        });
         formRef.current?.reset();
+        if (result.document.parseStatus === "PARSING") {
+          setMessage({ ok: true, text: `Reading ${result.document.fileName}… You can keep working.` });
+          void pollRecruiterParse(result.document.id, result.document.fileName);
+        } else {
+          setMessage({
+            ok: true,
+            text: `${result.document.fileName} uploaded — ${result.document.parseStatus.toLowerCase()}.`,
+          });
+        }
       } else {
         setMessage({ ok: false, text: result.error });
       }

@@ -22,6 +22,7 @@ vi.mock("next/cache", () => ({
 
 import { confirmClientCandidateHire } from "@/app/actions/application-actions";
 import { AuthorizationError } from "@/lib/auth/authorization";
+import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
 
 const MARKER = `hire-${process.pid}-${Date.now()}`;
@@ -37,7 +38,7 @@ describe("hire confirmation permission", () => {
   afterAll(async () => {
     if (companyIds.length === 0) return;
     await prisma.outcomeEvent.deleteMany({ where: { companyId: { in: companyIds } } });
-    await prisma.auditLog.deleteMany({ where: { companyId: { in: companyIds } } });
+    await deleteAuditLogsForTests({ companyId: { in: companyIds } });
     await prisma.billingLineItem.deleteMany({
       where: { billingRecord: { companyId: { in: companyIds } } },
     });

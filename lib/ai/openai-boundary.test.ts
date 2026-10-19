@@ -7,7 +7,7 @@ const ROOT = path.resolve(__dirname, "../..");
 const ALLOWED = new Set([path.normalize("lib/ai/gateway.ts")]);
 
 function filesUnder(dir: string): string[] {
-  const skip = new Set(["node_modules", ".next", "lib/generated", ".data", "coverage"]);
+  const skip = new Set(["node_modules", ".next", ".next-e2e", ".next-roadmap", "lib/generated", ".data", "coverage"]);
   const found: string[] = [];
   for (const entry of readdirSync(dir)) {
     if (skip.has(entry)) continue;

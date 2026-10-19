@@ -61,7 +61,7 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
   });
 
   const calendar = await prisma.interviewerCalendarIntegration.findUnique({
-    where: { userId: admin.id },
+    where: { userId_provider: { userId: admin.id, provider: "GOOGLE" } },
     select: { grantedScopes: true },
   });
   const reconnectCalendar = Boolean(calendar) && calendarNeedsReconnect(calendar?.grantedScopes);

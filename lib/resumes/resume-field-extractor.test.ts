@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { heuristicResumeFields, suggestionFromFields } from "@/lib/resumes/resume-field-extractor";
+import { heuristicResumeFields, rolesFromResumeHeadings, suggestionFromFields } from "@/lib/resumes/resume-field-extractor";
 import { acceptResumeFields } from "@/lib/resumes/resume-fields";
 import { createParseControl } from "@/lib/resumes/text-extraction";
 
@@ -123,6 +123,20 @@ describe("acceptResumeFields contract", () => {
         source,
       ),
     ).toEqual({ ok: false, reason: "UNGROUNDED_QUOTE" });
+  });
+});
+
+describe("rolesFromResumeHeadings", () => {
+  it("reads the title under the name and the title under WORK EXPERIENCE", () => {
+    const header = rolesFromResumeHeadings(
+      "Imgeeyaul Ansari\njava developer\n\nPune, Maharashtra - Email me on Indeed: indeed.com/r/x\n",
+    );
+    expect(header[0]?.title.value).toBe("java developer");
+    const section = rolesFromResumeHeadings(
+      "WORK EXPERIENCE\n\nTechnical Consultant\n\nOracle -  Bengaluru, Karnataka -\n\nOctober 2015 to Present\n",
+    );
+    expect(section[0]?.title.value).toBe("Technical Consultant");
+    expect(section[0]?.organization?.value).toBe("Oracle");
   });
 });
 

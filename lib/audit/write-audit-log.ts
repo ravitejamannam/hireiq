@@ -4,6 +4,14 @@ import { prisma } from "@/lib/prisma";
 
 type AuditDb = Prisma.TransactionClient | typeof prisma;
 
+/** Test cleanup only. Production deletes stay rejected by the database trigger. */
+export async function deleteAuditLogsForTests(where: Prisma.AuditLogWhereInput) {
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`SELECT set_config('hireiq.allow_audit_delete', 'on', true)`);
+    await tx.auditLog.deleteMany({ where });
+  });
+}
+
 export async function writeAuditLog(
   db: AuditDb,
   input: {

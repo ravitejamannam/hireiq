@@ -64,7 +64,13 @@ export function canonicalEmployer(raw: string): string | null {
     for (const name of group) {
       const alias = fold(name);
       if (alias.length < 3) continue;
-      if (key !== alias && !key.includes(alias) && !alias.includes(key)) continue;
+      if (key === alias) {
+        if (!best || alias.length > best.length) best = { name: group[0], length: alias.length };
+        continue;
+      }
+      // Short aliases must match the whole name. "LTI" must not fire inside an unrelated word.
+      if (alias.length < 5) continue;
+      if (!key.includes(alias) && !alias.includes(key)) continue;
       if (!best || alias.length > best.length) best = { name: group[0], length: alias.length };
     }
   }

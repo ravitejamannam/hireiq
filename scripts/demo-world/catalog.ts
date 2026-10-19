@@ -324,6 +324,27 @@ export const DEMO_INTERVIEWERS: InterviewerDef[] = [
   },
 ];
 
+/** Assigned only to Harbor Pay jobs. Not part of the shared round-robin. */
+export const HARBOR_ONLY_INTERVIEWER: InterviewerDef = {
+  email: "interviewer.meera.harbor@hireiq.local",
+  name: "Meera Shah",
+  category: "PRODUCT",
+  headline: "Harbor Pay interviewer — payments operations",
+  location: "Mumbai",
+  aboutText:
+    "I interview only for Harbor Pay. The conversations are about settlement exceptions, reconciliation, and whether a candidate can explain a money-movement failure.",
+  roleTitle: "Payments Interviewer",
+  experienceYears: 12,
+  domains: ["Payments", "Operations"],
+  currentTitle: "Head of Payments",
+  currentCompany: "Harbor Pay",
+  priorTitle: "Operations Lead",
+  priorCompany: "Razorpay",
+  school: "IIM Ahmedabad",
+  degree: "MBA",
+  field: "Finance",
+};
+
 export const PIPELINE_PACK: PipelineSeat[] = [
   {
     key: "applied",
