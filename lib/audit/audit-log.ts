@@ -24,6 +24,7 @@ export async function getAuditLogPage(input: {
         occurredAt: true,
         actorUserId: true,
         actorRole: true,
+        scimTokenId: true,
         companyId: true,
         action: true,
         targetType: true,

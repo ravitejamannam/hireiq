@@ -38,6 +38,17 @@ const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const LIST_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:ListResponse";
 const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 
+/**
+ * What a user-level event actually touched. A User is named only when the directory entry is linked to one; an
+ * unlinked entry is the directory row itself, so its id is never presented as a User id. (The route also checks the
+ * linked user belongs to the company before it keeps this target.)
+ */
+export function userAuditTarget(user: Pick<ScimUser, "id" | "portalUserId">) {
+  return user.portalUserId
+    ? { targetType: "User", targetId: user.portalUserId }
+    : { targetType: "ScimDirectoryUser", targetId: Number(user.id) };
+}
+
 export function emptyDirectory(companyId: number): ScimState {
   return { companyId, users: [], groups: [], seq: 1 };
 }
@@ -323,7 +334,7 @@ export function applyScim(input: {
         state: { ...input.state, users: input.state.users.map((row) => row.id === user.id ? next : row) },
         status: 204,
         body: null,
-        audit: { companyId: input.companyId, action: "SCIM_USER_DEPROVISIONED", targetType: "User", targetId: user.portalUserId ?? Number(user.id), reason: "IdP deleted the user. Sessions and API keys are revoked immediately." },
+        audit: { companyId: input.companyId, action: "SCIM_USER_DEPROVISIONED", ...userAuditTarget(user), reason: "IdP deleted the user. Sessions and API keys are revoked immediately." },
         deprovision: deprovisionEffect(input.now),
       };
     }
@@ -343,7 +354,7 @@ export function applyScim(input: {
         state: { ...input.state, users: input.state.users.map((row) => row.id === user.id ? next : row) },
         status: 200,
         body: userResource(next),
-        audit: { companyId: input.companyId, action: next.active ? "SCIM_USER_REPLACED" : "SCIM_USER_DEPROVISIONED", targetType: "User", targetId: user.portalUserId ?? Number(user.id), reason: "User replaced." },
+        audit: { companyId: input.companyId, action: next.active ? "SCIM_USER_REPLACED" : "SCIM_USER_DEPROVISIONED", ...userAuditTarget(user), reason: "User replaced." },
         deprovision,
       };
     }
@@ -358,8 +369,7 @@ export function applyScim(input: {
         audit: {
           companyId: input.companyId,
           action: patched.user.active ? "SCIM_USER_UPDATED" : "SCIM_USER_DEPROVISIONED",
-          targetType: "User",
-          targetId: user.portalUserId ?? Number(user.id),
+          ...userAuditTarget(user),
           reason: patched.user.active ? "IdP updated the user." : "IdP deactivated the user. Sessions and API keys are revoked immediately.",
         },
         deprovision,

@@ -15,14 +15,14 @@ import { buildResumeStorageKey, readResume, storeResume } from "@/lib/resumes/st
 import { extractResumeText } from "@/lib/resumes/text-extraction";
 import { cancelBookedInterview } from "@/lib/interviews/scheduling-service";
 
-async function auditActor() {
-  const user = await prisma.user.findFirst({
-    where: { role: "ADMIN" },
-    select: { id: true },
-    orderBy: { id: "asc" },
-  });
-  return user?.id ?? null;
-}
+/**
+ * Audit rows record the actor role (CANDIDATE), the tenant, the action, the target and the time. A candidate is not
+ * a user, so actorUserId stays null: it must never name an administrator who did not act. The candidate is found
+ * through the target id, and companyId comes from the application the validated portal session owns.
+ * They never carry the candidate's email address or free text. Audit rows are append-only, so anything written
+ * here cannot be erased later.
+ */
+const PORTAL_REASON = "via candidate portal";
 
 async function audit(input: {
   companyId: number;
@@ -31,10 +31,8 @@ async function audit(input: {
   targetId: number;
   reason: string;
 }) {
-  const actorUserId = await auditActor();
-  if (!actorUserId) return;
   await writeAuditLog(prisma, {
-    actorUserId,
+    actorUserId: null,
     actorRole: "CANDIDATE",
     companyId: input.companyId,
     action: input.action,
@@ -128,7 +126,7 @@ export async function setOptOut(applicationId: number, email: string, optedOut: 
     action: optedOut ? "AI_OPT_OUT" : "AI_OPT_IN",
     targetType: "APPLICATION",
     targetId: application.id,
-    reason: email,
+    reason: PORTAL_REASON,
   });
   return application.id;
 }
@@ -145,7 +143,7 @@ export async function setFutureRolesConsent(applicationId: number, email: string
     action: allowed ? "FUTURE_ROLES_CONSENT" : "FUTURE_ROLES_DECLINED",
     targetType: "APPLICATION",
     targetId: application.id,
-    reason: email,
+    reason: PORTAL_REASON,
   });
   return application.id;
 }
@@ -162,7 +160,7 @@ export async function requestPortalHumanReview(applicationId: number, email: str
     action: "HUMAN_REVIEW_REQUESTED",
     targetType: "APPLICATION",
     targetId: application.id,
-    reason: email,
+    reason: PORTAL_REASON,
   });
   return application.id;
 }
@@ -179,7 +177,7 @@ export async function withdrawApplication(applicationId: number, email: string, 
     action: "APPLICATION_WITHDRAWN",
     targetType: "APPLICATION",
     targetId: application.id,
-    reason: `${email}${reason.trim() ? ` | ${reason.trim()}` : ""}`,
+    reason: reason.trim() ? `${PORTAL_REASON} | reason given` : PORTAL_REASON,
   });
   return application.id;
 }
@@ -196,7 +194,7 @@ export async function unsubscribeApplication(applicationId: number, email: strin
     action: "EMAIL_UNSUBSCRIBED",
     targetType: "APPLICATION",
     targetId: application.id,
-    reason: email,
+    reason: PORTAL_REASON,
   });
   return application.id;
 }
@@ -218,7 +216,7 @@ export async function queueDeletion(applicationId: number, email: string) {
     action: "DELETION_REQUESTED",
     targetType: "CANDIDATE",
     targetId: application.candidateId,
-    reason: email,
+    reason: PORTAL_REASON,
   });
   return row.id;
 }
@@ -308,7 +306,7 @@ export async function savePortalDocument(input: {
     action: "DOCUMENT_UPLOADED",
     targetType: "APPLICATION",
     targetId: application.id,
-    reason: `${input.email} | ${input.kind}`,
+    reason: `${PORTAL_REASON} | kind ${input.kind}`,
   });
   if (input.kind === "RESUME") {
     void import("@/lib/talent/rediscovery-service").then((mod) => mod.rerunRediscoveryForCandidate(application.candidateId).catch(() => undefined));
@@ -347,7 +345,7 @@ export async function issuePortalBookingLink(email: string, applicationId: numbe
     action: "INTERVIEW_RESCHEDULE_LINK",
     targetType: "APPLICATION",
     targetId: application.id,
-    reason: email,
+    reason: PORTAL_REASON,
   });
   return `${origin}/schedule/${token.rawToken}`;
 }
@@ -361,7 +359,7 @@ export async function cancelPortalInterview(email: string, applicationId: number
     action: "INTERVIEW_CANCELLED",
     targetType: "APPLICATION",
     targetId: application.id,
-    reason: email,
+    reason: PORTAL_REASON,
   });
   return application.id;
 }

@@ -75,7 +75,7 @@ export default async function AuditLogPage({ searchParams }: AuditPageProps) {
               result.entries.map((entry) => (
                 <tr key={entry.id} className="border-t border-zinc-200">
                   <td className="px-3 py-2">{entry.occurredAt.toISOString()}</td>
-                  <td className="px-3 py-2">{entry.actorUserId}</td>
+                  <td className="px-3 py-2">{entry.actorUserId ?? (entry.scimTokenId ? `SCIM credential #${entry.scimTokenId}` : "none")}</td>
                   <td className="px-3 py-2">{entry.actorRole}</td>
                   <td className="px-3 py-2">{entry.companyId}</td>
                   <td className="px-3 py-2">{entry.action}</td>

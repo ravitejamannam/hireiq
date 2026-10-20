@@ -491,19 +491,24 @@ model OutcomeEvent {
 model AuditLog {
   id          Int      @id @default(autoincrement())
   occurredAt  DateTime @default(now())
-  actorUserId Int
+  /// Null only for actors that are not users. A CANDIDATE row must be null (database CHECK); the candidate is found through the target.
+  actorUserId Int?
   actorRole   String
   companyId   Int
   action      String
   targetType  String
   targetId    Int
   reason      String?
+  /// Which company-scoped SCIM credential acted. Set exactly when actorRole is SCIM (database CHECKs). The row's id only: never the token or its hash.
+  scimTokenId Int?
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  actor   User    @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  actor     User?      @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  scimToken ScimToken? @relation(fields: [scimTokenId], references: [id], onDelete: Restrict)
 
   @@index([companyId, occurredAt])
   @@index([actorUserId])
+  @@index([scimTokenId])
 }
 
 /// Candidate-facing email outcome. Does not store the address or message.
@@ -3218,7 +3223,8 @@ model ScimToken {
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  auditLogs AuditLog[]
 
   @@index([companyId])
 }
