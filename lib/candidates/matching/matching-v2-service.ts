@@ -232,7 +232,7 @@ export async function executeRunMatcherV2(input: {
     applicationId: application.id,
   });
 
-  const key: MatcherV2IdempotencyKey = {
+  const idempotency: MatcherV2IdempotencyKey = {
     companyId: application.companyId,
     applicationId: application.id,
     jobSpecificationVersionId: spec.id,
@@ -242,12 +242,12 @@ export async function executeRunMatcherV2(input: {
     intelligenceSnapshotHash: selected.snapshotHash,
   };
 
-  const existing = await findCompletedAssessmentRun(key);
+  const existing = await findCompletedAssessmentRun(idempotency);
   if (existing) {
     return toSafeRun(existing, intel.requirements);
   }
 
-  const running = await findLatestRunningAssessmentRun(key);
+  const running = await findLatestRunningAssessmentRun(idempotency);
   if (running) {
     if (Date.now() - running.createdAt.getTime() < STALE_MS) {
       throw new MatcherV2Error(
@@ -263,7 +263,7 @@ export async function executeRunMatcherV2(input: {
   }
 
   const run = await createAssessmentRun({
-    ...key,
+    ...idempotency,
     candidateId: application.candidateId,
     jobId: application.jobId,
   });
@@ -286,11 +286,11 @@ export async function executeRunMatcherV2(input: {
     });
 
     const completed = await prisma.$transaction(async (tx) => {
-      const raced = await findCompletedAssessmentRun(key, tx);
+      const raced = await findCompletedAssessmentRun(idempotency, tx);
       if (raced) {
         await markAssessmentRunFailed(
           run.id,
-          key.companyId,
+          idempotency.companyId,
           MATCHER_V2_INTERNAL_ERROR,
           tx,
         );
@@ -298,7 +298,7 @@ export async function executeRunMatcherV2(input: {
       }
       await createRequirementAssessments(
         {
-          companyId: key.companyId,
+          companyId: idempotency.companyId,
           runId: run.id,
           applicationId: application.id,
           candidateId: application.candidateId,
@@ -306,14 +306,14 @@ export async function executeRunMatcherV2(input: {
         },
         tx,
       );
-      const updated = await markAssessmentRunCompleted(run.id, key.companyId, tx);
+      const updated = await markAssessmentRunCompleted(run.id, idempotency.companyId, tx);
       if (updated.count !== 1) {
         throw new MatcherV2Error(
           MATCHER_V2_GENERIC_ERROR,
           MATCHER_V2_INTERNAL_ERROR,
         );
       }
-      const stored = await getAssessmentRunWithRows(run.id, key.companyId, tx);
+      const stored = await getAssessmentRunWithRows(run.id, idempotency.companyId, tx);
       if (!stored) {
         throw new MatcherV2Error(
           MATCHER_V2_GENERIC_ERROR,
@@ -326,7 +326,7 @@ export async function executeRunMatcherV2(input: {
   } catch (error) {
     await markAssessmentRunFailed(
       run.id,
-      key.companyId,
+      idempotency.companyId,
       error instanceof MatcherV2Error ? error.code : MATCHER_V2_INTERNAL_ERROR,
     );
     if (error instanceof MatcherV2Error) {

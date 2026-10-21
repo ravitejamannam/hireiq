@@ -129,8 +129,9 @@ if [ -z "${TOKEN//[[:space:]]/}" ] || [[ "$TOKEN" == */* ]]; then
 fi
 SNAPSHOT=$(q 'SELECT "applyUrlSnapshot" FROM "JobDistribution" WHERE "companyId" = 1 AND "jobId" = 3 AND "applyMode" = '"'"'HIREIQ_HOSTED'"'"' AND "status" = '"'"'PUBLISHED'"'"' AND "applyUrlSnapshot" IS NOT NULL;')
 STORED_HASH=$(q 'SELECT t."tokenHash" FROM "ApplyToken" t JOIN "JobDistribution" d ON d.id = t."distributionId" WHERE d."companyId" = 1 AND d."jobId" = 3 AND d."applyMode" = '"'"'HIREIQ_HOSTED'"'"' AND d.status = '"'"'PUBLISHED'"'"' AND t."revokedAt" IS NULL;')
-if ! BASE="$BASE" SNAPSHOT="$SNAPSHOT" TOKEN="$TOKEN" STORED_HASH="$STORED_HASH" node --input-type=module << 'EOF'
-import { hashSecureToken } from "/Users/ravitejamannam/Developer/hireiq/lib/auth/secure-token.ts";
+if ! BASE="$BASE" SNAPSHOT="$SNAPSHOT" TOKEN="$TOKEN" STORED_HASH="$STORED_HASH" HIREIQ_ROOT="$ROOT" node --input-type=module << 'EOF'
+import { pathToFileURL } from "node:url";
+const { hashSecureToken } = await import(pathToFileURL(`${process.env.HIREIQ_ROOT}/lib/auth/secure-token.ts`).href);
 const base = new URL(process.env.BASE);
 const snapshot = new URL(process.env.SNAPSHOT);
 const hashes = (process.env.STORED_HASH || "").split("\n").filter(Boolean);

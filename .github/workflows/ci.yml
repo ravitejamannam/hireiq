@@ -32,6 +32,10 @@ jobs:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/hireiq_test
     steps:
       - uses: actions/checkout@v4
+        with:
+          # gitleaks scans `git log -1`. A depth-1 checkout has no parent,
+          # so that patch is the entire tree and historical false positives fail every push.
+          fetch-depth: 2
 
       - uses: pnpm/action-setup@v4
 
