@@ -37,6 +37,10 @@ On the 179-resume tune set this measured a model-time 95th percentile of 19.1s a
 
 The Indian 30 were scored once more for latency only. That run's 95th percentile was 23.5s, with zero timeouts. Median was 12.2s. Titles, companies, and degrees on that second draw were 96.3%, 89.2%, and 95.7%. That draw is not a new headline. Temperature 0.2 moves a few fields between runs.
 
+## Backlog
+
+43% of the skills gpt-4o labeled (230 of 537) were never extracted, not merely left out of the primary list. A later pass can chase that recall. It does not block the matcher: ranking uses quoted evidence, and the recruiter still has the full resume.
+
 ## Known limits
 
 - The gpt-4o labels are not human-checked. A spot-check of 10 resumes is still open.
