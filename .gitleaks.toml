@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "pnpm integrity hashes and the throwaway localhost CI database"
+paths = ['''pnpm-lock\.yaml''']
+regexes = ['''postgresql://ci:ci@localhost:5432/''']

@@ -701,6 +701,7 @@ async function candidateViaRealServices(input: {
       name: input.name,
       email: input.email,
       consent: true,
+      aiEvaluation: "allowed",
       coverLetter: "I build platforms that stay up.",
       location: "Bengaluru",
       experienceYears: 9,
