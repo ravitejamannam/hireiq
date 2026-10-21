@@ -7,13 +7,16 @@ import {
 import { normalizeIdentityEmail } from "@/lib/auth/email-normalization";
 import { generateSecureToken, hashSecureToken } from "@/lib/auth/secure-token";
 import { prisma } from "@/lib/prisma";
+import {
+  clientRoleLabel,
+  clientRoleSummary,
+} from "@/lib/organizations/client-portal-roles";
 import { deliverOrganizationInvitationEmail } from "@/lib/organizations/invitation-email";
 import {
-  INVITATION_MEMBER_ROLE,
   INVITATION_TTL_MS,
   OrganizationMembershipError,
   assertInviteeIsNotPrivilegedPortalUser,
-  assertInvitationRoleIsMember,
+  assertInvitableOrganizationRole,
   assertUserCanAcceptClientInvitation,
   validateInvitationEmail,
   validateInvitationId,
@@ -40,8 +43,12 @@ export async function inviteOrganizationMemberForOwner(input: {
   actorUserId: number;
   companyId: number;
   email: unknown;
+  role?: unknown;
 }): Promise<InviteOrganizationMemberResult> {
   const email = validateInvitationEmail(input.email);
+  const role = assertInvitableOrganizationRole(
+    input.role === undefined ? "MEMBER" : input.role,
+  );
   const companyId = input.companyId;
   const now = new Date();
 
@@ -122,7 +129,7 @@ export async function inviteOrganizationMemberForOwner(input: {
         data: {
           companyId,
           email,
-          role: INVITATION_MEMBER_ROLE,
+          role,
           tokenHash: token.tokenHash,
           expiresAt,
           invitedByUserId: input.actorUserId,
@@ -140,12 +147,12 @@ export async function inviteOrganizationMemberForOwner(input: {
     throw error;
   }
 
-  assertInvitationRoleIsMember(INVITATION_MEMBER_ROLE);
-
   const delivery = await deliverOrganizationInvitationEmail({
     to: email,
     companyName: owner.company.name,
     rawToken: token.rawToken,
+    roleLabel: clientRoleLabel(role),
+    roleSummary: clientRoleSummary(role),
   });
 
   return {
@@ -249,7 +256,7 @@ export async function acceptOrganizationInvitationForUser(input: {
         throw new OrganizationMembershipError("Invitation has expired.");
       }
 
-      assertInvitationRoleIsMember(invitation.role);
+      assertInvitableOrganizationRole(invitation.role);
 
       const user = await tx.user.findUnique({
         where: { id: input.userId },
@@ -391,6 +398,7 @@ export async function previewInvitationByToken(token: unknown) {
     where: { tokenHash },
     select: {
       email: true,
+      role: true,
       expiresAt: true,
       acceptedAt: true,
       revokedAt: true,
@@ -411,6 +419,8 @@ export async function previewInvitationByToken(token: unknown) {
     );
   }
 
+  assertInvitableOrganizationRole(invitation.role);
+
   const existing = await prisma.user.findUnique({
     where: { email: invitation.email },
     select: { id: true },
@@ -419,6 +429,9 @@ export async function previewInvitationByToken(token: unknown) {
   return {
     email: invitation.email,
     companyName: invitation.company.name,
+    role: invitation.role,
+    roleLabel: clientRoleLabel(invitation.role),
+    roleSummary: clientRoleSummary(invitation.role),
     userExists: Boolean(existing),
   };
 }
@@ -474,6 +487,7 @@ export async function listCompanyTeam(companyId: number) {
     select: {
       id: true,
       email: true,
+      role: true,
       expiresAt: true,
       createdAt: true,
     },

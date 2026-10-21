@@ -17,6 +17,8 @@ export async function deliverOrganizationInvitationEmail(input: {
   to: string;
   companyName: string;
   rawToken: string;
+  roleLabel: string;
+  roleSummary: string;
 }) {
   const baseUrl = getPublicAppUrl();
   const invitePath = `/invite/${encodeURIComponent(input.rawToken)}`;
@@ -27,7 +29,8 @@ export async function deliverOrganizationInvitationEmail(input: {
     : "Sign in to HireIQ and open the invitation link from this email.";
 
   const text = [
-    `You were invited to join ${input.companyName} on HireIQ.`,
+    `You were invited to join ${input.companyName} on HireIQ as ${input.roleLabel}.`,
+    input.roleSummary,
     "",
     ctaLine,
     "",
@@ -36,7 +39,8 @@ export async function deliverOrganizationInvitationEmail(input: {
 
   const html = `
     <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.5;">
-      <p>You were invited to join <strong>${escapeHtml(input.companyName)}</strong> on HireIQ.</p>
+      <p>You were invited to join <strong>${escapeHtml(input.companyName)}</strong> on HireIQ as <strong>${escapeHtml(input.roleLabel)}</strong>.</p>
+      <p>${escapeHtml(input.roleSummary)}</p>
       ${
         ctaUrl
           ? `<p><a href="${escapeHtml(ctaUrl)}">Accept the invitation</a></p>`

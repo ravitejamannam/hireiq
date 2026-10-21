@@ -1,0 +1,2 @@
+ALTER TYPE "OrganizationMemberRole" ADD VALUE IF NOT EXISTS 'HR_HEAD';
+ALTER TYPE "OrganizationMemberRole" ADD VALUE IF NOT EXISTS 'RECRUITER';

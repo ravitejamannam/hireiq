@@ -1,9 +1,10 @@
-import { OrganizationMemberRole, PortalRole } from "@prisma/client";
+import { PortalRole } from "@prisma/client";
 
 import {
   isPlausibleIdentityEmail,
   normalizeIdentityEmail,
 } from "@/lib/auth/email-normalization";
+import { isInvitableClientRole } from "@/lib/organizations/client-portal-roles";
 
 export class OrganizationMembershipError extends Error {
   constructor(message: string) {
@@ -11,8 +12,6 @@ export class OrganizationMembershipError extends Error {
     this.name = "OrganizationMembershipError";
   }
 }
-
-export const INVITATION_MEMBER_ROLE = OrganizationMemberRole.MEMBER;
 
 export const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -62,14 +61,15 @@ export function validateInvitationId(id: unknown) {
   return id;
 }
 
-export function assertInvitationRoleIsMember(
-  role: OrganizationMemberRole | unknown,
-) {
-  if (role !== OrganizationMemberRole.MEMBER) {
+/** Invitations may create a member, HR Head, or recruiter. Never an owner. */
+export function assertInvitableOrganizationRole(role: unknown) {
+  if (!isInvitableClientRole(role)) {
     throw new OrganizationMembershipError(
       "Invitations cannot create an owner.",
     );
   }
+
+  return role;
 }
 
 export function assertUserCanAcceptClientInvitation(user: {

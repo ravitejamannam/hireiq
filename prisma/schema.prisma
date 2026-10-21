@@ -227,9 +227,14 @@ enum PortalRole {
   INTERVIEWER
 }
 
+/// Company seat inside the client portal.
+/// OWNER runs the account. MEMBER is general hiring access.
+/// HR_HEAD collects basic requirements. RECRUITER analyses, posts, and collects candidates.
 enum OrganizationMemberRole {
   OWNER
   MEMBER
+  HR_HEAD
+  RECRUITER
 }
 
 enum OrganizationMemberStatus {
