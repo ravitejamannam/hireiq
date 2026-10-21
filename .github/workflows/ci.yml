@@ -20,7 +20,7 @@ jobs:
         env:
           POSTGRES_USER: ci
           POSTGRES_PASSWORD: ci
-          POSTGRES_DB: hireiq_test
+          POSTGRES_DB: hireiq_e2e_disp_verify
         ports:
           - 5432:5432
         options: >-
@@ -29,7 +29,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://ci:ci@localhost:5432/hireiq_test
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/hireiq_e2e_disp_verify
+      E2E_DATABASE_NAME: hireiq_e2e_disp_verify
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,11 +72,12 @@ jobs:
         run: pnpm eslint lib app scripts --max-warnings 0
 
       # /careers prerenders with a database query, so this must be the
-      # migrated hireiq_test database from the job environment.
+      # migrated disposable database from the job environment.
       - name: Build
         run: pnpm build
         env:
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/hireiq_test
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/hireiq_e2e_disp_verify
+          E2E_DATABASE_NAME: hireiq_e2e_disp_verify
           AUTH_SECRET: ci-build-secret
 
   e2e:

@@ -102,8 +102,9 @@ if (otherApps !== "0") {
 q(`DELETE FROM "AssessmentAnswer" WHERE "attemptId" IN (SELECT t.id FROM "AssessmentAttempt" t JOIN "AssessmentInvite" i ON i.id = t."inviteId" WHERE i."applicationId" = ${Number(applicationId)})`);
 q(`DELETE FROM "AssessmentAttempt" WHERE "inviteId" IN (SELECT id FROM "AssessmentInvite" WHERE "applicationId" = ${Number(applicationId)})`);
 q(`DELETE FROM "AssessmentInvite" WHERE "applicationId" = ${Number(applicationId)}`);
-q(`DELETE FROM "CandidateEvidence" WHERE "applicationId" = ${Number(applicationId)}`);
+q(`DELETE FROM "CandidateEvidence" WHERE "applicationId" = ${Number(applicationId)} OR "ingestionEventId" = ${Number(eventId)}`);
 q(`DELETE FROM "CandidateResumeDocument" WHERE "applicationId" = ${Number(applicationId)}`);
+q(`DELETE FROM "CandidateIdentitySignal" WHERE "candidateId" = ${Number(candidateId)} OR "ingestionEventId" = ${Number(eventId)} OR "hostedApplySubmissionId" = ${Number(submissionId)}`);
 q(`UPDATE "HostedApplyResumeUpload" SET "hostedApplySubmissionId" = NULL WHERE id = ${Number(uploadId)}`);
 q(`DELETE FROM "ApplicationIngestionEvent" WHERE id = ${Number(eventId)} AND "hostedApplySubmissionId" = ${Number(submissionId)}`);
 q(`DELETE FROM "HostedApplySubmission" WHERE id = ${Number(submissionId)}`);
@@ -167,12 +168,22 @@ printf '%s\n' \
   'Skills: Go, PostgreSQL, Kafka, SQL, TypeScript, Docker, Linux, testing, and system design.' \
   > /tmp/az-resume.txt
 UP=$(curl --connect-timeout 5 --max-time 60 -s -X POST "$BASE/api/apply/$TOKEN/resume" -H "Origin: $BASE" -F "file=@/tmp/az-resume.txt")
-STATUS=$(echo "$UP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('parseStatus',''))" 2>/dev/null)
-CLAIM=$(echo "$UP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('resumeClaim',''))" 2>/dev/null)
+STATUS=$(echo "$UP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('parseStatus',''))" 2>/dev/null || true)
+CLAIM=$(echo "$UP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('resumeClaim',''))" 2>/dev/null || true)
 if [ -n "$CLAIM" ]; then
   CREATED_CLAIM="$CLAIM"
+  for _ in $(seq 1 20); do
+    if [ "$STATUS" = "READY" ] || [ "$STATUS" = "PARSED" ] || [ "$STATUS" = "FAILED" ]; then
+      break
+    fi
+    sleep 1
+    STATUS=$(curl --connect-timeout 5 --max-time 20 -s -H "Origin: $BASE" "$BASE/api/apply/$TOKEN/resume/status?claim=$CLAIM" | python3 -c "import sys,json;print(json.load(sys.stdin).get('parseStatus',''))" 2>/dev/null || true)
+  done
 fi
-check "resume pre-upload PARSED" "$STATUS" "PARSED"
+if [ "$STATUS" = "PARSED" ]; then
+  STATUS="READY"
+fi
+check "resume pre-upload ready" "$STATUS" "READY"
 [ -n "$CLAIM" ]; check "claim issued" "$([ -n "$CLAIM" ] && echo yes || echo no)" "yes"
 
 KEY=$(uuidgen | tr 'A-Z' 'a-z')
