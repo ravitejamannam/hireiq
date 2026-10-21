@@ -62,12 +62,11 @@ function loadEnvFile() {
     const eq = trimmed.indexOf("=");
     if (eq < 1) continue;
     const key = trimmed.slice(0, eq).trim();
-    if (process.env[key] !== undefined) continue;
     let value = trimmed.slice(eq + 1).trim();
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     }
-    process.env[key] = value;
+    if (key === "OPENAI_API_KEY" || process.env[key] === undefined) process.env[key] = value;
   }
 }
 
@@ -114,6 +113,9 @@ function recall(expected: string[], got: string[], match: (label: string, value:
 async function main() {
   const which = process.argv[2] === "holdout" ? "holdout" : "tune";
   loadEnvFile();
+  if (process.env.NODE_ENV === "production") {
+    (process.env as { NODE_ENV?: string }).NODE_ENV = "development";
+  }
   const dir = path.join(process.cwd(), ".data/resumes/indian_resumes/hireiq_fixtures");
   const ids = readdirSync(dir)
     .filter((name) => name.startsWith("dataturks-") && name.endsWith(".json"))
@@ -136,15 +138,30 @@ async function main() {
   let verified = 0;
   let model = 0;
   let unreviewed = 0;
+  let timeouts = 0;
+  const passTimes = { fieldsMs: [] as number[], skillsMs: [] as number[], rolesMs: [] as number[], wallMs: [] as number[] };
+  let rolesSkipped = 0;
   const companyMisses: string[] = [];
   await mapPool(fixtures, 4, async (row) => {
-    const proposal = await proposeResumeFieldsDetailed(row.text);
+    const proposal = await proposeResumeFieldsDetailed(row.text, { optedOut: false, subject: { synthetic: true } });
+    if (proposal.modelFailure === "TIMEOUT") timeouts += 1;
+    if (proposal.timings) {
+      passTimes.fieldsMs.push(proposal.timings.fieldsMs);
+      passTimes.skillsMs.push(proposal.timings.skillsMs);
+      passTimes.rolesMs.push(proposal.timings.rolesMs);
+      passTimes.wallMs.push(proposal.timings.wallMs);
+      if (proposal.timings.rolesSkipped) rolesSkipped += 1;
+    }
     if (proposal.source === "model") model += 1;
     else unreviewed += 1;
     const gotTitles = proposal.fields.experience.map((role) => role.title.value);
     const gotCompanies = proposal.fields.experience.flatMap((role) => (role.organization ? [role.organization.value] : []));
     const gotDegrees = proposal.fields.education.map((school) => school.credential.value);
-    const gotSkills = proposal.fields.skills.filter((skill) => verifiedSkill(skill.value, skill.quote, row.text));
+    const gotSkills = [
+      ...proposal.fields.skills,
+      ...proposal.fields.otherMentions,
+    ].filter((skill) => verifiedSkill(skill.value, skill.quote, row.text));
+    const primarySkills = proposal.fields.skills.filter((skill) => verifiedSkill(skill.value, skill.quote, row.text));
     const title = recall(row.titles, gotTitles, labelsMatch);
     const company = recall(row.companies, gotCompanies, employersNearMatch);
     const degree = recall(row.credentials, gotDegrees, labelsMatch);
@@ -165,7 +182,7 @@ async function main() {
     totals.degrees[1] += degree.total;
     totals.skills[0] += skill.hit;
     totals.skills[1] += skill.total;
-    for (const skillValue of gotSkills) {
+    for (const skillValue of primarySkills) {
       predicted += 1;
       if (gold.some((label) => skillsMatch(label, skillValue.value))) predictedHit += 1;
       verified += 1;
@@ -193,6 +210,20 @@ async function main() {
         degrees: pct(totals.degrees),
         skillsRecall: pct(totals.skills),
         skillPrecision: predicted === 0 ? null : Math.round((1000 * predictedHit) / predicted) / 10,
+        timeouts,
+        rolesSkipped,
+        passes: {
+          fieldsMs: passTimes.fieldsMs.length === 0 ? 0 : Math.round(passTimes.fieldsMs.reduce((sum, value) => sum + value, 0) / passTimes.fieldsMs.length),
+          skillsMs: passTimes.skillsMs.length === 0 ? 0 : Math.round(passTimes.skillsMs.reduce((sum, value) => sum + value, 0) / passTimes.skillsMs.length),
+          rolesMs: passTimes.rolesMs.length === 0 ? 0 : Math.round(passTimes.rolesMs.reduce((sum, value) => sum + value, 0) / passTimes.rolesMs.length),
+          wallMs: passTimes.wallMs.length === 0 ? 0 : Math.round(passTimes.wallMs.reduce((sum, value) => sum + value, 0) / passTimes.wallMs.length),
+          wallP95Ms: (() => {
+            const sorted = [...passTimes.wallMs].sort((left, right) => left - right);
+            if (sorted.length === 0) return 0;
+            const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * 0.95) - 1));
+            return sorted[index] ?? 0;
+          })(),
+        },
         verifiedSkillPrecision: predicted === 0 ? null : Math.round((1000 * verified) / predicted) / 10,
         labelled: totals,
         companyMisses: which === "tune" ? companyMisses : undefined,

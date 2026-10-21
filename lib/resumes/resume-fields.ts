@@ -111,12 +111,17 @@ function sanitizeResumeFields(raw: unknown): unknown {
     fullName: asQuoted(record.fullName),
     email: asQuoted(record.email),
     phone: asQuoted(record.phone),
-    skills: asQuotedList(record.skills),
-    experience,
-    education,
-    certifications: asQuotedList(record.certifications),
-    projects,
+    skills: asQuotedList(record.skills).slice(0, 40),
+    experience: experience.slice(0, 20),
+    education: education.slice(0, 10),
+    certifications: asQuotedList(record.certifications).slice(0, 20),
+    projects: projects.slice(0, 20),
   };
+}
+
+/** Drop extra keys, empty quotes, and arrays over the schema cap so one bad item does not reject the resume. */
+export function repairResumeFieldShape(raw: unknown): unknown {
+  return sanitizeResumeFields(raw);
 }
 
 function escapeRegExp(value: string) {

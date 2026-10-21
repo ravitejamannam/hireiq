@@ -19,6 +19,9 @@ describe("isResumeSkillPhrase", () => {
     expect(isResumeSkillPhrase("8.1)")).toBe(false);
     expect(isResumeSkillPhrase("Club player in football")).toBe(false);
     expect(isResumeSkillPhrase("Meeting Room")).toBe(false);
+    expect(isResumeSkillPhrase("+ Python")).toBe(true);
+    expect(isResumeSkillPhrase("teamwork")).toBe(false);
+    expect(isResumeSkillPhrase("Sử dụng AWS: S3")).toBe(false);
     expect(isResumeSkillPhrase("Dubai")).toBe(false);
     expect(isResumeSkillPhrase("Self motivator")).toBe(false);
     expect(isResumeSkillPhrase("Preparation and")).toBe(false);

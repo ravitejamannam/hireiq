@@ -9,6 +9,10 @@
  * the webhook quarantine philosophy.
  */
 
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
 import { getOpenAiApiKey } from "@/lib/ai/job-description-generator";
 import { betterExtraction, columnJumbleShare, scoreExtraction, textLooksColumnJumbled, type ExtractionQuality } from "@/lib/resumes/extraction-quality";
 import {
@@ -17,7 +21,7 @@ import {
   type ResumeVisionAudit,
 } from "@/lib/resumes/layout-vision";
 
-export const RESUME_TEXT_EXTRACTOR_VERSION = "4";
+export const RESUME_TEXT_EXTRACTOR_VERSION = "5";
 
 /** A single file cannot hold the upload request open longer than this. */
 export const RESUME_PARSE_TIMEOUT_MS = 25_000;
@@ -25,7 +29,8 @@ export const RESUME_PARSE_TIMEOUT_MS = 25_000;
 /** Long enough for multi-role resumes. Evidence inline text uses the same cap. */
 export const RESUME_TEXT_MAX = 30_000;
 
-const OCR_MAX_PAGES = 3;
+const VISION_MAX_PAGES = 3;
+const SCAN_OCR_MAX_PAGES = 8;
 
 export type ExtractionOutcome =
   | { ok: true; text: string; quality: ExtractionQuality; extractor: string }
@@ -242,12 +247,12 @@ async function extractFromPdf(
         (await resumeAiAllowed(auditBase.db, auditBase))
       ) {
         const shot = await parser
-          .getScreenshot({ imageBuffer: true, imageDataUrl: false, scale: 1.5, first: OCR_MAX_PAGES })
+          .getScreenshot({ imageBuffer: true, imageDataUrl: false, scale: 1.5, first: VISION_MAX_PAGES })
           .catch(() => ({ pages: [] as Array<{ data?: Uint8Array }> }));
         const images = (shot.pages ?? [])
           .map((page) => page.data)
           .filter((data): data is Uint8Array => data instanceof Uint8Array && data.byteLength > 0)
-          .slice(0, OCR_MAX_PAGES);
+          .slice(0, VISION_MAX_PAGES);
         const pages: string[] = [];
         for (let pageIndex = 0; pageIndex < images.length; pageIndex += 1) {
           if (control.aborted) break;
@@ -261,14 +266,14 @@ async function extractFromPdf(
       if (!best) {
         const info = await parser.getInfo().catch(() => ({ total: 0 }));
         const pageCount = typeof info.total === "number" ? info.total : 0;
-        if (pageCount > OCR_MAX_PAGES) {
+        if (pageCount > SCAN_OCR_MAX_PAGES) {
           console.info(
             JSON.stringify({
               event: "resume_parse",
               kind: "pdf",
               ocrPagesTruncated: true,
               pageCount,
-              ocrPageLimit: OCR_MAX_PAGES,
+              ocrPageLimit: SCAN_OCR_MAX_PAGES,
             }),
           );
         }
@@ -340,17 +345,18 @@ async function ocrPdfScreenshots(
       imageBuffer: true,
       imageDataUrl: false,
       scale: 2,
-      first: OCR_MAX_PAGES,
+      first: SCAN_OCR_MAX_PAGES,
     });
     if (control.aborted) return null;
     const pages = (shot.pages ?? [])
       .map((page) => page.data)
       .filter((data): data is Uint8Array => data instanceof Uint8Array && data.byteLength > 0)
-      .slice(0, OCR_MAX_PAGES);
+      .slice(0, SCAN_OCR_MAX_PAGES);
     if (pages.length === 0) return null;
 
     const tesseract = await import("tesseract.js");
-    const worker = await tesseract.createWorker("eng");
+    const languages = process.env.NODE_ENV === "test" ? "eng" : "eng+hin";
+    const worker = await tesseract.createWorker(languages);
     onWorker(worker);
     try {
       if (control.aborted) return null;
@@ -459,20 +465,58 @@ async function extractResumeTextInner(
 
 export { offsetsOf, stripHiddenText } from "@/lib/resumes/hidden-text";
 
+function textCacheFile(bytes: Buffer, hint: ResumeFileHint) {
+  const hash = createHash("sha256")
+    .update(hint.ocr ?? "default")
+    .update(hint.visionAudit ? "vision" : "novision")
+    .update(bytes)
+    .digest("hex");
+  return path.join(process.cwd(), ".data/resumes/text-cache", `${hash}.json`);
+}
+
+function readTextCache(bytes: Buffer, hint: ResumeFileHint): ExtractionOutcome | null {
+  if (process.env.NODE_ENV === "test" || process.env.VITEST) return null;
+  try {
+    const file = textCacheFile(bytes, hint);
+    if (!existsSync(file)) return null;
+    const cached = JSON.parse(readFileSync(file, "utf8")) as ExtractionOutcome;
+    if (!cached.ok || typeof cached.text !== "string" || !cached.text.trim()) return null;
+    return cached;
+  } catch {
+    return null;
+  }
+}
+
+function writeTextCache(bytes: Buffer, hint: ResumeFileHint, outcome: ExtractionOutcome) {
+  if (process.env.NODE_ENV === "test" || process.env.VITEST || !outcome.ok) return;
+  try {
+    const file = textCacheFile(bytes, hint);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify(outcome));
+  } catch {
+    // A cache miss next time is safe. Extraction already succeeded.
+  }
+}
+
 export async function extractResumeText(
   bytes: Buffer,
   hint: ResumeFileHint = {},
 ): Promise<ExtractionOutcome> {
+  const cached = readTextCache(bytes, hint);
+  if (cached) return cached;
   const control = createParseControl();
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutMs = hint.ocr === "inline" ? 120_000 : RESUME_PARSE_TIMEOUT_MS;
   const timeout = new Promise<ExtractionOutcome>((resolve) => {
     timer = setTimeout(() => {
       control.stop();
       resolve({ ok: false, errorCode: "PARSE_TIMEOUT" });
-    }, RESUME_PARSE_TIMEOUT_MS);
+    }, timeoutMs);
   });
   try {
-    return await Promise.race([extractResumeTextInner(bytes, hint, control), timeout]);
+    const outcome = await Promise.race([extractResumeTextInner(bytes, hint, control), timeout]);
+    writeTextCache(bytes, hint, outcome);
+    return outcome;
   } finally {
     if (timer) clearTimeout(timer);
   }

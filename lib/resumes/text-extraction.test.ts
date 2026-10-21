@@ -260,14 +260,14 @@ describe("extractResumeText", () => {
       lines.push(String(message));
     };
     try {
-      await extractResumeText(emptyPdfPages(4), {
+      await extractResumeText(emptyPdfPages(9), {
         fileName: "long-scan.pdf",
         contentType: "application/pdf",
       });
     } finally {
       console.info = original;
     }
-    expect(lines.some((line) => line.includes('"ocrPagesTruncated":true') && line.includes('"pageCount":4'))).toBe(
+    expect(lines.some((line) => line.includes('"ocrPagesTruncated":true') && line.includes('"pageCount":9'))).toBe(
       true,
     );
   });

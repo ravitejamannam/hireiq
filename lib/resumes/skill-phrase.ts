@@ -49,15 +49,29 @@ const DEGREE_NAME =
 const TITLE =
   /\b(?:engineer|supervisor|officer|manager|technician|foreman|worker|personnel|personel)\b/i;
 
+const SOFT_SKILLS = new Set([
+  "teamwork",
+  "team work",
+  "giao tiếp",
+  "kỹ năng giao tiếp",
+  "làm việc nhóm",
+  "kỹ năng làm việc nhóm",
+  "làm việc độc lập",
+  "tiếng anh",
+  "đàm phán",
+  "customer service",
+  "communication",
+]);
+
 const DUTY_START =
-  /^(?:making|checking|preparing|preparation of|maintaining|maintain |ensuring|working|responsible|monitoring|dealing|carry|participat|worked|providing|testing of|operation\s*[&+]\s*maintenance|operation and maintenance|knowledge of|knowledge in|the ability|good knowledge|established|diagnos|installation of|installation and maintenance|provide |construction of|prepare |inspection of|inspection request|coordination|co-ordination|witnessing|planning of|handling |sourcing |analyzing |pouring |erection\b|commissioning and|to check|to maintain|correspond |well conversant|experience as|as a |languages?\s+know|using |fulfilled|app\.?\s*packages)/i;
+  /^(?:making|checking|preparing|preparation of|maintaining|maintain |ensuring|working|responsible|monitoring|dealing|carry|participat|worked|providing|testing of|operation\s*[&+]\s*maintenance|operation and maintenance|knowledge of|knowledge in|the ability|good knowledge|established|diagnos|installation of|installation and maintenance|provide |construction of|prepare |inspection of|inspection request|coordination|co-ordination|witnessing|planning of|handling |sourcing |analyzing |pouring |erection\b|commissioning and|to check|to maintain|correspond |well conversant|experience as|as a |languages?\s+know|using |sử dụng|fulfilled|app\.?\s*packages)/i;
 
 /**
  * A skill is a short noun phrase: a tool, method, trade, language, standard, or piece of equipment.
  * Sentences, job titles, traits, and broken fragments are not skills.
  */
 export function isResumeSkillPhrase(raw: string): boolean {
-  const text = raw.replace(/^[\s•\-]+/, "").trim();
+  const text = raw.replace(/^[\s•\-+]+/, "").trim();
   if (text.length < 2 || text.length > 80) return false;
   if (/[.!?]$/.test(text)) return false;
   const open = text.match(/\(/g)?.length ?? 0;
@@ -66,14 +80,14 @@ export function isResumeSkillPhrase(raw: string): boolean {
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length === 0 || words.length > 5) return false;
   const folded = text.toLowerCase().replace(/\s+/g, " ");
-  if (TRAITS.has(folded) || BARE_DUTIES.has(folded) || DEGREE_NAME.test(text)) return false;
+  if (TRAITS.has(folded) || SOFT_SKILLS.has(folded) || BARE_DUTIES.has(folded) || DEGREE_NAME.test(text)) return false;
   if (words.length === 1 && folded.length < 2) return false;
   if (TITLE.test(folded)) return false;
   if (DUTY_START.test(text)) return false;
   if (TRAIT_PHRASE.test(text)) return false;
   if (PLACE_OR_FACILITY.test(text) || PLACE_NAME.has(folded)) return false;
   if (/^[A-Z]{6,}$/.test(text)) return false;
-  if (/\s+(?:and|of)\s*$/i.test(text) || /^(?:and|of)\b/i.test(text) || text.startsWith("&")) return false;
+  if (/\s+(?:and|of)\s*$/i.test(text) || /^(?:and|of)\b/i.test(text) || text.startsWith("&") || text.startsWith("+")) return false;
   if (/^(?:supervision of|daily (?:work |rejection )?report|languages?\s+english)\b/i.test(text)) return false;
   if (/^(?:square meters?|kilograms?|safety|valve|leave schedule|monthly invoices)$/i.test(text)) return false;
   if (/\bworkshop\b/i.test(text)) return false;
