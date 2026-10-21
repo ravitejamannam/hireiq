@@ -2,6 +2,7 @@
   "name": "hireiq",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.2.1",
   "scripts": {
     "dev": "next dev -p 4000",
     "build": "prisma generate && node scripts/migrate-on-deploy.mjs && next build --webpack",
