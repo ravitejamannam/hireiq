@@ -1,11 +1,22 @@
 #!/bin/bash
-set -a
-source "$(dirname "$0")/../.env"
-set +a
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ENV_FILE="$ROOT/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+fi
+if [ -z "${AZ_DATABASE_URL:-}" ]; then
+  AZ_DATABASE_URL="${DATABASE_URL:-}"
+fi
+export AZ_DATABASE_URL
 if [ -z "${AZ_DATABASE_URL:-}" ]; then
   echo "AZ_DATABASE_URL is required. Set it to the hireiq_e2e database." >&2
   exit 1
 fi
+if [ -z "${AZ_ADMIN_EMAIL:-}" ]; then AZ_ADMIN_EMAIL="${ADMIN_EMAIL:-}"; fi
+if [ -z "${AZ_ADMIN_PASSWORD:-}" ]; then AZ_ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"; fi
+export AZ_ADMIN_EMAIL AZ_ADMIN_PASSWORD
 if ! DB_NAME=$(node --input-type=module -e '
 const raw = process.env.AZ_DATABASE_URL;
 let name = "";
@@ -15,8 +26,9 @@ try {
   console.error("AZ_DATABASE_URL is not a valid database URL.");
   process.exit(2);
 }
-if (name !== "hireiq_e2e") {
-  console.error("AZ_DATABASE_URL must use the hireiq_e2e database.");
+const disposable = name.startsWith("hireiq_e2e_disp_") && name.length > "hireiq_e2e_disp_".length;
+if (name !== "hireiq_e2e" && !disposable) {
+  console.error("AZ_DATABASE_URL must use hireiq_e2e or a hireiq_e2e_disp_ database.");
   process.exit(2);
 }
 process.stdout.write(name);
@@ -39,9 +51,10 @@ cleanup_created_rows() {
   if [ -z "${CREATED_CLAIM:-}" ]; then
     return 0
   fi
-  CLAIM="$CREATED_CLAIM" DB="$DB" node --input-type=module << 'EOF'
+  CLAIM="$CREATED_CLAIM" DB="$DB" HIREIQ_ROOT="$ROOT" node --input-type=module << 'EOF'
 import { execFileSync } from "node:child_process";
-import { hashSecureToken } from "/Users/ravitejamannam/Developer/hireiq/lib/auth/secure-token.ts";
+import { pathToFileURL } from "node:url";
+const { hashSecureToken } = await import(pathToFileURL(`${process.env.HIREIQ_ROOT}/lib/auth/secure-token.ts`).href);
 const db = process.env.DB;
 const claim = process.env.CLAIM;
 if (!db || !claim) process.exit(0);
