@@ -8,6 +8,7 @@ import { signOut } from "next-auth/react";
 import {
   Bell,
   Briefcase,
+  CalendarDays,
   ClipboardList,
   LayoutDashboard,
   UserRound,
@@ -24,6 +25,11 @@ const links = [
     icon: LayoutDashboard,
     label: "Dashboard",
     href: "/interviewer",
+  },
+  {
+    icon: CalendarDays,
+    label: "My interviews",
+    href: "/interviewer/interviews",
   },
   {
     icon: Briefcase,

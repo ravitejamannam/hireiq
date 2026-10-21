@@ -41,6 +41,9 @@ export function applyTestEnvFile(options: {
     ) {
       value = value.slice(1, -1);
     }
+    if (key === "DATABASE_URL" || key === "DIRECT_URL") {
+      continue;
+    }
     if (options.env[key] === undefined) {
       options.env[key] = value;
     }

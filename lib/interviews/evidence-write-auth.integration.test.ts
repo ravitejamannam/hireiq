@@ -1,5 +1,4 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   ApplicationPipelineStatus,
@@ -11,17 +10,6 @@ import {
   JobStatus,
   PortalRole,
 } from "@prisma/client";
-
-const actor = vi.hoisted(() => ({ id: "0" }));
-
-vi.mock("@/auth", () => ({
-  auth: async () => ({ user: { id: actor.id } }),
-}));
-
-vi.mock("next/cache", () => ({
-  revalidatePath: () => undefined,
-}));
-
 import {
   createCodingTest,
   deleteCodingTest,
@@ -35,6 +23,25 @@ import {
 import { AuthorizationError } from "@/lib/auth/authorization";
 import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
+
+const actor = vi.hoisted(() => ({ id: "0" }));
+
+vi.mock("@/auth", () => ({
+  auth: async () => ({ user: { id: actor.id } }),
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
+
+
+
+
+
 
 const MARKER = `evidence-${process.pid}-${Date.now()}`;
 const WHEN = new Date("2026-10-01T00:00:00.000Z");
@@ -43,7 +50,7 @@ function asUser(id: number) {
   actor.id = String(id);
 }
 
-describe("interview and coding-test writes", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("interview and coding-test writes", () => {
   const companyIds: number[] = [];
   const userIds: number[] = [];
   const interviewerIds: number[] = [];

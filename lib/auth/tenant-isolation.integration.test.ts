@@ -1,5 +1,4 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   ApplicationPipelineStatus,
@@ -11,17 +10,6 @@ import {
   PortalRole,
   RequirementLifecycle,
 } from "@prisma/client";
-
-const actor = vi.hoisted(() => ({ id: "0" }));
-
-vi.mock("@/auth", () => ({
-  auth: async () => ({ user: { id: actor.id } }),
-}));
-
-vi.mock("next/cache", () => ({
-  revalidatePath: () => undefined,
-}));
-
 import { selectClientCandidate, transitionInterviewerApplicationStatus } from "@/app/actions/application-actions";
 import { inviteOrganizationMember } from "@/app/actions/organization-actions";
 import { getClientBillingRecordById, getBillingRecordById } from "@/lib/repositories/billing-repository";
@@ -35,6 +23,33 @@ import { ApplicationValidationError } from "@/lib/validation/application-validat
 import { OrganizationMembershipError } from "@/lib/validation/organization-membership-validation";
 import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
+
+const actor = vi.hoisted(() => ({ id: "0" }));
+
+vi.mock("@/auth", () => ({
+  auth: async () => ({ user: { id: actor.id } }),
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const MARKER = `iso-${process.pid}-${Date.now()}`;
 
@@ -42,7 +57,7 @@ function asUser(id: number) {
   actor.id = String(id);
 }
 
-describe("tenant isolation boundaries", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("tenant isolation boundaries", () => {
   const ids: {
     companies: number[];
     users: number[];

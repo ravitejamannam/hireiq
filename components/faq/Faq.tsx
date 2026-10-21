@@ -15,7 +15,7 @@ const faqs = [
   {
     question: "How do candidates benefit?",
     answer:
-      "They see their assessment score, their live pipeline status, and where they stand on a public leaderboard for the role. No application disappears into a void — and rejections come with real communication.",
+      "They see their live pipeline status. Assessment results stay with the hiring team and are never ranked publicly. No application disappears into a void — and rejections come with real communication.",
   },
   {
     question: "Can agencies use this with their clients?",

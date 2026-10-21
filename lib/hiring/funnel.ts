@@ -1,5 +1,6 @@
 import { ApplicationPipelineStatus } from "@prisma/client";
 
+import { attributionEvent, classifyIntakeSource, type ChannelEvent } from "@/lib/analytics/channel-analytics";
 import { resolveApplicationSourceLabel } from "@/lib/hiring/ingestion-source";
 
 /**
@@ -44,7 +45,22 @@ export type ApplicationFunnelSnapshot = {
   sourceChannel?: string | null;
   sourcingDatabaseSource?: string | null;
   hostedApplySubmissionId?: number | null;
+  /** Present when the desk loaded ingestion events. Empty means none were recorded. */
+  ingestionEvents?: ChannelEvent[];
 };
+
+/**
+ * Intake label for one application.
+ * Recorded events use the analytics classifier and the earliest-processed selection.
+ * No events keeps the previous fallback: hosted submission, then the sourcing field, then Unknown.
+ */
+export function applicationIntakeLabel(snapshot: ApplicationFunnelSnapshot): string {
+  const selected = snapshot.ingestionEvents?.length
+    ? attributionEvent(snapshot.ingestionEvents)
+    : undefined;
+  if (selected) return classifyIntakeSource(selected);
+  return resolveApplicationSourceLabel(snapshot);
+}
 
 export type HiringFunnelReport = {
   funnel: HiringFunnelStage[];
@@ -146,7 +162,7 @@ export function buildHiringFunnelReport(
 
   const sourceMap = new Map<string, { count: number; hires: number }>();
   for (const snapshot of snapshots) {
-    const source = resolveApplicationSourceLabel(snapshot);
+    const source = applicationIntakeLabel(snapshot);
     const entry = sourceMap.get(source) ?? { count: 0, hires: 0 };
     entry.count += 1;
     if (snapshot.status === ApplicationPipelineStatus.HIRED) entry.hires += 1;

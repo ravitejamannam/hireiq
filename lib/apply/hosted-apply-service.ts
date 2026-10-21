@@ -4,9 +4,9 @@ import {
   JobDistributionStatus,
   JobSpecificationVersionStatus,
   JobStatus,
-  ApplicationPipelineStatus,
 } from "@prisma/client";
 
+import { withApplicationWriteGuard } from "@/lib/privacy/erasure-guard";
 import {
   APPLY_LINK_UNAVAILABLE,
   HostedApplyError,
@@ -149,8 +149,9 @@ async function statusTokenForApplication(applicationId: number | null): Promise<
     const { ensureStatusToken, buildStatusUrl } = await import(
       "@/lib/candidates/status-tracking"
     );
-    const raw = await ensureStatusToken(applicationId);
-    return buildStatusUrl(raw);
+    // A replayed or late request must not give an erased candidate a new status link.
+    const guarded = await withApplicationWriteGuard(applicationId, (tx) => ensureStatusToken(applicationId, tx));
+    return guarded.ok ? buildStatusUrl(guarded.value) : null;
   } catch {
     return null; // idempotent replay already has one
   }
@@ -167,8 +168,9 @@ async function assessmentUrlForApplication(applicationId: number | null) {
   }
 
   try {
-    const minted = await mintAssessmentInviteForApplication(applicationId);
-    return minted?.assessmentUrl ?? null;
+    // Same rule for the assessment link. Replaying an old submission never reaches an erased candidate.
+    const guarded = await withApplicationWriteGuard(applicationId, (tx) => mintAssessmentInviteForApplication(applicationId, tx as never));
+    return guarded.ok ? (guarded.value?.assessmentUrl ?? null) : null;
   } catch (error) {
     console.error("[hosted-apply] assessment mint failed", error);
     return null;
@@ -192,13 +194,10 @@ async function applyKnockoutDecision(input: {
     answers: parseKnockoutAnswers(input.body),
   });
   if (!graded.rejectByRule) return;
-  await prisma.application.update({
-    where: { id: input.applicationId },
-    data: {
-      status: ApplicationPipelineStatus.REJECTED,
-      rejectionReasonCode: "KNOCKOUT",
-      rejectionReason: "Knockout answer",
-    },
+  // Recorded for the recruiter's "Doesn't meet stated requirements" view; the status is not changed here.
+  await prisma.application.updateMany({
+    where: { id: input.applicationId, companyId: input.companyId, knockoutFailedAt: null },
+    data: { knockoutFailedAt: new Date() },
   });
 }
 
@@ -253,6 +252,8 @@ export async function submitHostedApply(input: {
         profilePayload: {
           ...fields.profile,
           futureRolesConsent: fields.futureRolesConsent,
+          aiEvaluationAllowed: fields.aiEvaluationAllowed,
+          aiPreference: fields.aiPreference,
           knockoutAnswers: parseKnockoutAnswers(input.body),
           screeningAnswers: parseScreeningAnswers(input.body),
         } as object,

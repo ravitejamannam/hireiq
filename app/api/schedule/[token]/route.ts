@@ -53,7 +53,7 @@ export async function POST(
     if (!result.ok) {
       return NextResponse.json(
         { ok: false, error: result.errorCode },
-        { status: result.errorCode === "SLOT_UNAVAILABLE" ? 409 : 404, headers: NO_STORE },
+        { status: result.errorCode === "SLOT_UNAVAILABLE" || result.errorCode === "SLOT_DURATION_MISMATCH" ? 409 : 404, headers: NO_STORE },
       );
     }
 

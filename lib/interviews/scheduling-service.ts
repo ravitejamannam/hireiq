@@ -2,6 +2,8 @@ import {
   InterviewResult,
   InterviewSlotStatus,
   InterviewType,
+  InterviewerAvailability,
+  Prisma,
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
@@ -105,8 +107,8 @@ function validateSlots(slotsInput: unknown): Array<{
     }
     const durationMinutes =
       s.durationMinutes === undefined ? 45 : Number(s.durationMinutes);
-    if (!Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > 240) {
-      throw new SchedulingError("DURATION_INVALID", "Duration must be 15-240 minutes.");
+    if (!Number.isInteger(durationMinutes) || durationMinutes < 10 || durationMinutes > 240) {
+      throw new SchedulingError("DURATION_INVALID", "Duration must be 10-240 minutes.");
     }
     const key = String(startAt.toISOString());
     if (seen.has(key)) continue;
@@ -136,14 +138,24 @@ export async function mintBookingInviteForApplication(input: {
     throw new SchedulingError("NO_ASSIGNED_INTERVIEWER");
   }
 
+  return issueBookingInvite(prisma, applicationId);
+}
+
+/** One live booking link per application. Issuing again replaces the token, so the previous link stops working. Callers authorize first. */
+export async function issueBookingInvite(
+  db: Pick<Prisma.TransactionClient, "interviewBookingInvite">,
+  applicationId: number,
+  options: { requiredDurationMinutes?: number } = {},
+): Promise<{ bookingUrl: string | null; expiresAt: Date }> {
+  const requiredDurationMinutes = options.requiredDurationMinutes ?? null;
   const origin = getPublicAppUrl();
   const { rawToken, tokenHash } = generateSecureToken();
   const expiresAt = new Date(Date.now() + BOOKING_INVITE_TTL_HOURS * 60 * 60 * 1000);
 
-  await prisma.interviewBookingInvite.upsert({
+  await db.interviewBookingInvite.upsert({
     where: { applicationId },
-    create: { applicationId, tokenHash, expiresAt },
-    update: { tokenHash, expiresAt, usedAt: null },
+    create: { applicationId, tokenHash, expiresAt, requiredDurationMinutes },
+    update: { tokenHash, expiresAt, usedAt: null, requiredDurationMinutes },
   });
 
   return {
@@ -175,7 +187,11 @@ export async function listOpenSlotsForBooking(rawToken: string): Promise<{
           company: { select: { name: true } },
           assignedInterviewer: { select: { id: true, name: true } },
           interviewSlots: {
-            where: { status: InterviewSlotStatus.OPEN, startAt: { gt: new Date() } },
+            where: {
+              status: InterviewSlotStatus.OPEN,
+              startAt: { gt: new Date() },
+              ...(invite.requiredDurationMinutes ? { durationMinutes: invite.requiredDurationMinutes } : {}),
+            },
             select: { id: true, startAt: true, durationMinutes: true },
             orderBy: { startAt: "asc" },
             take: 50,
@@ -297,6 +313,7 @@ export async function bookSlotWithToken(input: {
     where: { id: invite.applicationId },
     select: {
       id: true,
+      candidateId: true,
       emailUnsubscribedAt: true,
       job: {
         select: {
@@ -306,7 +323,7 @@ export async function bookSlotWithToken(input: {
           company: { select: { name: true } },
           assignedInterviewerId: true,
           assignedInterviewer: {
-            select: { name: true, users: { select: { id: true, email: true }, take: 1 } },
+            select: { name: true, availability: true, users: { select: { id: true, email: true }, take: 1 } },
           },
           interviewSlots: {
             where: { id: slotId },
@@ -330,13 +347,33 @@ export async function bookSlotWithToken(input: {
     !slot ||
     slot.status !== InterviewSlotStatus.OPEN ||
     slot.startAt.getTime() < Date.now() ||
-    slot.interviewerId !== application.job.assignedInterviewerId
+    slot.interviewerId !== application.job.assignedInterviewerId ||
+    application.job.assignedInterviewer?.availability !== InterviewerAvailability.AVAILABLE
   ) {
     return { ok: false, errorCode: "SLOT_UNAVAILABLE" };
+  }
+  // A walkthrough link only books its exact length, whatever the page showed.
+  if (invite.requiredDurationMinutes && slot.durationMinutes !== invite.requiredDurationMinutes) {
+    return { ok: false, errorCode: "SLOT_DURATION_MISMATCH" };
   }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      // One interviewer cannot be in two places: serialise bookings per interviewer and refuse overlaps.
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(918276, ${slot.interviewerId}::int)`);
+      const slotEnd = new Date(slot.startAt.getTime() + slot.durationMinutes * 60_000);
+      const neighbours = await tx.interviewSlot.findMany({
+        where: {
+          interviewerId: slot.interviewerId,
+          status: InterviewSlotStatus.BOOKED,
+          id: { not: slot.id },
+          startAt: { lt: slotEnd, gt: new Date(slot.startAt.getTime() - 240 * 60_000) },
+        },
+        select: { startAt: true, durationMinutes: true },
+      });
+      if (neighbours.some((other) => other.startAt.getTime() + other.durationMinutes * 60_000 > slot.startAt.getTime())) {
+        throw new SchedulingError("SLOT_UNAVAILABLE");
+      }
       // Guarded claim: only succeeds if the slot is still OPEN. Two
       // concurrent bookings of the same slot cannot both pass this.
       const claimed = await tx.interviewSlot.updateMany({
@@ -434,6 +471,7 @@ export async function bookSlotWithToken(input: {
         },
       });
       const delivery = await deliverBookingConfirmation({
+        scope: { companyId: application.job.companyId, candidateId: application.candidateId },
         candidateUnsubscribed: Boolean(application.emailUnsubscribedAt),
         interviewerEmail:
           application.job.assignedInterviewer?.users?.[0]?.email ?? null,
@@ -480,7 +518,7 @@ async function loadLiveInvite(rawToken: string) {
   const tokenHash = hashSecureToken(rawToken);
   const invite = await prisma.interviewBookingInvite.findUnique({
     where: { tokenHash },
-    select: { id: true, applicationId: true, expiresAt: true, usedAt: true },
+    select: { id: true, applicationId: true, expiresAt: true, usedAt: true, requiredDurationMinutes: true },
   });
   if (!invite) return null;
   if (invite.usedAt || invite.expiresAt.getTime() < Date.now()) return null;

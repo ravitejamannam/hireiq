@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { createAiRunUnlessErased } from "@/lib/privacy/erasure-guard";
 import { prisma } from "@/lib/prisma";
 
 /** Model features that must write exactly one AIRun per call. */
@@ -59,16 +60,8 @@ function hashInput(feature: string, input: unknown) {
 }
 
 async function insertRun(subject: AiRunCallSubject, data: AiRunRow) {
-  if (subject.db) {
-    await subject.db.aIRun.create({ data });
-    return;
-  }
-  await prisma.aIRun.create({
-    data: {
-      ...data,
-      outputJson: data.outputJson as object,
-    },
-  });
+  // Goes through the erasure guard when this is the real client and the entity belongs to a candidate.
+  await createAiRunUnlessErased(subject.db ?? prisma, data);
 }
 
 /**

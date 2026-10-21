@@ -1,3 +1,4 @@
+import { withCandidateWriteGuard } from "@/lib/privacy/erasure-guard";
 import { prisma } from "@/lib/prisma";
 
 export const SELF_ID_FIELDS = ["gender", "ageBand", "disability", "region"] as const;
@@ -21,6 +22,18 @@ function choice(value: string | undefined, allowed: Set<string>) {
   return value;
 }
 
+export class SelfIdentificationError extends Error {
+  constructor() {
+    super("Candidate not found.");
+    this.name = "SelfIdentificationError";
+  }
+}
+
+/**
+ * A row may only carry the company that owns the candidate, and nothing may be written for an erased candidate.
+ * Both are enforced inside the erasure write guard: it locks the Candidate row, matches id AND companyId, and
+ * re-reads the erasure tombstone, so a refused call writes nothing and leaves any existing row untouched.
+ */
 export async function saveSelfIdentification(input: SelfIdInput) {
   const data = {
     companyId: input.companyId,
@@ -30,11 +43,15 @@ export async function saveSelfIdentification(input: SelfIdInput) {
     region: input.region?.trim() ? input.region.trim().slice(0, 80) : PREFER_NOT,
     consentedAt: new Date(),
   };
-  return prisma.candidateSelfIdentification.upsert({
-    where: { candidateId: input.candidateId },
-    create: { candidateId: input.candidateId, ...data },
-    update: data,
-  });
+  const result = await withCandidateWriteGuard(input.candidateId, input.companyId, (tx) =>
+    tx.candidateSelfIdentification.upsert({
+      where: { candidateId: input.candidateId },
+      create: { candidateId: input.candidateId, ...data },
+      update: data,
+    }),
+  );
+  if (!result.ok) throw new SelfIdentificationError();
+  return result.value;
 }
 
 export async function readSelfIdentification(candidateId: number) {

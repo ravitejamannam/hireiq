@@ -1,4 +1,5 @@
 import type { AiRunScope } from "@/lib/ai/ai-run";
+import type { GatewaySubject } from "@/lib/ai/gateway";
 import { runGuardedCompletion } from "@/lib/ai/guarded-completion";
 import { getOpenAiApiKey } from "@/lib/ai/job-description-generator";
 import { acceptResumeFields, type ResumeFields } from "@/lib/resumes/resume-fields";
@@ -383,6 +384,7 @@ async function listSkillsFromModel(
       optedOut: false,
       scope: guard?.scope,
       request: {
+        subject: guard?.subject,
         feature: "resume_fields",
         model,
         promptVersion: "resume-skills-1",
@@ -466,6 +468,7 @@ async function listRolesFromModel(
       optedOut: false,
       scope: guard?.scope,
       request: {
+        subject: guard?.subject,
         feature: "resume_fields",
         model,
         promptVersion: "resume-roles-1",
@@ -640,6 +643,8 @@ const RESUME_FIELDS_SCHEMA = {
 export type ResumeFieldGuard = {
   optedOut: boolean;
   scope?: AiRunScope | null;
+  /** Whose resume this is. The gateway re-checks it; a call without one is refused. */
+  subject?: GatewaySubject;
 };
 
 export type ResumeModelFailure =
@@ -666,7 +671,8 @@ async function fieldsFromModel(
         optedOut: false,
         scope: guard?.scope,
         request: {
-          feature: "resume_fields",
+          subject: guard?.subject,
+        feature: "resume_fields",
           model,
           promptVersion: "resume-fields-9",
           system: FIELD_INSTRUCTIONS,
@@ -681,7 +687,7 @@ async function fieldsFromModel(
       const result = outcome.result;
       if (result) {
         recordExtractionUsage({
-          feature: "resume_fields",
+        feature: "resume_fields",
           model: result.model,
           promptTokens: result.promptTokens ?? 0,
           completionTokens: result.completionTokens ?? 0,

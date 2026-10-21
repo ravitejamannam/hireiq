@@ -1,5 +1,4 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it } from "vitest";
 import {
   CandidateEvidenceOrigin,
@@ -10,7 +9,6 @@ import {
   JobStatus,
   PortalRole,
 } from "@prisma/client";
-
 import { prisma } from "@/lib/prisma";
 import {
   HUMAN_RELEVANCE_ALREADY_SUPERSEDED,
@@ -19,6 +17,9 @@ import {
   HUMAN_RELEVANCE_NOT_FOUND,
 } from "@/lib/relevance/human-relevance-errors";
 import { createHumanRelevanceJudgment } from "@/lib/relevance/human-relevance-operations";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const MARKER = `m12-${process.pid}-${Date.now()}`;
 
@@ -135,7 +136,7 @@ afterAll(async () => {
   });
 });
 
-describe("human relevance judgments", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("human relevance judgments", () => {
   it("keeps client judgments inside the company and preserves history", async () => {
     const a = await world("a");
     const b = await world("b");

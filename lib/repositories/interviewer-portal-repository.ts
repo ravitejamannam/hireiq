@@ -391,3 +391,69 @@ export async function getInterviewerEvaluations() {
     },
   });
 }
+
+/**
+ * The interviewer's own interview schedule: upcoming (not yet held, not cancelled) first, then the most
+ * recent held or cancelled ones. Scoped through the job's assigned interviewer, like every other
+ * interviewer-portal read.
+ */
+export async function getInterviewerSchedule(now: Date = new Date()) {
+  const interviewer = await requireInterviewerPortal();
+  const baseWhere = {
+    application: {
+      job: {
+        assignedInterviewerId: interviewer.interviewerId,
+      },
+    },
+  };
+
+  const [upcoming, past] = await Promise.all([
+    prisma.interview.findMany({
+      where: {
+        ...baseWhere,
+        interviewAt: { gte: now },
+        result: "PENDING",
+      },
+      select: {
+        id: true,
+        type: true,
+        interviewAt: true,
+        meetUrl: true,
+        application: {
+          select: {
+            id: true,
+            candidate: { select: { name: true } },
+            job: { select: { title: true } },
+          },
+        },
+      },
+      orderBy: { interviewAt: "asc" },
+      take: 50,
+    }),
+    prisma.interview.findMany({
+      where: {
+        ...baseWhere,
+        OR: [
+          { interviewAt: { lt: now } },
+          { result: { not: "PENDING" } },
+        ],
+      },
+      select: {
+        id: true,
+        type: true,
+        interviewAt: true,
+        result: true,
+        application: {
+          select: {
+            candidate: { select: { name: true } },
+            job: { select: { title: true } },
+          },
+        },
+      },
+      orderBy: { interviewAt: "desc" },
+      take: 10,
+    }),
+  ]);
+
+  return { upcoming, past };
+}

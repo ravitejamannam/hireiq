@@ -160,6 +160,11 @@ describe("phase 4 workflow", () => {
       trigger: "STAGE_CHANGE",
       status: "REJECTED",
       knockoutFailed: true,
+    }).outcome).toBe("BLOCKED");
+    expect(executeWorkflow(rule, {
+      trigger: "STAGE_CHANGE",
+      status: "REJECTED",
+      humanConfirmed: true,
     }).outcome).toBe("EXECUTED");
     expect(executeWorkflow({
       ...rule,

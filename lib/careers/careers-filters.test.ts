@@ -18,6 +18,8 @@ function role(
     applyUrl: "/apply/x",
     datePosted: new Date("2026-01-02T00:00:00Z"),
     validThrough: null,
+    remotePolicy: null,
+    compensationRange: null,
     applicationCount: null,
     ...overrides,
   };

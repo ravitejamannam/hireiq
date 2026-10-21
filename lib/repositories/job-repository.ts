@@ -25,6 +25,7 @@ const jobSelect = {
   jobDescription: true,
   evaluationCriteria: true,
   primarySkills: true,
+  remotePolicy: true,
   requirementLifecycle: true,
   clientCompletedAt: true,
   sourcingDatabaseSource: true,

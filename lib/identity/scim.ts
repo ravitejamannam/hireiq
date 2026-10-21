@@ -36,7 +36,6 @@ export type ScimState = {
 const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const LIST_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:ListResponse";
-const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 
 /**
  * What a user-level event actually touched. A User is named only when the directory entry is linked to one; an

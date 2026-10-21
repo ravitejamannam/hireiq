@@ -1,5 +1,4 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   ApplicationPipelineStatus,
@@ -10,6 +9,24 @@ import {
   PortalRole,
   RequirementLifecycle,
 } from "@prisma/client";
+import { confirmClientCandidateHire } from "@/app/actions/application-actions";
+import { notifyCandidateOfStageChange } from "@/lib/candidates/stage-change-emails";
+import { sendOutboundEmail } from "@/lib/communication/email-transport";
+import { retryNotificationEmail } from "@/lib/communication/notification-service";
+import { generateSecureToken } from "@/lib/auth/secure-token";
+import {
+  bookSlotWithToken,
+  createSlotsForJobForAdmin,
+} from "@/lib/interviews/scheduling-service";
+import {
+  getApplicationById,
+  getClientApplicationsForRequirement,
+} from "@/lib/repositories/application-repository";
+import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
+import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const actor = vi.hoisted(() => ({ id: "0" }));
 const transport = vi.hoisted(() => ({
@@ -28,21 +45,15 @@ vi.mock("@/lib/communication/email-transport", () => ({
   sendOutboundEmail: vi.fn(async () => transport.result),
 }));
 
-import { confirmClientCandidateHire } from "@/app/actions/application-actions";
-import { notifyCandidateOfStageChange } from "@/lib/candidates/stage-change-emails";
-import { sendOutboundEmail } from "@/lib/communication/email-transport";
-import { retryNotificationEmail } from "@/lib/communication/notification-service";
-import { generateSecureToken } from "@/lib/auth/secure-token";
-import {
-  bookSlotWithToken,
-  createSlotsForJobForAdmin,
-} from "@/lib/interviews/scheduling-service";
-import {
-  getApplications,
-  getClientApplicationsForRequirement,
-} from "@/lib/repositories/application-repository";
-import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
-import { prisma } from "@/lib/prisma";
+
+
+
+
+
+
+
+
+
 
 const MARKER = `mail-${process.pid}-${Date.now()}`;
 
@@ -50,7 +61,7 @@ function asUser(id: number) {
   actor.id = String(id);
 }
 
-describe("email delivery status", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("email delivery status", () => {
   const companyIds: number[] = [];
   const userIds: number[] = [];
   const interviewerIds: number[] = [];
@@ -242,14 +253,24 @@ describe("email delivery status", () => {
     asUser(otherOwner);
     expect(await getClientApplicationsForRequirement(job.id)).toEqual([]);
 
+    // Scope checks read test-owned rows by id. The list queries scan every tenant, so running them here raced other
+    // suites deleting their own jobs mid-read (Prisma loads application and job in separate queries).
+    const otherCandidate = await prisma.candidate.create({
+      data: { name: `${MARKER} other candidate`, role: "Engineer", experienceYears: 1, status: CandidateStatus.APPLIED, companyId: other.id },
+    });
+    const otherJob = await prisma.job.create({ data: { title: `${MARKER} other role`, status: JobStatus.OPEN, companyId: other.id } });
+    const otherApplication = await prisma.application.create({
+      data: { candidateId: otherCandidate.id, jobId: otherJob.id, companyId: other.id, status: ApplicationPipelineStatus.SELECTED },
+    });
+
     asUser(admin);
-    const adminRows = await getApplications();
-    expect(adminRows.some((row) => row.id === application.id && row.candidateStageEmailStatus === "SENT")).toBe(true);
+    const adminRow = await getApplicationById(application.id);
+    expect(adminRow?.candidateStageEmailStatus).toBe("SENT");
+    expect((await getApplicationById(otherApplication.id))?.id).toBe(otherApplication.id);
 
     asUser(interviewerUser);
-    const interviewerRows = await getApplications();
-    expect(interviewerRows.some((row) => row.job.companyId === other.id)).toBe(false);
-    expect(interviewerRows.some((row) => row.id === application.id)).toBe(true);
+    expect((await getApplicationById(application.id))?.id).toBe(application.id);
+    expect(await getApplicationById(otherApplication.id)).toBeNull();
 
     const callsBefore = vi.mocked(sendOutboundEmail).mock.calls.length;
     const notice = await prisma.notification.create({

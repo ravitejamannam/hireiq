@@ -1,6 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
 
-import { ResumeStorageError, type ResumeStorageDriver } from "@/lib/resumes/storage-types";
+import { ResumeStorageError, type ResumeStorageDriver, type StorageDeleteStatus } from "@/lib/resumes/storage-types";
 
 /**
  * S3-compatible object storage (AWS S3, Cloudflare R2, MinIO).
@@ -55,7 +55,7 @@ function amzDate(now: Date) {
 }
 
 async function signedFetch(input: {
-  method: "PUT" | "GET" | "DELETE";
+  method: "PUT" | "GET" | "HEAD" | "DELETE";
   key: string;
   body?: Buffer;
 }): Promise<Response> {
@@ -153,12 +153,25 @@ export class S3ResumeStorage implements ResumeStorageDriver {
     return Buffer.from(await response.arrayBuffer());
   }
 
-  async delete(key: string): Promise<void> {
+  async delete(key: string): Promise<StorageDeleteStatus> {
     assertKey(key);
-    const response = await signedFetch({ method: "DELETE", key });
-    if (response.status === 404 || response.ok) {
-      return;
+    // S3-style DELETE answers success whether or not the object existed, so look first to tell the two apart.
+    // A network error or timeout says nothing about the object, so it is a failure, never "absent".
+    const head = await signedFetch({ method: "HEAD", key }).catch(() => {
+      console.error("[s3] delete lookup unreachable");
+      throw new ResumeStorageError("STORAGE_DELETE_FAILED");
+    });
+    if (head.status === 404) return "ABSENT";
+    if (!head.ok) {
+      console.error("[s3] delete lookup failed", head.status);
+      throw new ResumeStorageError("STORAGE_DELETE_FAILED");
     }
+    const response = await signedFetch({ method: "DELETE", key }).catch(() => {
+      console.error("[s3] delete unreachable");
+      throw new ResumeStorageError("STORAGE_DELETE_FAILED");
+    });
+    if (response.status === 404) return "ABSENT";
+    if (response.ok) return "DELETED";
     console.error("[s3] delete failed", response.status);
     throw new ResumeStorageError("STORAGE_DELETE_FAILED");
   }

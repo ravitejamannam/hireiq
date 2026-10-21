@@ -1,7 +1,12 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { OrganizationMemberRole, PortalRole, RoleCategory } from "@prisma/client";
+import { createClientRequirement } from "@/app/actions/job-actions";
+import { ASSESSMENT_BANK_EMPTY } from "@/lib/assessments/assessment-errors";
+import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const actor = vi.hoisted(() => ({ id: "0" }));
 
@@ -13,9 +18,9 @@ vi.mock("next/cache", () => ({
   revalidatePath: () => undefined,
 }));
 
-import { createClientRequirement } from "@/app/actions/job-actions";
-import { ASSESSMENT_BANK_EMPTY } from "@/lib/assessments/assessment-errors";
-import { prisma } from "@/lib/prisma";
+
+
+
 
 const MARKER = `bank-${process.pid}-${Date.now()}`;
 
@@ -33,7 +38,7 @@ const fields = {
   primarySkills: "Figma",
 };
 
-describe("assessment configuration on client post", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("assessment configuration on client post", () => {
   const companyIds: number[] = [];
   const userIds: number[] = [];
   const questionIds: number[] = [];

@@ -5,6 +5,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { lockCandidateForWrite } from "@/lib/privacy/erasure-guard";
 import { getPrismaErrorCode } from "@/lib/prisma-error";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -156,39 +157,48 @@ export async function listHostedApplyBackfillSources(
   });
 }
 
-export async function createEvidence(
-  data: {
-    companyId: number;
-    candidateId: number;
-    applicationId: number | null;
-    sourceType: CandidateEvidenceSourceType;
-    origin: CandidateEvidenceOrigin;
-    ingestionEventId: number | null;
-    hostedApplySubmissionId: number | null;
-    actorUserId: number | null;
-    inlineText: string | null;
-    contentSha256: string | null;
-    createdAt?: Date;
-  },
-  db: Db = prisma,
-) {
+type EvidenceInput = {
+  companyId: number;
+  candidateId: number;
+  applicationId: number | null;
+  sourceType: CandidateEvidenceSourceType;
+  origin: CandidateEvidenceOrigin;
+  ingestionEventId: number | null;
+  hostedApplySubmissionId: number | null;
+  actorUserId: number | null;
+  inlineText: string | null;
+  contentSha256: string | null;
+  createdAt?: Date;
+};
+
+/** Takes a FOR SHARE lock on the candidate row, so erasure cannot tombstone between the check and the insert. */
+async function insertEvidenceUnlessErased(data: EvidenceInput, tx: Prisma.TransactionClient) {
+  if (!(await lockCandidateForWrite(tx, data.candidateId, data.companyId))) return null;
+  return tx.candidateEvidence.create({
+    data: {
+      companyId: data.companyId,
+      candidateId: data.candidateId,
+      applicationId: data.applicationId,
+      sourceType: data.sourceType,
+      origin: data.origin,
+      ingestionEventId: data.ingestionEventId,
+      hostedApplySubmissionId: data.hostedApplySubmissionId,
+      actorUserId: data.actorUserId,
+      inlineText: data.inlineText,
+      contentSha256: data.contentSha256,
+      ...(data.createdAt ? { createdAt: data.createdAt } : {}),
+    },
+    select: evidenceSelect,
+  });
+}
+
+/** Returns null when the candidate is erased. Inside a caller's transaction the lock lasts until that commits. */
+export async function createEvidence(data: EvidenceInput, db: Db = prisma) {
   try {
-    return await db.candidateEvidence.create({
-      data: {
-        companyId: data.companyId,
-        candidateId: data.candidateId,
-        applicationId: data.applicationId,
-        sourceType: data.sourceType,
-        origin: data.origin,
-        ingestionEventId: data.ingestionEventId,
-        hostedApplySubmissionId: data.hostedApplySubmissionId,
-        actorUserId: data.actorUserId,
-        inlineText: data.inlineText,
-        contentSha256: data.contentSha256,
-        ...(data.createdAt ? { createdAt: data.createdAt } : {}),
-      },
-      select: evidenceSelect,
-    });
+    if (db === prisma) {
+      return await prisma.$transaction((tx) => insertEvidenceUnlessErased(data, tx));
+    }
+    return await insertEvidenceUnlessErased(data, db as Prisma.TransactionClient);
   } catch (error) {
     if (
       getPrismaErrorCode(error) === "P2002" &&

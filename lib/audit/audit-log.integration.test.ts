@@ -1,5 +1,4 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   ApplicationPipelineStatus,
@@ -9,17 +8,6 @@ import {
   PortalRole,
   RequirementLifecycle,
 } from "@prisma/client";
-
-const actor = vi.hoisted(() => ({ id: "0" }));
-
-vi.mock("@/auth", () => ({
-  auth: async () => ({ user: { id: actor.id } }),
-}));
-
-vi.mock("next/cache", () => ({
-  revalidatePath: () => undefined,
-}));
-
 import {
   confirmClientCandidateHire,
   transitionApplicationStatus,
@@ -32,6 +20,26 @@ import { getAuditLogPage } from "@/lib/audit/audit-log";
 import { AuthorizationError } from "@/lib/auth/authorization";
 import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
+
+const actor = vi.hoisted(() => ({ id: "0" }));
+
+vi.mock("@/auth", () => ({
+  auth: async () => ({ user: { id: actor.id } }),
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
+
+
+
+
+
+
 
 const MARKER = `audit-${process.pid}-${Date.now()}`;
 
@@ -39,7 +47,7 @@ function asUser(id: number) {
   actor.id = String(id);
 }
 
-describe("audit log", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("audit log", () => {
   const companyIds: number[] = [];
   const userIds: number[] = [];
 

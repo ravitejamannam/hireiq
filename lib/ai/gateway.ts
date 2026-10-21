@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { aiBlockReasonForSubject, type AiSubject } from "@/lib/ai/ai-policy";
+import { AiEvaluationOptOutError } from "@/lib/ai/opt-out";
 
 export type GatewayFeature =
   | "job_description"
@@ -25,7 +27,14 @@ export type GatewayRequest = {
   timeoutMs?: number;
   maxRetries?: number;
   apiKey?: string | null;
+  /**
+   * Whose data this request is about. Required for candidate-evaluation features and re-checked against the
+   * database on every call (preference, human review, tenant). `synthetic` is for fixtures and is refused in production.
+   */
+  subject?: GatewaySubject;
 };
+
+export type GatewaySubject = AiSubject | { synthetic: true };
 
 export type GatewayResult = {
   parsed: unknown;
@@ -104,7 +113,18 @@ export function postOpenAi(input: {
  * Returns an in-memory run payload. Persistence is persistAiRun in lib/ai/ai-run.ts.
  * Offline calls with no company id keep this payload and do not insert AIRun.
  */
+export async function assertGatewaySubject(feature: GatewayFeature, subject: GatewaySubject | undefined) {
+  if (!EVALUATION_FEATURES.has(feature)) return;
+  if (subject && "synthetic" in subject) {
+    if (process.env.NODE_ENV === "production") throw new AiEvaluationOptOutError("NO_APPLICATION");
+    return;
+  }
+  const reason = await aiBlockReasonForSubject(subject ?? {});
+  if (reason) throw new AiEvaluationOptOutError(reason);
+}
+
 export async function completeStructured(input: GatewayRequest): Promise<GatewayResult> {
+  await assertGatewaySubject(input.feature, input.subject);
   const apiKey = input.apiKey ?? process.env.OPENAI_API_KEY?.trim() ?? "";
   if (!apiKey) {
     throw new Error("AI provider is not configured.");

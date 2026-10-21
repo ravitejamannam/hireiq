@@ -101,7 +101,7 @@ export async function scoreLabelledResumes() {
   const found = emptyCounts();
   const ungrounded = emptyCounts();
   const misses: Array<{ id: string; field: ScoreField; expected: string }> = [];
-  const parsed = await mapPool(samples, 4, (sample) => proposeResumeFields(sample.text));
+  const parsed = await mapPool(samples, 4, (sample) => proposeResumeFields(sample.text, { optedOut: false, subject: { synthetic: true } }));
   samples.forEach((sample, index) => {
     const fields = parsed[index];
     const got: Record<ScoreField, string[]> = {

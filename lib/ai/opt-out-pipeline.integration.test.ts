@@ -1,8 +1,5 @@
 import { afterAll, describe, expect, it, vi } from "vitest";
-
-vi.mock("@/auth", () => ({ auth: async () => null }));
 import { CandidateStatus, JobStatus } from "@prisma/client";
-
 import { assertAIEvaluationAllowed, stopQueuedAiEvaluation } from "@/lib/ai/opt-out";
 import { submitGeneratedAssessment } from "@/lib/assessments/generated-assessment-service";
 import { executeRunDeterministicIntelligence } from "@/lib/candidates/intelligence/deterministic-intelligence-service";
@@ -10,10 +7,24 @@ import { executeRunCandidateMatching } from "@/lib/candidates/matching/matching-
 import { quotesForVagueRequirements } from "@/lib/jobs/requirement-checks";
 import { prisma } from "@/lib/prisma";
 import { scoreLabel } from "@/lib/review/review-queue";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
+
+vi.mock("@/auth", () => ({ auth: async () => null }));
+
+
+
+
+
+
+
+
+
 
 const MARKER = `optout-${Date.now()}`;
 
-describe("opted-out evaluation", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("opted-out evaluation", () => {
   const companyIds: number[] = [];
 
   afterAll(async () => {

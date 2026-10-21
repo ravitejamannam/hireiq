@@ -1,5 +1,4 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   ApplyMode,
@@ -10,17 +9,6 @@ import {
   OrganizationMemberStatus,
   PortalRole,
 } from "@prisma/client";
-
-const actor = vi.hoisted(() => ({ id: "0" }));
-
-vi.mock("@/auth", () => ({
-  auth: async () => ({ user: { id: actor.id } }),
-}));
-
-vi.mock("next/cache", () => ({
-  revalidatePath: () => undefined,
-}));
-
 import {
   closeJobDistribution,
   connectProvider,
@@ -40,6 +28,26 @@ import {
 import { AuthenticationError, AuthorizationError } from "@/lib/auth/authorization";
 import { JobDistributionError } from "@/lib/validation/job-distribution-validation";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
+
+const actor = vi.hoisted(() => ({ id: "0" }));
+
+vi.mock("@/auth", () => ({
+  auth: async () => ({ user: { id: actor.id } }),
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
+
+
+
+
+
+
 
 const MARKER = `dist-${process.pid}-${Date.now()}`;
 
@@ -47,7 +55,7 @@ function asUser(id: number) {
   actor.id = String(id);
 }
 
-describe("distribution authorization", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("distribution authorization", () => {
   const companyIds: number[] = [];
   const userIds: number[] = [];
 

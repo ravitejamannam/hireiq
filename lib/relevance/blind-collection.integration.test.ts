@@ -1,5 +1,4 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it } from "vitest";
 import {
   CandidateEvidenceOrigin,
@@ -9,12 +8,14 @@ import {
   JobStatus,
   PortalRole,
 } from "@prisma/client";
-
 import { prisma } from "@/lib/prisma";
 import {
   createHumanRelevanceJudgment,
   loadHumanRelevanceCollection,
 } from "@/lib/relevance/human-relevance-operations";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const MARKER = `m121-${process.pid}-${Date.now()}`;
 const companyIds: number[] = [];
@@ -158,7 +159,7 @@ afterAll(async () => {
   await prisma.company.deleteMany({ where: { id: { in: companyIds } } });
 });
 
-describe("blind relevance collection", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("blind relevance collection", () => {
   it("returns only published requirements and eligible evidence", async () => {
     const row = await world("blind");
     const other = await world("other");

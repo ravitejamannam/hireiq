@@ -15,7 +15,7 @@ type AssessmentTakeFormProps = {
   alreadySubmitted: boolean;
   score: number | null;
   maxScore: number | null;
-  leaderboardHref: string;
+  leaderboardHref?: string;
 };
 
 function remainingLabel(expiresAt: string) {
@@ -167,14 +167,17 @@ export default function AssessmentTakeForm({
         </p>
         <p className="mt-3 text-sm text-emerald-800">
           This is your score on this role&apos;s assessment, not a hire
-          decision.
+          decision. A recruiter reviews it alongside the rest of your
+          application.
         </p>
-        <a
-          href={leaderboardHref}
-          className="mt-6 inline-block rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600"
-        >
-          See where you stand →
-        </a>
+        {leaderboardHref ? (
+          <a
+            href={leaderboardHref}
+            className="mt-6 inline-block rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600"
+          >
+            See where you stand →
+          </a>
+        ) : null}
       </div>
     );
   }
@@ -321,8 +324,8 @@ export default function AssessmentTakeForm({
       </div>
 
       <p className="mt-4 text-center text-xs text-zinc-400">
-        Focus and clipboard activity during the attempt are recorded as part
-        of standard assessment integrity.
+        Focus and clipboard activity are counted and shown to the recruiter as
+        context only. They are never used to reject an application.
       </p>
     </form>
   );

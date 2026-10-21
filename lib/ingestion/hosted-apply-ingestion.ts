@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { lockCandidateForWrite } from "@/lib/privacy/erasure-guard";
 import {
   ApplicationIngestionChannel,
   ApplicationIngestionStatus,
@@ -27,6 +28,9 @@ import {
   validateIngestionSubmissionId,
 } from "@/lib/validation/application-ingestion-validation";
 
+import { decideIntakeMatch } from "@/lib/candidates/intake-match";
+import { loadKnownCandidates } from "@/lib/imports/import-service";
+import { phoneDigits } from "@/lib/imports/import-mapping";
 import { createEvidence } from "@/lib/repositories/candidate-evidence-repository";
 import { claimPendingResumeInIngestion } from "@/lib/apply/hosted-resume-service";
 import { analyseParsedCandidate } from "@/lib/resumes/analyse-after-parse";
@@ -282,6 +286,35 @@ export async function ingestHostedApplySubmission(submissionId: unknown) {
       assertSubmissionIntegrity(fresh);
 
       let candidateId = locked.candidateId;
+      if (fresh.emailNormalized) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`intake:${fresh.companyId}:${fresh.emailNormalized}`})::bigint)`;
+      }
+      const known = await loadKnownCandidates(
+        fresh.companyId,
+        fresh.emailNormalized ? [fresh.emailNormalized] : [],
+        [fresh.name],
+        tx,
+      );
+      const intakeMatch = decideIntakeMatch({
+        companyId: fresh.companyId,
+        email: fresh.emailNormalized,
+        phoneDigits: fresh.phone ? phoneDigits(fresh.phone) : null,
+        name: fresh.name,
+        employer: null,
+        known,
+      });
+      if (!candidateId && intakeMatch.decision === "attach") {
+        candidateId = intakeMatch.candidateId;
+      } else if (!candidateId && intakeMatch.decision === "erased") {
+        throw new ApplicationIngestionError(INGESTION_INVALID, "CANDIDATE_ERASED");
+      } else if (!candidateId && intakeMatch.decision === "review") {
+        throw new ApplicationIngestionError(INGESTION_INVALID, "AMBIGUOUS_MATCH");
+      }
+      // A replay for a candidate that already exists must not write after erasure. A new candidate cannot be erased yet.
+      if (candidateId && !(await lockCandidateForWrite(tx, candidateId, fresh.companyId))) {
+        throw new ApplicationIngestionError(INGESTION_INVALID, "CANDIDATE_ERASED");
+      }
+      const reusingCandidate = Boolean(candidateId);
       if (!candidateId) {
         const candidate = await tx.candidate.create({
           data: {
@@ -296,8 +329,9 @@ export async function ingestHostedApplySubmission(submissionId: unknown) {
         candidateId = candidate.id;
       }
 
-      const profilePayload = parseStoredStructuredProfile(fresh.profilePayload);
-      await upsertProfileFromApply(
+      if (!reusingCandidate) {
+        const profilePayload = parseStoredStructuredProfile(fresh.profilePayload);
+        await upsertProfileFromApply(
         candidateId,
         fresh.job.companyId,
         candidateProfileWriteFromStructured({
@@ -311,7 +345,16 @@ export async function ingestHostedApplySubmission(submissionId: unknown) {
         }),
         tx,
       );
+      }
 
+      // Only an explicit answer is recorded. A missing or garbled answer stays UNKNOWN, which never permits AI.
+      const payload = fresh.profilePayload as { aiPreference?: unknown; aiEvaluationAllowed?: unknown } | null;
+      const aiPreference =
+        payload?.aiPreference === "ALLOWED" || payload?.aiPreference === "REFUSED"
+          ? payload.aiPreference
+          : payload?.aiPreference === undefined && payload?.aiEvaluationAllowed === true
+            ? "ALLOWED"
+            : "UNKNOWN";
       let applicationId = locked.applicationId;
       if (!applicationId) {
         const existingApplication = await tx.application.findUnique({
@@ -332,6 +375,13 @@ export async function ingestHostedApplySubmission(submissionId: unknown) {
             );
           }
           applicationId = existingApplication.id;
+          // A later submission can withdraw permission but never grant it.
+          if (aiPreference === "REFUSED") {
+            await tx.application.updateMany({
+              where: { id: existingApplication.id, aiPreference: { not: "REFUSED" } },
+              data: { aiPreference: "REFUSED", aiPreferenceSource: "HOSTED_FORM", aiPreferenceAt: new Date(), aiOptOutAt: new Date() },
+            });
+          }
         } else {
           const createStatus = assertApplicationCreatedAtCvPool(
             ApplicationPipelineStatus.CV_POOL,
@@ -346,6 +396,10 @@ export async function ingestHostedApplySubmission(submissionId: unknown) {
               expertScore: null,
               rejectionReason: null,
               futureRolesConsent: Boolean((fresh.profilePayload as { futureRolesConsent?: boolean } | null)?.futureRolesConsent),
+              aiPreference,
+              aiPreferenceSource: aiPreference === "UNKNOWN" ? "HOSTED_FORM_NO_ANSWER" : "HOSTED_FORM",
+              aiPreferenceAt: new Date(),
+              aiOptOutAt: aiPreference === "REFUSED" ? new Date() : null,
             },
           });
           applicationId = created.id;

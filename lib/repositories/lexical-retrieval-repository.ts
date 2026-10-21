@@ -1,5 +1,6 @@
 import { LexicalRetrievalRunStatus, Prisma } from "@prisma/client";
 
+import { writeRowsForLiveCandidates } from "@/lib/privacy/erasure-guard";
 import type { LexicalApplicationScore } from "@/lib/retrieval/lexical-retrieval-types";
 import { prisma } from "@/lib/prisma";
 
@@ -181,18 +182,21 @@ export async function createLexicalRetrievalResults(
   if (input.rows.length === 0) {
     return;
   }
-  await db.lexicalRetrievalResult.createMany({
-    data: input.rows.map((row, index) => ({
-      companyId: input.companyId,
-      runId: input.runId,
-      applicationId: row.applicationId,
-      candidateId: row.candidateId,
-      rank: index + 1,
-      lexicalScore: row.lexicalScore,
-      matchedTerms: row.matchedTerms,
-      method: input.method,
-    })),
-  });
+  // Rows for an erased candidate are dropped, so a stale run cannot put a snapshot back.
+  await writeRowsForLiveCandidates(db, input.companyId, input.rows, (tx, live) =>
+      tx.lexicalRetrievalResult.createMany({
+      data: live.map((row, index) => ({
+        companyId: input.companyId,
+        runId: input.runId,
+        applicationId: row.applicationId,
+        candidateId: row.candidateId,
+        rank: index + 1,
+        lexicalScore: row.lexicalScore,
+        matchedTerms: row.matchedTerms,
+        method: input.method,
+      })),
+    }),
+  );
 }
 
 export async function markLexicalRetrievalRunCompleted(

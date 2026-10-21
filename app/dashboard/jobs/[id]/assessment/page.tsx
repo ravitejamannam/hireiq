@@ -14,7 +14,7 @@ export default async function JobAssessmentPage({ params }: PageProps) {
   const job = await prisma.job.findUnique({ where: { id: jobId }, select: { title: true, companyId: true } });
   if (!job || deniesCrossCompany(admin, job.companyId)) notFound();
   const assessment = await prisma.generatedAssessment.findFirst({
-    where: { jobId },
+    where: { jobId, companyId: job.companyId },
     orderBy: { version: "desc" },
   });
   const items = Array.isArray(assessment?.items) ? assessment.items : [];
@@ -25,7 +25,9 @@ export default async function JobAssessmentPage({ params }: PageProps) {
         jobTitle={job.title}
         assessmentId={assessment?.id ?? null}
         status={assessment?.status ?? "NONE"}
-        timeLimitMinutes={assessment?.timeLimitMinutes ?? 45}
+        timeLimitMinutes={assessment?.timeLimitMinutes ?? 20}
+        drawCount={assessment?.drawCount ?? 8}
+        candidateInstructions={assessment?.candidateInstructions ?? null}
         items={items as Array<{ id: string; type: string; prompt: string; requirement: string; rubricCriterion: string }>}
       />
       <CopilotPanel jobId={jobId} companyId={job.companyId} />

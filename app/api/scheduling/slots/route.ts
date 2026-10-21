@@ -20,7 +20,7 @@ function schedulingErrorMessage(error: unknown): { message: string; status: numb
     case "SLOT_START_INVALID":
       return { message: "Slots must be in the future.", status: 400 };
     case "DURATION_INVALID":
-      return { message: "Slot duration must be 15-240 minutes.", status: 400 };
+      return { message: "Slot duration must be 10-240 minutes.", status: 400 };
     case "NO_ASSIGNED_INTERVIEWER":
       return { message: "Assign an interviewer to this application's job first.", status: 400 };
     default:

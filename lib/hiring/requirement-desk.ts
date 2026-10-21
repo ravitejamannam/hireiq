@@ -7,12 +7,13 @@ import {
   type HiringTimelineEvent,
   type TimelineApplicationInput,
 } from "@/lib/hiring/application-timeline";
+import { attributionEvent } from "@/lib/analytics/channel-analytics";
 import {
+  applicationIntakeLabel,
   buildHiringFunnelReport,
   type ApplicationFunnelSnapshot,
   type HiringFunnelReport,
 } from "@/lib/hiring/funnel";
-import { resolveApplicationSourceLabel } from "@/lib/hiring/ingestion-source";
 import {
   INTERVIEW_RESULT_LABELS,
   INTERVIEW_TYPE_LABELS,
@@ -59,10 +60,14 @@ const deskApplicationSelect = {
     },
   },
   ingestionEvents: {
-    orderBy: { receivedAt: "desc" as const },
-    take: 1,
+    orderBy: [{ receivedAt: "asc" as const }, { id: "asc" as const }],
     select: {
+      id: true,
+      receivedAt: true,
+      status: true,
       sourceChannel: true,
+      externalApplicationId: true,
+      distributionId: true,
       hostedApplySubmissionId: true,
     },
   },
@@ -89,7 +94,18 @@ type DeskApplicationRow = Prisma.ApplicationGetPayload<{
 }>;
 
 function toSnapshot(row: DeskApplicationRow): ApplicationFunnelSnapshot {
-  const latestIngestion = row.ingestionEvents[0] ?? null;
+  const ingestionEvents = row.ingestionEvents.map((event) => ({
+    id: event.id,
+    receivedAt: event.receivedAt,
+    status: event.status,
+    sourceChannel: event.sourceChannel,
+    externalApplicationId: event.externalApplicationId,
+    distributionId: event.distributionId,
+  }));
+  const selected = attributionEvent(ingestionEvents);
+  const selectedRow = selected
+    ? row.ingestionEvents.find((event) => event.id === selected.id) ?? null
+    : null;
   const assessment = row.assessmentInvite?.attempt ?? null;
   const interviewBookedAt =
     row.bookingInvite?.usedAt ??
@@ -110,14 +126,15 @@ function toSnapshot(row: DeskApplicationRow): ApplicationFunnelSnapshot {
     offerAcceptedAt: row.offerAcceptedAt,
     hiredAt: row.outcomeEvents[0]?.occurredAt ?? null,
     billedAt: row.billingLineItem?.createdAt ?? null,
-    sourceChannel: latestIngestion?.sourceChannel ?? null,
+    sourceChannel: selected?.sourceChannel ?? null,
     sourcingDatabaseSource: row.source,
-    hostedApplySubmissionId: latestIngestion?.hostedApplySubmissionId ?? null,
+    hostedApplySubmissionId: selectedRow?.hostedApplySubmissionId ?? null,
+    ingestionEvents,
   };
 }
 
 function toTimelineInput(row: DeskApplicationRow): TimelineApplicationInput {
-  const latestIngestion = row.ingestionEvents[0] ?? null;
+  const snapshot = toSnapshot(row);
   const attempt = row.assessmentInvite?.attempt ?? null;
   const ranking = row.rankingResults[0] ?? null;
 
@@ -131,11 +148,7 @@ function toTimelineInput(row: DeskApplicationRow): TimelineApplicationInput {
     offerDeclinedAt: row.offerDeclinedAt,
     candidateName: row.candidate.name,
     jobTitle: row.job.title,
-    sourceLabel: resolveApplicationSourceLabel({
-      sourceChannel: latestIngestion?.sourceChannel,
-      sourcingDatabaseSource: row.source,
-      hostedApplySubmissionId: latestIngestion?.hostedApplySubmissionId,
-    }),
+    sourceLabel: applicationIntakeLabel(snapshot),
     assessmentStartedAt:
       attempt?.startedAt ?? row.assessmentInvite?.startedAt ?? null,
     assessmentSubmittedAt: attempt?.submittedAt ?? null,

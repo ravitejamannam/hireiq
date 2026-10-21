@@ -1,8 +1,6 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it } from "vitest";
 import { JobSpecificationVersionStatus, JobStatus } from "@prisma/client";
-
 import { setJobDescriptionGeneratorForTests } from "@/lib/ai/job-description-generator";
 import { JobDescriptionAiError } from "@/lib/ai/job-description-output";
 import {
@@ -11,11 +9,14 @@ import {
 } from "@/lib/jobs/job-description-ai";
 import { JobValidationError } from "@/lib/validation/job-validation";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const MARKER = `gen-${process.pid}-${Date.now()}`;
 const ACTOR_USER_ID = 1_000_000_000 + (process.pid % 100_000) * 1_000 + (Date.now() % 1_000);
 
-describe("job description generation", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("job description generation", () => {
   const companyIds: number[] = [];
 
   afterAll(async () => {

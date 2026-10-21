@@ -28,6 +28,8 @@ const distributionInclude = {
       publishedAt: true,
       targetHireDate: true,
       structuredPayload: true,
+      remotePolicy: true,
+      compensationRange: true,
     },
   },
   job: {
@@ -60,6 +62,7 @@ export async function listPublicFeedJobs(
       id: true,
       createdAt: true,
       applyUrlSnapshot: true,
+      includeCompensation: true,
       ...distributionInclude,
     },
     orderBy: { createdAt: "desc" },
@@ -94,6 +97,7 @@ export async function getPublicJobByDistributionId(
       id: true,
       createdAt: true,
       applyUrlSnapshot: true,
+      includeCompensation: true,
       ...distributionInclude,
     },
   });
@@ -104,6 +108,35 @@ export async function getPublicJobByDistributionId(
     ...posting,
     applyUrl: publicAbsoluteApplyUrl(posting.applyUrl),
   };
+}
+
+export async function listAllPublicFeedJobs(
+  db: Db = prisma,
+): Promise<CanonicalJobPosting[]> {
+  const rows = await db.jobDistribution.findMany({
+    where: publicHostedDistributionWhere(),
+    select: {
+      id: true,
+      createdAt: true,
+      applyUrlSnapshot: true,
+      includeCompensation: true,
+      ...distributionInclude,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 2000,
+  });
+
+  const postings: CanonicalJobPosting[] = [];
+  for (const row of rows) {
+    const posting = toCanonicalJobPosting(row);
+    if (posting) {
+      postings.push({
+        ...posting,
+        applyUrl: publicAbsoluteApplyUrl(posting.applyUrl),
+      });
+    }
+  }
+  return postings;
 }
 
 /** True when the company has at least one publicly feedable job. */

@@ -6,6 +6,8 @@ import { S3ResumeStorage } from "@/lib/resumes/s3-driver";
 import {
   ResumeStorageError,
   type ResumeStorageDriver,
+  type StorageDeleteResult,
+  type StorageDeleteStatus,
   type StoredResume,
 } from "@/lib/resumes/storage-types";
 
@@ -48,11 +50,14 @@ class LocalResumeStorage implements ResumeStorageDriver {
     }
   }
 
-  async delete(key: string): Promise<void> {
+  async delete(key: string): Promise<StorageDeleteStatus> {
+    const full = this.resolve(key);
     try {
-      await rm(this.resolve(key));
-    } catch {
-      // deleting a missing object is a no-op
+      await rm(full);
+      return "DELETED";
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return "ABSENT";
+      throw new ResumeStorageError("STORAGE_DELETE_FAILED");
     }
   }
 }
@@ -100,6 +105,17 @@ export async function readResume(key: string): Promise<Buffer | null> {
   return activeDriver().get(key);
 }
 
+/** Observable delete. A provider failure is returned as FAILED and is never reported as deleted or absent. */
+export async function deleteResumeObject(key: string): Promise<StorageDeleteResult> {
+  try {
+    return { status: await activeDriver().delete(key) };
+  } catch (error) {
+    return { status: "FAILED", code: error instanceof ResumeStorageError ? error.code : "STORAGE_DELETE_FAILED" };
+  }
+}
+
+/** Throws when the provider reports a failure. */
 export async function deleteResume(key: string): Promise<void> {
-  return activeDriver().delete(key);
+  const result = await deleteResumeObject(key);
+  if (result.status === "FAILED") throw new ResumeStorageError(result.code);
 }

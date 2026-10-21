@@ -1,4 +1,8 @@
-import { readFileSync } from "node:fs";
+import { seededApplicantIndex, seededApplicantName } from "@/lib/testing/e2e-applicant-names";
+import { judgeRediscovery, pickAssessmentApplicant, type RediscoveryFixtureState } from "@/lib/testing/e2e-probes";
+import { assertE2eDatabase } from "@/lib/testing/e2e-database-guard";
+import { randomUUID } from "node:crypto";
+import { submitHostedApply } from "@/lib/apply/hosted-apply-service";
 
 import {
   overrideAssessmentGrade,
@@ -8,7 +12,6 @@ import {
   submitGeneratedAssessment,
 } from "@/lib/assessments/generated-assessment-service";
 import { generateSecureToken } from "@/lib/auth/secure-token";
-import { visibleScorecards } from "@/lib/interviews/slot-calculation";
 import { sendDueInterviewReminders } from "@/lib/interviews/interview-reminders";
 import {
   bookSlotWithToken,
@@ -32,7 +35,7 @@ function record(name: string, ok: boolean, detail: string) {
 }
 
 async function main() {
-  if (!process.env.DATABASE_URL?.includes("hireiq_e2e_full")) throw new Error("wrong database");
+  assertE2eDatabase();
   const company = await prisma.company.findFirstOrThrow({ where: { publicSlug: "e2e-nimbus" } });
   const source = await prisma.job.findFirstOrThrow({
     where: { companyId: company.id, title: "Nimbus Labs: Backend Engineer" },
@@ -45,32 +48,77 @@ async function main() {
 
   const rows = await prisma.application.findMany({
     where: { jobId: source.id, companyId: company.id },
-    select: { id: true, candidateId: true, futureRolesConsent: true, aiEvaluationOptOut: true, candidate: { select: { name: true } } },
+    select: { id: true, companyId: true, candidateId: true, futureRolesConsent: true, aiEvaluationOptOut: true, aiPreference: true, humanReviewRequestedAt: true, candidate: { select: { name: true } } },
   });
-  const forced = rows.filter((row) => {
-    const match = row.candidate.name.match(/Applicant (\d+)$/);
-    return match ? Number(match[1]) % 2 === 1 : false;
-  });
-  await prisma.application.updateMany({
-    where: { id: { in: forced.map((row) => row.id) } },
-    data: { futureRolesConsent: false },
-  });
-  const after = await prisma.application.findMany({
-    where: { jobId: source.id },
-    select: { futureRolesConsent: true, aiEvaluationOptOut: true },
-  });
-  const consented = after.filter((row) => row.futureRolesConsent).length;
-  const optedOut = after.filter((row) => row.aiEvaluationOptOut).length;
-  const both = after.filter((row) => row.futureRolesConsent && row.aiEvaluationOptOut).length;
-  const eligible = consented - both;
-  const ranked = await runTalentRediscovery({ jobId: second.id });
-  record(
-    "rediscovery consent",
-    ranked.length === eligible,
-    `${rows.length} applicants, ${consented} consented, ${optedOut} opted out, ${both} both, rediscovery ${ranked.length}, expected ${eligible}`,
-  );
+  if (!rows.some((row) => seededApplicantIndex(row.candidate.name, "nimbus") !== null)) {
+    throw new Error('Setup: no "nimbus Applicant N" applicants on the source job. Run scripts/e2e-full-followup.ts before this script.');
+  }
+  const applyUrl = (await prisma.applyToken.findFirstOrThrow({
+    where: { distribution: { jobId: source.id } },
+    select: { distribution: { select: { applyUrlSnapshot: true } } },
+  })).distribution.applyUrlSnapshot;
+  const applyToken = applyUrl?.split("/apply/")[1] ?? "";
 
-  const scheduleApp = rows.find((row) => row.candidate.name === "nimbus Applicant 2");
+  // Dedicated synthetic fixtures. AI consent and future-roles consent are answered through the hosted form, so the
+  // database trigger sets the AI flag itself; nothing here writes aiEvaluationOptOut or clears a flag.
+  const fixtureDefs = [
+    { key: "eligible", consent: true, ai: "allowed", resume: true, withdraw: false },
+    { key: "no-resume", consent: true, ai: "allowed", resume: false, withdraw: false },
+    { key: "opted-out", consent: true, ai: "human_only", resume: true, withdraw: false },
+    { key: "withdrawn", consent: true, ai: "allowed", resume: true, withdraw: true },
+    { key: "no-consent", consent: false, ai: "allowed", resume: true, withdraw: false },
+  ] as const;
+  const fixtureStates: RediscoveryFixtureState[] = [];
+  for (const def of fixtureDefs) {
+    const email = `rediscovery-${def.key}@example.com`;
+    const name = `Rediscovery Fixture ${def.key}`;
+    await submitHostedApply({
+      token: applyToken,
+      idempotencyKey: randomUUID(),
+      body: { name, email, phone: "9845012345", consent: true, location: "Bengaluru", experienceYears: 6, futureRolesConsent: def.consent, aiEvaluation: def.ai },
+    });
+    const application = await prisma.application.findFirstOrThrow({
+      where: { companyId: company.id, jobId: source.id, candidate: { name } },
+      select: { id: true, candidateId: true },
+    });
+    if (def.resume) {
+      await prisma.candidateEvidence.create({
+        data: {
+          companyId: company.id,
+          candidateId: application.candidateId,
+          applicationId: application.id,
+          sourceType: "RECRUITER_ENTERED_TEXT",
+          origin: "RECRUITER_ENTERED",
+          inlineText: "Backend engineer. Go, PostgreSQL, and Kubernetes in production for six years.",
+        },
+      });
+    }
+    if (def.withdraw) await withdrawApplication(application.id, email, "Rediscovery fixture withdrew");
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+      select: { futureRolesConsent: true, aiPreference: true, withdrawnAt: true },
+    });
+    const evidence = await prisma.candidateEvidence.count({
+      where: { candidateId: application.candidateId, companyId: company.id, revokedAt: null, inlineText: { not: "" } },
+    });
+    const onTarget = await prisma.application.count({
+      where: { candidateId: application.candidateId, jobId: second.id, withdrawnAt: null, status: { not: "REJECTED" } },
+    });
+    fixtureStates.push({
+      key: def.key,
+      candidateId: application.candidateId,
+      hasResume: evidence > 0,
+      futureRolesConsent: stored.futureRolesConsent,
+      aiPreference: stored.aiPreference,
+      withdrawn: stored.withdrawnAt !== null,
+      activeOnTargetJob: onTarget > 0,
+    });
+  }
+  const ranked = await runTalentRediscovery({ jobId: second.id });
+  const verdict = judgeRediscovery(fixtureStates, ranked.map((row) => row.candidateId));
+  record("rediscovery inclusion and exclusion", verdict.status === "PASS", verdict.detail);
+
+  const scheduleApp = rows.find((row) => row.candidate.name === seededApplicantName("nimbus", 2));
   if (!scheduleApp || !source.assignedInterviewerId) {
     record("scheduling", false, "missing applicant or interviewer");
   } else {
@@ -101,16 +149,16 @@ async function main() {
     );
   }
 
-  const assessApp = rows.find((row) => row.candidate.name === "nimbus Applicant 4" && !row.aiEvaluationOptOut);
+  const assessApp = pickAssessmentApplicant(rows, seededApplicantName("nimbus", 4));
   const admin = await prisma.user.findFirstOrThrow({ where: { email: "admin.nimbus@e2e.hireiq.local" } });
   if (!assessApp) {
-    record("assessment", false, "missing applicant");
+    record("assessment", false, "no applicant who allowed AI evaluation (consent is not overridden)");
   } else {
     let draft = await prisma.generatedAssessment.findFirst({ where: { jobId: source.id }, orderBy: { id: "desc" } });
     if (!draft) record("assessment", false, "no draft");
     else {
-      if (draft.status !== "PUBLISHED") draft = await publishAssessment(draft.id, admin.id);
-      const link = await sendAssessmentLink({ applicationId: assessApp.id, actorUserId: admin.id });
+      if (draft.status !== "PUBLISHED") draft = await publishAssessment(draft.id, admin.id, draft.companyId);
+      const link = await sendAssessmentLink({ applicationId: assessApp.id, actorUserId: admin.id, companyId: assessApp.companyId, retake: true });
       const loaded = await import("@/lib/assessments/generated-assessment-service").then((mod) => mod.loadCandidateAssessment(link.rawToken));
       const patch: Record<string, string> = {};
       if (loaded && "items" in loaded && Array.isArray(loaded.items)) {
@@ -123,7 +171,7 @@ async function main() {
       const invite = await prisma.generatedAssessmentInvite.findUniqueOrThrow({ where: { id: link.inviteId } });
       const first = Array.isArray(invite.grades) ? (invite.grades as Array<{ itemId: string }>)[0] : null;
       if (first) {
-        await overrideAssessmentGrade({ inviteId: invite.id, itemId: first.itemId, score: 5, reason: "Human review of the written answer.", actorUserId: admin.id });
+        await overrideAssessmentGrade({ inviteId: invite.id, itemId: first.itemId, score: 1, reason: "Human review of the written answer.", actorUserId: admin.id, companyId: assessApp.companyId });
       }
       const updated = await prisma.generatedAssessmentInvite.findUniqueOrThrow({ where: { id: link.inviteId } });
       const grades = Array.isArray(updated.grades) ? updated.grades as Array<{ overrideReason?: string }> : [];
@@ -135,7 +183,7 @@ async function main() {
     }
   }
 
-  const portalApp = rows.find((row) => row.candidate.name === "nimbus Applicant 6");
+  const portalApp = rows.find((row) => row.candidate.name === seededApplicantName("nimbus", 6));
   if (!portalApp) {
     record("portal", false, "missing applicant");
   } else {
@@ -149,9 +197,9 @@ async function main() {
       contentType: "application/pdf",
       bytes: pdf,
     });
-    const opted = await setOptOut(portalApp.id, email, true);
+    await setOptOut(portalApp.id, email, true);
     const exported = await exportPortalData(email);
-    const withdrawn = await withdrawApplication(portalApp.id, email, "Taking another offer");
+    await withdrawApplication(portalApp.id, email, "Taking another offer");
     const row = await prisma.application.findUnique({ where: { id: portalApp.id }, select: { aiEvaluationOptOut: true, withdrawnAt: true } });
     record(
       "portal upload opt-out export withdraw",

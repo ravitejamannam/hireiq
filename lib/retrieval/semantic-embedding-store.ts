@@ -1,5 +1,7 @@
 import { RetrievalEmbeddingSourceType } from "@prisma/client";
 
+import { prisma } from "@/lib/prisma";
+import { withCandidateWriteGuard } from "@/lib/privacy/erasure-guard";
 import {
   createRetrievalEmbeddings,
   listRetrievalEmbeddings,
@@ -128,7 +130,25 @@ export async function loadOrCreateRetrievalEmbeddings(input: {
     };
   });
 
-  await createRetrievalEmbeddings(created);
+  // Job-query vectors are not about a person. Evidence vectors are stored per owning candidate, under the
+  // erasure guard, so an embedding that finished after erasure is dropped instead of stored.
+  const evidenceRows = created.filter((row) => row.sourceType === RetrievalEmbeddingSourceType.EVIDENCE);
+  const otherRows = created.filter((row) => row.sourceType !== RetrievalEmbeddingSourceType.EVIDENCE);
+  await createRetrievalEmbeddings(otherRows);
+  if (evidenceRows.length > 0) {
+    const owners = await prisma.candidateEvidence.findMany({
+      where: { companyId: input.identity.companyId, id: { in: evidenceRows.map((row) => row.sourceId) } },
+      select: { id: true, candidateId: true },
+    });
+    const byCandidate = new Map<number, typeof evidenceRows>();
+    for (const owner of owners) {
+      const rows = evidenceRows.filter((row) => row.sourceId === owner.id);
+      byCandidate.set(owner.candidateId, [...(byCandidate.get(owner.candidateId) ?? []), ...rows]);
+    }
+    for (const [candidateId, rows] of byCandidate) {
+      await withCandidateWriteGuard(candidateId, input.identity.companyId, (tx) => createRetrievalEmbeddings(rows, tx));
+    }
+  }
   return vectors;
 }
 

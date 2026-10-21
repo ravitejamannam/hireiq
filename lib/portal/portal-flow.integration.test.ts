@@ -1,11 +1,5 @@
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { CandidateStatus, JobStatus } from "@prisma/client";
-
-vi.mock("@/auth", () => ({ auth: async () => null }));
-vi.mock("@/lib/resumes/text-extraction", () => ({
-  extractResumeText: async () => ({ ok: true, text: "Go and Postgres for nine years.", quality: {}, extractor: "test" }),
-}));
-
 import { prisma } from "@/lib/prisma";
 import {
   consumeMagicLink,
@@ -18,10 +12,21 @@ import {
   setOptOut,
   withdrawApplication,
 } from "@/lib/portal/portal-service";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
+
+vi.mock("@/auth", () => ({ auth: async () => null }));
+vi.mock("@/lib/resumes/text-extraction", () => ({
+  extractResumeText: async () => ({ ok: true, text: "Go and Postgres for nine years.", quality: {}, extractor: "test" }),
+}));
+
+
+
 
 const MARKER = `portal-${Date.now()}`;
 
-describe("candidate portal flow", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("candidate portal flow", () => {
   const companyIds: number[] = [];
 
   afterAll(async () => {

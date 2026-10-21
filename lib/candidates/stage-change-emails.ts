@@ -159,11 +159,13 @@ export async function notifyCandidateOfStageChange(
       contact.jobTitle,
     );
 
+    const owner = await prisma.application.findUnique({ where: { id: applicationId }, select: { candidateId: true, companyId: true } });
     const result = await sendOutboundEmail({
       to: contact.email,
       subject,
       text: body,
       html: `<p>${body.replaceAll("\n", "<br>")}</p>`,
+      scope: owner ? { companyId: owner.companyId, candidateId: owner.candidateId } : undefined,
     });
 
     const outcome = outcomeFromTransport(result);

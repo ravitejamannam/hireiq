@@ -1,8 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { hostedApplyPathFromSnapshot } from "@/lib/apply/hosted-apply-url";
+import { buildManualPostKit } from "@/lib/jobs/distribution/manual-post-kit";
+import { prefixPublicOrigin, publicCompanyJobsPath, publicJobPath } from "@/lib/jobs/public-feed/public-job-slug";
+
+function htmlAttr(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
 
 type Channel = {
   label: string;
@@ -13,28 +23,37 @@ type Channel = {
 
 export default function DistributionKit({
   jobTitle,
+  jobDescription,
   applyUrl,
   distributionId,
   companyId,
   companyPublicSlug,
+  publicOrigin = "",
 }: {
   jobTitle: string;
+  jobDescription?: string | null;
   applyUrl: string | null;
   distributionId: number | null;
   companyId: number | null;
   companyPublicSlug?: string | null;
+  /** Server-known public origin. Empty until the browser origin is applied after mount. */
+  publicOrigin?: string;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
+  const configuredOrigin = publicOrigin.trim().replace(/\/$/, "");
+  const [browserOrigin, setBrowserOrigin] = useState("");
 
-  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  useEffect(() => {
+    if (configuredOrigin) return;
+    setBrowserOrigin(window.location.origin);
+  }, [configuredOrigin]);
+
+  const origin = configuredOrigin || browserOrigin;
   const snapshot = applyUrl?.trim() || "";
   const applyPath = snapshot ? hostedApplyPathFromSnapshot(snapshot) : null;
-  const liveApply = applyPath ? `${origin}${applyPath}` : snapshot;
-  const leaderboardUrl = liveApply
-    ? `${liveApply.replace(/\/$/, "")}/leaderboard`
-    : "";
+  const liveApply = applyPath ? prefixPublicOrigin(origin, applyPath) : snapshot;
   const careersUrl = companyPublicSlug
-    ? `${origin}/careers/${companyPublicSlug}`
+    ? prefixPublicOrigin(origin, publicCompanyJobsPath(companyPublicSlug))
     : "";
 
   const channels: Channel[] = [
@@ -46,39 +65,35 @@ export default function DistributionKit({
       kind: "url",
     },
     {
-      label: "2. Public assessment leaderboard",
-      description:
-        "Anonymized: first name and last initial. Ranked by this role's assessment only — not a hire score. Hiring teams see full names on the requirement desk.",
-      value: leaderboardUrl,
-      kind: "url",
-    },
-    {
-      label: "3. Company careers hub",
+      label: "2. Company careers hub",
       description:
         "Lists every open HireIQ-hosted role for this company. Share this when you have more than one live posting.",
       value: careersUrl,
       kind: "url",
     },
     {
-      label: "4. Public job page",
+      label: "3. Public job page",
       description:
-        "Google Jobs structured-data listing. Apply CTA still uses the hosted apply link.",
-      value: distributionId ? `${origin}/jobs/${distributionId}` : "",
+        "Public job page with JobPosting structured data. Search engines can read it. That is not a guarantee the job appears in Google Jobs.",
+      value:
+        distributionId && companyPublicSlug
+          ? prefixPublicOrigin(origin, publicJobPath(companyPublicSlug, jobTitle, distributionId))
+          : "",
       kind: "url",
     },
     {
-      label: "5. Embed on your careers site",
+      label: "4. Embed on your careers site",
       description: "Iframe of the apply form. Zero extra JavaScript.",
       value: liveApply
-        ? `<iframe src="${origin}/embed/apply/${liveApply.split("/apply/").pop() ?? ""}" style="width:100%;height:640px;border:0;border-radius:12px" title="Apply — ${jobTitle}" loading="lazy"></iframe>`
+        ? `<iframe src="${htmlAttr(prefixPublicOrigin(origin, `/embed/apply/${liveApply.split("/apply/").pop() ?? ""}`))}" style="width:100%;height:640px;border:0;border-radius:12px" title="${htmlAttr(`Apply — ${jobTitle}`)}" loading="lazy"></iframe>`
         : "",
       kind: "snippet",
     },
     {
-      label: "6. XML feed (aggregators)",
+      label: "5. XML feed (aggregators)",
       description:
         "Signed company feed. Open Integrations → Feeds to copy the tokenized URL. LinkedIn / Indeed / Naukri are partner-gated and do not post live yet.",
-      value: companyId ? `${origin}/dashboard/integrations/feeds` : "",
+      value: companyId ? prefixPublicOrigin(origin, "/dashboard/integrations/feeds") : "",
       kind: "url",
     },
   ];
@@ -95,8 +110,8 @@ export default function DistributionKit({
       <h2 className="text-lg font-bold text-black">Where this role is posted</h2>
       <p className="mt-1 text-sm text-zinc-500">
         {jobTitle}: candidates enter through hosted apply. After submit they
-        take the role assessment. Scores land on this role&apos;s leaderboard.
-        Other jobs have their own links and boards.
+        take the role assessment. Results are visible only to the hiring team.
+        Other jobs have their own links.
       </p>
 
       {!liveApply ? (
@@ -141,6 +156,73 @@ export default function DistributionKit({
           </li>
         ))}
       </ul>
+      <ManualChannels
+        jobTitle={jobTitle}
+        description={jobDescription?.trim() || jobTitle}
+        applyUrl={liveApply || null}
+        distributionId={distributionId}
+      />
     </section>
+  );
+}
+
+function ManualChannels({
+  jobTitle,
+  description,
+  applyUrl,
+  distributionId,
+}: {
+  jobTitle: string;
+  description: string;
+  applyUrl: string | null;
+  distributionId: number | null;
+}) {
+  const kit = buildManualPostKit({
+    jobTitle,
+    description,
+    applyUrl,
+    distributionId,
+  });
+
+  return (
+    <div className="mt-8 border-t border-zinc-200 pt-6">
+      <h3 className="text-base font-bold text-black">Manual post kit</h3>
+      <p className="mt-1 text-sm text-zinc-500">
+        Paste these into the employer’s own board account. A copied link is not
+        a posted job. The external posting URL stays blank until you paste the
+        live URL from that board. Recruiter confirmation is not provider
+        verification. Inbound email is {kit.inboundEmailStatus}.
+      </p>
+      {kit.description ? (
+        <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+          {kit.description}
+        </pre>
+      ) : null}
+      <ul className="mt-4 space-y-3">
+        {kit.channels.map((channel) => (
+          <li key={channel.id} className="rounded-xl border border-zinc-200 p-4">
+            <p className="text-sm font-semibold text-black">{channel.label}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-zinc-600">
+              {channel.instructions.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            {channel.trackedApplyUrl ? (
+              <pre className="mt-2 overflow-x-auto rounded-lg bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-300">
+                {channel.trackedApplyUrl}
+              </pre>
+            ) : (
+              <p className="mt-2 text-xs text-zinc-400">
+                Tracked apply URL appears after this role has a published hosted
+                apply link.
+              </p>
+            )}
+            <p className="mt-2 text-xs text-zinc-500">
+              External posting URL: not recorded. Posting ID: none.
+            </p>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

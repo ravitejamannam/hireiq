@@ -1,14 +1,14 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it } from "vitest";
 import { CandidateStatus, JobStatus } from "@prisma/client";
-
 import { readFileSync } from "fs";
 import { join } from "path";
-
 import { commitOfferDecision } from "@/lib/outcomes/outcome-event-writes";
 import { mintOfferForAuthorizedAdmin } from "@/lib/offers/offer-mint";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const MARKER = `offer-${process.pid}-${Date.now()}`;
 const companyIds: number[] = [];
@@ -55,7 +55,7 @@ afterAll(async () => {
   await prisma.company.deleteMany({ where: { id: { in: companyIds } } });
 });
 
-describe("application-scoped offer mint", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("application-scoped offer mint", () => {
   it("mints for the application's company and ignores any other company", async () => {
     const companyA = await applicationIn("a", "SELECTED");
     const companyB = await applicationIn("b", "HIRED");

@@ -1,28 +1,64 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it } from "vitest";
 import { JobSpecificationVersionStatus, JobStatus } from "@prisma/client";
-
 import { acceptGeneratedJobDescriptionForActor } from "@/lib/jobs/job-description-ai";
 import { JobValidationError } from "@/lib/validation/job-validation";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const MARKER = `jd-${process.pid}-${Date.now()}`;
 
-describe("job description acceptance", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("job description acceptance", () => {
   const companyIds: number[] = [];
+  const jobIds: number[] = [];
+  const versionIds: number[] = [];
 
   afterAll(async () => {
-    if (companyIds.length === 0) return;
-    await prisma.job.updateMany({
-      where: { companyId: { in: companyIds } },
-      data: { currentPublishedSpecificationVersionId: null },
-    });
-    await prisma.jobSpecificationVersion.deleteMany({
-      where: { job: { companyId: { in: companyIds } } },
-    });
-    await prisma.job.deleteMany({ where: { companyId: { in: companyIds } } });
-    await prisma.company.deleteMany({ where: { id: { in: companyIds } } });
+    const companies = companyIds.filter((id) => id > 0);
+    const jobs = jobIds.filter((id) => id > 0);
+    const versions = versionIds.filter((id) => id > 0);
+    if (companies.length + jobs.length + versions.length === 0) return;
+
+    const failures: string[] = [];
+    const attempt = async (step: string, run: () => Promise<unknown>) => {
+      try {
+        await run();
+        return true;
+      } catch (error) {
+        failures.push(`${step}: ${error instanceof Error ? error.message : "cleanup failed"}`);
+        return false;
+      }
+    };
+
+    // Job.currentPublishedSpecificationVersion is SetNull, so clearing the
+    // pointer is not required before deleting the version. The version's job
+    // relation is Restrict, and Job.company is Restrict.
+    if (jobs.length > 0) {
+      await attempt("published specification pointers", () =>
+        prisma.job.updateMany({
+          where: { id: { in: jobs } },
+          data: { currentPublishedSpecificationVersionId: null },
+        }));
+    }
+    let versionsGone = versions.length === 0;
+    if (versions.length > 0) {
+      versionsGone = await attempt("specification versions", () =>
+        prisma.jobSpecificationVersion.deleteMany({ where: { id: { in: versions } } }));
+    }
+    let jobsGone = jobs.length === 0;
+    if (versionsGone && jobs.length > 0) {
+      jobsGone = await attempt("jobs", () =>
+        prisma.job.deleteMany({ where: { id: { in: jobs } } }));
+    }
+    if (jobsGone && companies.length > 0) {
+      await attempt("companies", () =>
+        prisma.company.deleteMany({ where: { id: { in: companies } } }));
+    }
+    if (failures.length > 0) {
+      throw new Error(`Job description acceptance fixture cleanup failed.\n${failures.join("\n")}`);
+    }
   });
 
   it("copies an accepted draft onto the draft row and leaves the published version unchanged", async () => {
@@ -43,6 +79,7 @@ describe("job description acceptance", () => {
         jobDescription: "Published working copy",
       },
     });
+    jobIds.push(job.id);
     const published = await prisma.jobSpecificationVersion.create({
       data: {
         jobId: job.id,
@@ -53,6 +90,7 @@ describe("job description acceptance", () => {
         jobDescription: "Immutable published text",
       },
     });
+    versionIds.push(published.id);
     await prisma.job.update({
       where: { id: job.id },
       data: { currentPublishedSpecificationVersionId: published.id },
@@ -69,6 +107,7 @@ describe("job description acceptance", () => {
         aiGeneratedAt: new Date(),
       },
     });
+    versionIds.push(draft.id);
 
     await expect(
       acceptGeneratedJobDescriptionForActor({

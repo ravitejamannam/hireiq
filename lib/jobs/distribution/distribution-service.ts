@@ -28,6 +28,8 @@ import {
   revokeLiveApplyTokens,
 } from "@/lib/apply/apply-token";
 import { HOSTED_APPLY_APP_URL_REQUIRED } from "@/lib/apply/hosted-apply-errors";
+import { enqueueIndexingForDistribution } from "@/lib/jobs/indexing/indexing-queue";
+import { reportError } from "@/lib/obs/report-error";
 import {
   APPLY_URL_REQUIRED,
   CONNECTION_INACTIVE,
@@ -457,6 +459,24 @@ async function persistAttemptOutcome(input: {
   if (!fresh) {
     throw new JobDistributionError(DISTRIBUTION_NOT_FOUND);
   }
+
+  if (
+    result.ok &&
+    (input.successStatus === JobDistributionStatus.PUBLISHED ||
+      input.successStatus === JobDistributionStatus.CLOSED)
+  ) {
+    await enqueueIndexingForDistribution({
+      companyId: input.companyId,
+      distributionId: input.distributionId,
+      notificationType:
+        input.successStatus === JobDistributionStatus.PUBLISHED
+          ? "URL_UPDATED"
+          : "URL_DELETED",
+    }).catch((error: unknown) => {
+      reportError("indexing-enqueue", error);
+    });
+  }
+
   return toSafeDistribution(fresh);
 }
 

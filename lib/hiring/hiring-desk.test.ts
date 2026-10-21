@@ -1,11 +1,14 @@
-import { ApplicationPipelineStatus } from "@prisma/client";
+import { ApplicationPipelineStatus, PortalRole } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
+import { jobScopeWhere } from "@/lib/auth/authorization";
 import {
+  applicationIntakeLabel,
   buildHiringFunnelReport,
   formatHireDuration,
   reachedHiringStage,
   timeToHireFromSnapshots,
+  type ApplicationFunnelSnapshot,
 } from "@/lib/hiring/funnel";
 import { resolveApplicationSourceLabel } from "@/lib/hiring/ingestion-source";
 import {
@@ -32,6 +35,66 @@ describe("ingestion source labels", () => {
         hostedApplySubmissionId: 12,
       }),
     ).toBe("Hosted apply");
+  });
+});
+
+describe("hiring desk intake attribution", () => {
+  const at = new Date("2026-03-15T12:00:00.000Z");
+
+  function snapshot(events: ApplicationFunnelSnapshot["ingestionEvents"], extra: Partial<ApplicationFunnelSnapshot> = {}): ApplicationFunnelSnapshot {
+    return {
+      createdAt: at,
+      status: ApplicationPipelineStatus.CV_POOL,
+      shortlistedAt: null,
+      assessmentSubmittedAt: null,
+      interviewBookedAt: null,
+      offerMintedAt: null,
+      offerAcceptedAt: null,
+      billedAt: null,
+      sourcingDatabaseSource: "LINKEDIN",
+      ingestionEvents: events,
+      ...extra,
+    };
+  }
+
+  it("classifies recorded intake and keeps the sourcing field as a fallback only", () => {
+    expect(applicationIntakeLabel(snapshot([{ id: 1, receivedAt: at, status: "PROCESSED", sourceChannel: "MANUAL", externalApplicationId: "import:3:2", distributionId: null }]))).toBe("CSV Import");
+    expect(applicationIntakeLabel(snapshot([{ id: 1, receivedAt: at, status: "PROCESSED", sourceChannel: "MANUAL", externalApplicationId: "inbound:8", distributionId: null }]))).toBe("Inbound Email");
+    expect(applicationIntakeLabel(snapshot([{ id: 1, receivedAt: at, status: "PROCESSED", sourceChannel: "HOSTED_APPLY", externalApplicationId: null, distributionId: null }]))).toBe("Hosted Apply");
+    expect(applicationIntakeLabel(snapshot([{ id: 1, receivedAt: at, status: "PROCESSED", sourceChannel: "MANUAL", externalApplicationId: null, distributionId: null }]))).toBe("Manual Entry");
+    expect(applicationIntakeLabel(snapshot([], { sourcingDatabaseSource: "NAUKRI" }))).toBe("Naukri");
+    expect(applicationIntakeLabel(snapshot([], { sourcingDatabaseSource: null, hostedApplySubmissionId: 12 }))).toBe("Hosted apply");
+    expect(applicationIntakeLabel(snapshot([]))).toBe("LinkedIn");
+    expect(applicationIntakeLabel(snapshot(undefined, { sourcingDatabaseSource: null, sourceChannel: null }))).toBe("Unknown");
+  });
+
+  it("uses the earliest processed event and does not count a retry twice", () => {
+    const events = [
+      { id: 9, receivedAt: at, status: "PROCESSED", sourceChannel: "MANUAL", externalApplicationId: "inbound:8", distributionId: null },
+      { id: 3, receivedAt: at, status: "PROCESSED", sourceChannel: "MANUAL", externalApplicationId: "import:3:2", distributionId: null },
+      { id: 1, receivedAt: new Date("2026-03-14T00:00:00.000Z"), status: "FAILED", sourceChannel: "HOSTED_APPLY", externalApplicationId: null, distributionId: null },
+    ];
+    expect(applicationIntakeLabel(snapshot(events))).toBe("CSV Import");
+    const report = buildHiringFunnelReport([
+      snapshot(events, { status: ApplicationPipelineStatus.HIRED }),
+      snapshot([{ id: 4, receivedAt: at, status: "PROCESSED", sourceChannel: "MANUAL", externalApplicationId: "import:9:1", distributionId: null }], { sourcingDatabaseSource: "NAUKRI" }),
+    ]);
+    expect(report.totals.applications).toBe(2);
+    expect(report.sources).toEqual([{ source: "CSV Import", count: 2, hires: 1 }]);
+  });
+
+  it("keeps a company admin inside that company", () => {
+    const admin = {
+      id: 1,
+      email: "admin@hireiq.test",
+      name: "Admin",
+      role: PortalRole.ADMIN,
+      companyId: 7,
+      interviewerId: null,
+      platformOperator: false,
+    };
+    expect(jobScopeWhere(admin)).toEqual({ companyId: 7 });
+    expect(jobScopeWhere({ ...admin, companyId: null })).toEqual({ id: -1 });
   });
 });
 

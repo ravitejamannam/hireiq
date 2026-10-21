@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth/authorization";
 import { Prisma } from "@prisma/client";
 
+import { writeAuditLog } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
 import { getEvaluationForApplication } from "@/lib/repositories/evaluation-repository";
 import {
@@ -685,36 +686,57 @@ export async function submitRubricScorecard(input: {
   if (scores.some((row) => !Number.isInteger(row.score) || row.score < 1 || row.score > 5)) {
     throw new Error("Score each item from 1 to 5.");
   }
-  const application = await prisma.application.findFirst({
-    where: { id: input.applicationId, job: { assignedInterviewerId: interviewer.interviewerId } },
-    select: { id: true },
-  });
-  if (!application) throw new AuthorizationError();
   const now = new Date();
   const overall = Math.round(scores.reduce((sum, row) => sum + row.score, 0) / scores.length);
-  await prisma.evaluation.upsert({
-    where: {
-      applicationId_interviewerId: {
+  // The status/assignment recheck, the upsert and the audit row commit together: a refusal or an audit
+  // failure leaves no scorecard and no event. The recheck runs inside the transaction so the decision is
+  // not made from a status read earlier in the request.
+  await prisma.$transaction(async (tx) => {
+    const application = await tx.application.findFirst({
+      where: { id: input.applicationId, job: { assignedInterviewerId: interviewer.interviewerId } },
+      select: { id: true, companyId: true, status: true, withdrawnAt: true },
+    });
+    if (!application) throw new AuthorizationError();
+    if (
+      application.withdrawnAt ||
+      application.status === ApplicationPipelineStatus.HIRED ||
+      application.status === ApplicationPipelineStatus.REJECTED
+    ) {
+      throw new EvaluationValidationError("Scorecards can no longer be submitted for this application.");
+    }
+    await tx.evaluation.upsert({
+      where: {
+        applicationId_interviewerId: {
+          applicationId: application.id,
+          interviewerId: interviewer.interviewerId,
+        },
+      },
+      create: {
         applicationId: application.id,
         interviewerId: interviewer.interviewerId,
+        overallScore: overall,
+        scorecard: scores,
+        notes: input.notes?.trim() || null,
+        submittedAt: now,
+        evaluatedAt: now,
       },
-    },
-    create: {
-      applicationId: application.id,
-      interviewerId: interviewer.interviewerId,
-      overallScore: overall,
-      scorecard: scores,
-      notes: input.notes?.trim() || null,
-      submittedAt: now,
-      evaluatedAt: now,
-    },
-    update: {
-      overallScore: overall,
-      scorecard: scores,
-      notes: input.notes?.trim() || null,
-      submittedAt: now,
-      evaluatedAt: now,
-    },
+      update: {
+        overallScore: overall,
+        scorecard: scores,
+        notes: input.notes?.trim() || null,
+        submittedAt: now,
+        evaluatedAt: now,
+      },
+    });
+    // Identity and target only: the scores themselves are never copied into the audit row.
+    await writeAuditLog(tx, {
+      actorUserId: interviewer.id,
+      actorRole: "INTERVIEWER",
+      companyId: application.companyId,
+      action: "SCORECARD_SUBMITTED",
+      targetType: "APPLICATION",
+      targetId: application.id,
+    });
   });
   revalidatePath(`/interviewer/requirements`);
 }

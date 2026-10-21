@@ -1,9 +1,10 @@
+import { assertE2eDatabase } from "@/lib/testing/e2e-database-guard";
 import { createPostedRequirementForCompany } from "@/lib/jobs/posted-requirement";
 import { prisma } from "@/lib/prisma";
 import { runTalentRediscovery } from "@/lib/talent/rediscovery-service";
 
 async function main() {
-  if (!process.env.DATABASE_URL?.includes("hireiq_e2e_full")) throw new Error("wrong database");
+  assertE2eDatabase();
   const company = await prisma.company.findFirstOrThrow({ where: { publicSlug: "e2e-nimbus" } });
   const admin = await prisma.user.findFirstOrThrow({ where: { email: "admin.nimbus@e2e.hireiq.local" } });
   const source = await prisma.job.findFirstOrThrow({

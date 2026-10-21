@@ -1,5 +1,6 @@
 import { HybridRetrievalRunStatus, type Prisma } from "@prisma/client";
 
+import { writeRowsForLiveCandidates } from "@/lib/privacy/erasure-guard";
 import { prisma } from "@/lib/prisma";
 import type { HybridFusionRow } from "@/lib/retrieval/hybrid-engine";
 import {
@@ -112,19 +113,22 @@ export async function createHybridRetrievalResults(
   if (input.rows.length === 0) {
     return;
   }
-  await db.hybridRetrievalResult.createMany({
-    data: input.rows.map((row, index) => ({
-      companyId: input.companyId,
-      runId: input.runId,
-      applicationId: row.applicationId,
-      candidateId: row.candidateId,
-      rank: index + 1,
-      rrfScore: row.rrfScore,
-      lexicalRank: row.lexicalRank,
-      semanticRank: row.semanticRank,
-      fusionVersion: row.fusionVersion,
-    })),
-  });
+  // Rows for an erased candidate are dropped, so a stale run cannot put a snapshot back.
+  await writeRowsForLiveCandidates(db, input.companyId, input.rows, (tx, live) =>
+      tx.hybridRetrievalResult.createMany({
+      data: live.map((row, index) => ({
+        companyId: input.companyId,
+        runId: input.runId,
+        applicationId: row.applicationId,
+        candidateId: row.candidateId,
+        rank: index + 1,
+        rrfScore: row.rrfScore,
+        lexicalRank: row.lexicalRank,
+        semanticRank: row.semanticRank,
+        fusionVersion: row.fusionVersion,
+      })),
+    }),
+  );
 }
 
 export async function markHybridRetrievalRunCompleted(

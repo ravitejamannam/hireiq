@@ -12,7 +12,7 @@
 import { getOpenAiApiKey } from "@/lib/ai/job-description-generator";
 import { betterExtraction, columnJumbleShare, scoreExtraction, textLooksColumnJumbled, type ExtractionQuality } from "@/lib/resumes/extraction-quality";
 import {
-  applicationOptedOutOfAi,
+  resumeAiAllowed,
   transcribeResumePage,
   type ResumeVisionAudit,
 } from "@/lib/resumes/layout-vision";
@@ -232,7 +232,15 @@ async function extractFromPdf(
           }),
         );
       }
-      if (best && textLooksColumnJumbled(best.text) && getOpenAiApiKey() && !control.aborted) {
+      const auditBase = hint.visionAudit ?? null;
+      if (
+        best &&
+        textLooksColumnJumbled(best.text) &&
+        getOpenAiApiKey() &&
+        !control.aborted &&
+        auditBase !== null &&
+        (await resumeAiAllowed(auditBase.db, auditBase))
+      ) {
         const shot = await parser
           .getScreenshot({ imageBuffer: true, imageDataUrl: false, scale: 1.5, first: OCR_MAX_PAGES })
           .catch(() => ({ pages: [] as Array<{ data?: Uint8Array }> }));
@@ -241,28 +249,12 @@ async function extractFromPdf(
           .filter((data): data is Uint8Array => data instanceof Uint8Array && data.byteLength > 0)
           .slice(0, OCR_MAX_PAGES);
         const pages: string[] = [];
-        const auditBase = hint.visionAudit ?? null;
-        const optedOut =
-          auditBase !== null && (await applicationOptedOutOfAi(auditBase.db, auditBase.applicationId));
-        if (optedOut && auditBase) {
-          await transcribeResumePage(images[0] ?? new Uint8Array(), {
-            ...auditBase,
-            pageCount: images.length,
-            pageIndex: 0,
-          });
-        } else {
-          for (let pageIndex = 0; pageIndex < images.length; pageIndex += 1) {
-            if (control.aborted) break;
-            const image = images[pageIndex];
-            if (!image) continue;
-            const visual = await transcribeResumePage(
-              image,
-              auditBase
-                ? { ...auditBase, pageCount: images.length, pageIndex }
-                : null,
-            );
-            if (visual) pages.push(visual);
-          }
+        for (let pageIndex = 0; pageIndex < images.length; pageIndex += 1) {
+          if (control.aborted) break;
+          const image = images[pageIndex];
+          if (!image) continue;
+          const visual = await transcribeResumePage(image, { ...auditBase, pageCount: images.length, pageIndex });
+          if (visual) pages.push(visual);
         }
         if (pages.length > 0) best = remember(best, pages.join("\n\n"), "vision");
       }

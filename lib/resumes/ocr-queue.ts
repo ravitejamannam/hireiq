@@ -75,13 +75,14 @@ type OcrTable = {
 const resumeDocuments: OcrTable = {
   findMany: (args) => prisma.candidateResumeDocument.findMany(args),
   updateMany: (args) => prisma.candidateResumeDocument.updateMany(args),
-  update: (args) => prisma.candidateResumeDocument.update(args),
+  // Only a still-claimed row is finished. Erasure moves the row to ERASED, so a late OCR result is dropped.
+  update: (args) => prisma.candidateResumeDocument.updateMany({ ...args, where: { id: args.where.id, parseErrorCode: "OCR_CLAIMED" } }),
 };
 
 const hostedUploads: OcrTable = {
   findMany: (args) => prisma.hostedApplyResumeUpload.findMany(args),
   updateMany: (args) => prisma.hostedApplyResumeUpload.updateMany(args),
-  update: (args) => prisma.hostedApplyResumeUpload.update(args),
+  update: (args) => prisma.hostedApplyResumeUpload.updateMany({ ...args, where: { id: args.where.id, parseErrorCode: "OCR_CLAIMED" } }),
 };
 
 async function claimRow(table: OcrTable, row: OcrRow, now: Date): Promise<boolean> {
@@ -195,7 +196,7 @@ export async function processPendingResumeOcr(limitOrDeadline: number | { deadli
       drainTable(resumeDocuments, 1, async (row) => {
         const doc = await prisma.candidateResumeDocument.findUnique({
           where: { id: row.id },
-          select: { companyId: true, applicationId: true },
+          select: { companyId: true, applicationId: true, candidateId: true },
         });
         if (!doc) return null;
         return {
@@ -203,6 +204,7 @@ export async function processPendingResumeOcr(limitOrDeadline: number | { deadli
           entityType: doc.applicationId ? "Application" : "CandidateResumeDocument",
           entityId: doc.applicationId ?? row.id,
           applicationId: doc.applicationId,
+          candidateId: doc.candidateId,
           db: prisma as unknown as ResumeVisionAudit["db"],
         };
       }),

@@ -17,7 +17,7 @@ import {
  * consumers may pin to a version for reproducible rendering (§43).
  */
 
-export const CANONICAL_FEED_VERSION = 2;
+export const CANONICAL_FEED_VERSION = 3;
 
 export type CanonicalJobPosting = {
   externalRef: string; // stable public reference: distribution id
@@ -31,6 +31,8 @@ export type CanonicalJobPosting = {
   applyUrl: string;
   datePosted: Date;
   validThrough: Date | null;
+  remotePolicy: string | null;
+  compensationRange: string | null;
 };
 
 type DistributionWithSpec = Prisma.JobDistributionGetPayload<{
@@ -38,6 +40,7 @@ type DistributionWithSpec = Prisma.JobDistributionGetPayload<{
     id: true;
     createdAt: true;
     applyUrlSnapshot: true;
+    includeCompensation: true;
     pinnedSpecificationVersion: {
       select: {
         title: true;
@@ -45,8 +48,9 @@ type DistributionWithSpec = Prisma.JobDistributionGetPayload<{
         jobDescription: true;
         mustHaveRequirements: true;
         publishedAt: true;
-        targetHireDate: true;
         structuredPayload: true;
+        remotePolicy: true;
+        compensationRange: true;
       };
     };
     job: {
@@ -95,10 +99,10 @@ export function toCanonicalJobPosting(
     description,
     applyUrl,
     datePosted: spec.publishedAt ?? row.createdAt,
-    validThrough:
-      spec.targetHireDate && spec.targetHireDate > new Date()
-        ? spec.targetHireDate
-        : null,
+    // targetHireDate is an internal hiring target, not the posting's end date.
+    validThrough: null,
+    remotePolicy: spec.remotePolicy,
+    compensationRange: row.includeCompensation ? spec.compensationRange : null,
   };
 }
 

@@ -27,14 +27,15 @@ function parseBadge(code: string | null, attempts: number): ReviewParseBadge {
   return null;
 }
 
-async function companyForJob(jobId: number) {
-  const job = await prisma.job.findUnique({ where: { id: jobId }, select: { id: true, companyId: true, title: true } });
+/** The job, only if it belongs to the named company. Another company's job reads as not found. */
+async function ownedJob(jobId: number, companyId: number) {
+  const job = await prisma.job.findFirst({ where: { id: jobId, companyId }, select: { id: true, companyId: true, title: true } });
   if (!job) throw new Error("Requirement not found.");
   return job;
 }
 
-export async function listReviewQueue(input: { jobId: number; filters: ReviewFilters; page: number }) {
-  const job = await companyForJob(input.jobId);
+export async function listReviewQueue(input: { jobId: number; companyId: number; filters: ReviewFilters; page: number }) {
+  const job = await ownedJob(input.jobId, input.companyId);
   const applications = await prisma.application.findMany({
     where: { jobId: job.id, companyId: job.companyId },
     select: {
@@ -43,6 +44,7 @@ export async function listReviewQueue(input: { jobId: number; filters: ReviewFil
       aiEvaluationOptOut: true,
       humanReviewRequestedAt: true,
       rejectionReasonCode: true,
+      knockoutFailedAt: true,
       candidate: {
         select: {
           name: true,
@@ -54,7 +56,7 @@ export async function listReviewQueue(input: { jobId: number; filters: ReviewFil
       resumeDocuments: {
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { id: true, fileName: true, parseErrorCode: true, ocrAttempts: true, extractedText: true },
+        select: { id: true, fileName: true, parseErrorCode: true, ocrAttempts: true },
       },
       matchRuns: {
         where: { status: CandidateMatchRunStatus.COMPLETED },
@@ -97,7 +99,7 @@ export async function listReviewQueue(input: { jobId: number; filters: ReviewFil
       optedOut: application.aiEvaluationOptOut,
       humanReview: application.humanReviewRequestedAt !== null,
       quotes: satisfied.map((match) => match.claim?.value).filter((value): value is string => Boolean(value)).slice(0, 3),
-      knockout: application.rejectionReasonCode === "KNOCKOUT" ? "fail" : questionCount === 0 ? "pass" : "unanswered",
+      knockout: application.knockoutFailedAt || application.rejectionReasonCode === "KNOCKOUT" ? "fail" : questionCount === 0 ? "pass" : "unanswered",
       parseStatus: parseBadge(resume?.parseErrorCode ?? null, resume?.ocrAttempts ?? 0),
     };
   });
@@ -126,7 +128,7 @@ export async function reviewApplicationDetail(input: { applicationId: number; co
       resumeDocuments: {
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { id: true, fileName: true, extractedText: true },
+        select: { id: true, fileName: true },
       },
       matchRuns: {
         where: { status: CandidateMatchRunStatus.COMPLETED },
@@ -191,6 +193,14 @@ export async function reviewApplicationDetail(input: { applicationId: number; co
         : [];
       return grades;
     })(),
+    decisions: (
+      await prisma.decisionRecord.findMany({
+        where: { applicationId: application.id, companyId: input.companyId },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: { id: true, rationale: true, createdAt: true, decidedBy: { select: { name: true } } },
+      })
+    ).map((row) => ({ id: row.id, rationale: row.rationale, at: row.createdAt.toISOString(), by: row.decidedBy.name })),
     interviewFeedback: visibleScorecards({
       viewerInterviewerId: null,
       cards: await prisma.evaluation.findMany({
@@ -231,12 +241,47 @@ async function scoreFor(applicationId: number, companyId: number) {
   return { ...application, score };
 }
 
+/** Applications a person asked to have reviewed by a human; bulk reject skips them. */
+export async function humanReviewRequestedIds(applicationIds: number[], companyId: number) {
+  if (applicationIds.length === 0) return new Set<number>();
+  const rows = await prisma.application.findMany({
+    where: { id: { in: applicationIds }, companyId, humanReviewRequestedAt: { not: null } },
+    select: { id: true },
+  });
+  return new Set(rows.map((row) => row.id));
+}
+
+/**
+ * Undo only reverses the most recent stage change, back to the stage it came
+ * from. The target is taken from the outcome history, never from the client.
+ */
+async function undoTarget(applicationId: number, companyId: number, current: ApplicationPipelineStatus, requested: ApplicationPipelineStatus | null | undefined) {
+  const latest = await prisma.outcomeEvent.findFirst({
+    where: { applicationId, companyId, toStatus: { not: null } },
+    orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+    select: { fromStatus: true, toStatus: true },
+  });
+  if (!latest || latest.toStatus !== current || !latest.fromStatus) return null;
+  if (latest.fromStatus === ApplicationPipelineStatus.HIRED || current === ApplicationPipelineStatus.HIRED) return null;
+  if (requested && requested !== latest.fromStatus) return null;
+  return latest.fromStatus;
+}
+
 export async function applyReviewDecision(input: {
   applicationId: number;
   actorUserId: number;
   action: "advance" | "shortlist" | "reject" | "undo";
   reason?: string | null;
+  /** Optional free-text note recorded with the decision. */
+  note?: string | null;
   undoTo?: ApplicationPipelineStatus | null;
+  /** Screening result shown to the reviewer when they decided, kept with the decision. */
+  snapshot?: string | null;
+  /**
+   * Deliberate confirmation that the decision-maker saw the candidate's outstanding human-review request.
+   * A note alone is not acknowledgement. Never set for undo, which must stay exempt.
+   */
+  humanReviewAcknowledged?: boolean;
 }) {
   const owned = await prisma.application.findUnique({
     where: { id: input.applicationId },
@@ -255,7 +300,7 @@ export async function applyReviewDecision(input: {
       : input.action === "shortlist"
         ? shortlistStatus(current.status)
         : input.action === "undo"
-          ? input.undoTo ?? null
+          ? await undoTarget(input.applicationId, companyId, current.status, input.undoTo)
           : ApplicationPipelineStatus.REJECTED;
   if (!next) throw new Error("That action is not available for this stage.");
   if (input.action !== "undo") {
@@ -268,13 +313,46 @@ export async function applyReviewDecision(input: {
     current.aiEvaluationOptOut,
   );
 
+  const note = input.note?.trim().slice(0, 1000) || null;
+  const recordDecision = (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0], requestedAt: Date | null) =>
+    tx.decisionRecord.create({
+      data: {
+        companyId,
+        applicationId: input.applicationId,
+        rationale: [
+          `${input.action}: ${current.status} -> ${next}`,
+          input.action === "reject" ? `reason: ${input.reason}` : null,
+          note ? `note: ${note}` : null,
+          // Undo is exempt from the requirement, so it must not claim an acknowledgement either.
+          requestedAt && input.action !== "undo" ? `human-review-acknowledged (requested ${requestedAt.toISOString()})` : null,
+          input.snapshot ? `screening: ${input.snapshot.slice(0, 300)}` : null,
+        ]
+          .filter(Boolean)
+          .join(" | "),
+        decidedByUserId: input.actorUserId,
+      },
+    });
+
   const updated = await prisma.$transaction(async (tx) => {
+    // Authoritative in-transaction recheck of the human-review request: a request created while this call
+    // was running must be treated the same as one that was already outstanding.
+    const reviewState = await tx.application.findFirst({
+      where: { id: input.applicationId, companyId },
+      select: { humanReviewRequestedAt: true },
+    });
+    const requestedAt = reviewState?.humanReviewRequestedAt ?? null;
+    if (requestedAt && input.action !== "undo" && !input.humanReviewAcknowledged) {
+      throw new Error(
+        "This candidate asked for a human to review their application. Decide only after reviewing, and record that you saw the request (acknowledge it).",
+      );
+    }
     if (input.action === "undo") {
       const changed = await tx.application.updateMany({
         where: { id: input.applicationId, companyId, status: current.status },
         data: { status: next, rejectionReason: null },
       });
       if (changed.count !== 1) throw new Error("Candidate is no longer in the expected pipeline state.");
+      await recordDecision(tx, requestedAt);
       await writeAuditLog(tx, {
         actorUserId: input.actorUserId,
         actorRole: "ADMIN",
@@ -296,6 +374,7 @@ export async function applyReviewDecision(input: {
       patch: input.action === "reject" ? { rejectionReason: reason } : {},
     });
     if (!committed) throw new Error("Candidate is no longer in the expected pipeline state.");
+    await recordDecision(tx, requestedAt);
     return next;
   });
   return { status: updated, previous: current.status };

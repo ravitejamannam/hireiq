@@ -7,6 +7,7 @@ export const metadata: Metadata = {
 import Link from "next/link";
 
 import CopyField from "@/components/integrations/CopyField";
+import { updateCompanyPublicFeeds } from "@/app/actions/feed-settings-actions";
 import { requireAdmin } from "@/lib/auth/authorization";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import {
@@ -18,7 +19,7 @@ import {
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  searchParams: Promise<{ company?: string }>;
+  searchParams: Promise<{ company?: string; feedError?: string; feedSaved?: string }>;
 };
 
 function parseCompanyId(value?: string): number | null {
@@ -29,7 +30,7 @@ function parseCompanyId(value?: string): number | null {
 
 export default async function FeedsPage({ searchParams }: PageProps) {
   await requireAdmin();
-  const { company } = await searchParams;
+  const { company, feedError, feedSaved } = await searchParams;
 
   const companies = await listCompanyFeedSummaries();
   const selectedId = parseCompanyId(company) ?? companies[0]?.companyId ?? null;
@@ -61,7 +62,8 @@ export default async function FeedsPage({ searchParams }: PageProps) {
         <h1 className="mt-2 text-2xl font-semibold text-zinc-900">Public job feeds</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Syndication links per company. The XML feed is for job boards and
-          aggregators; job pages are Google Jobs–indexed landing pages.
+          aggregators. Job pages include JobPosting structured data that search
+          engines can read. That is not proof the URL is indexed.
         </p>
       </header>
 
@@ -91,11 +93,10 @@ export default async function FeedsPage({ searchParams }: PageProps) {
         <div className="space-y-6">
           {detail.appUrlConfigured && detail.feedUrl ? (
             <section className="rounded-xl border border-zinc-200 bg-white p-6">
-              <h2 className="font-semibold text-zinc-900">XML job feed</h2>
+              <h2 className="font-semibold text-zinc-900">Tokenized XML job feed</h2>
               <p className="mb-3 mt-1 text-sm text-zinc-500">
-                Submit this URL to job boards and aggregators. Treat it like a
-                credential — anyone holding it can read{" "}
-                {detail.companyName}&apos;s published roles.
+                Existing signed feed. Treat it like a credential. It is separate
+                from the company slug feeds below, which stay off until enabled.
               </p>
               <CopyField label="Feed URL" value={detail.feedUrl} />
             </section>
@@ -105,6 +106,68 @@ export default async function FeedsPage({ searchParams }: PageProps) {
               Set APP_URL in the environment to enable syndication.
             </p>
           )}
+
+          <section className="rounded-xl border border-zinc-200 bg-white p-6">
+            <h2 className="font-semibold text-zinc-900">Company slug feeds</h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              Off by default. Enabling a feed does not mean LinkedIn or any
+              other board has approved this company. The LinkedIn feed only
+              turns on when a LinkedIn company ID and poster email are saved.
+            </p>
+            {feedSaved === "1" ? (
+              <p className="mt-3 text-sm text-emerald-700">Feed settings saved.</p>
+            ) : null}
+            {feedError === "linkedin" ? (
+              <p className="mt-3 text-sm text-red-700">
+                LinkedIn feed was not enabled. Add the employer’s LinkedIn
+                company ID and a poster email first.
+              </p>
+            ) : null}
+            <form action={updateCompanyPublicFeeds} className="mt-4 space-y-3">
+              <input type="hidden" name="companyId" value={detail.companyId} />
+              <label className="flex items-center gap-2 text-sm text-zinc-800">
+                <input
+                  type="checkbox"
+                  name="jobsFeedEnabled"
+                  defaultChecked={detail.jobsFeedEnabled}
+                />
+                Enable {detail.jobsFeedPath}
+              </label>
+              <label className="block text-sm text-zinc-700">
+                LinkedIn company ID
+                <input
+                  name="linkedInCompanyId"
+                  defaultValue={detail.linkedInCompanyId}
+                  className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2"
+                  autoComplete="off"
+                />
+              </label>
+              <label className="block text-sm text-zinc-700">
+                LinkedIn poster email
+                <input
+                  name="linkedInPosterEmail"
+                  type="email"
+                  defaultValue={detail.linkedInPosterEmail}
+                  className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2"
+                  autoComplete="off"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm text-zinc-800">
+                <input
+                  type="checkbox"
+                  name="linkedInFeedEnabled"
+                  defaultChecked={detail.linkedInFeedEnabled}
+                />
+                Enable {detail.linkedInFeedPath}
+              </label>
+              <button
+                type="submit"
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Save feed settings
+              </button>
+            </form>
+          </section>
 
           <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
             <div className="border-b border-zinc-100 px-6 py-4">

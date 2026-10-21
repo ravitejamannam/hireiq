@@ -88,6 +88,7 @@ export default function HostedApplyForm({
   const [coverLetter, setCoverLetter] = useState("");
   const [draft, setDraft] = useState<StructuredProfileDraft>(emptyStructuredDraft);
   const [consent, setConsent] = useState(false);
+  const [aiEvaluation, setAiEvaluation] = useState<"" | "allowed" | "human_only">("");
   const [futureRoles, setFutureRoles] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -336,6 +337,7 @@ export default function HostedApplyForm({
           experienceYears: experienceYears || null,
           coverLetter: coverLetter || null,
           consent,
+          aiEvaluation,
           futureRolesConsent: futureRoles,
           resumeClaim,
           photoClaim,
@@ -673,15 +675,16 @@ export default function HostedApplyForm({
       {knockouts.length > 0 ? (
         <fieldset className="space-y-4 border-t border-zinc-200 pt-5">
           <legend className="text-sm font-semibold text-zinc-900">
-            Required answers
+            Role requirements
           </legend>
           <p className="text-sm text-zinc-600">
-            A wrong answer on these questions rejects the application by rule.
+            The hiring team set these as must-haves. Answer honestly; a person reviews every application, and an answer
+            here never closes your application automatically.
           </p>
           {knockouts.map((question) => (
             <label key={question.id} className="block">
               <span className="text-sm font-medium text-zinc-800">{question.prompt}</span>
-              <input
+              <select
                 value={knockoutAnswers[question.id] ?? ""}
                 onChange={(event) =>
                   setKnockoutAnswers((current) => ({
@@ -692,11 +695,44 @@ export default function HostedApplyForm({
                 required
                 disabled={pending}
                 className={inputClasses}
-              />
+              >
+                <option value="" disabled>
+                  Choose
+                </option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
             </label>
           ))}
         </fieldset>
       ) : null}
+
+      <fieldset className="space-y-2 border-t border-zinc-200 pt-5">
+        <legend className="text-sm font-semibold text-zinc-900">How should we review your application?</legend>
+        <p className="text-sm text-zinc-600">
+          A person makes every decision either way. Your resume is not sent to an AI model before you choose and submit.
+        </p>
+        {(
+          [
+            ["allowed", "AI may help the hiring team read my resume and grade my answers."],
+            ["human_only", "Human review only. Do not use AI on my application."],
+          ] as const
+        ).map(([value, label]) => (
+          <label key={value} className="flex items-start gap-2.5 text-sm text-zinc-700">
+            <input
+              type="radio"
+              name="aiEvaluation"
+              value={value}
+              checked={aiEvaluation === value}
+              onChange={() => setAiEvaluation(value)}
+              disabled={pending}
+              required
+              className="mt-0.5 h-4 w-4 border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>{label}</span>
+          </label>
+        ))}
+      </fieldset>
 
       <div className="space-y-4 border-t border-zinc-200 pt-5">
         <label className="flex items-start gap-2.5 text-sm text-zinc-700">

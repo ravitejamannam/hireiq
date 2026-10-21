@@ -33,8 +33,8 @@ export function executeWorkflow(rule: WorkflowRuleDraft, event: WorkflowEvent) {
   if (!matches(rule, event)) {
     return log(rule, "SKIPPED", { reason: "condition" });
   }
-  if (rule.action.type === "REJECT" && !event.knockoutFailed && !event.humanConfirmed) {
-    return log(rule, "BLOCKED", { reason: "rejection requires a human or a knockout answer" });
+  if (rule.action.type === "REJECT" && !event.humanConfirmed) {
+    return log(rule, "BLOCKED", { reason: "rejection requires a human decision" });
   }
   if (rule.action.type === "EMAIL") {
     if (event.unsubscribed) return log(rule, "BLOCKED", { reason: "unsubscribed" });

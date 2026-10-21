@@ -38,12 +38,3 @@ export function buildAssessmentUrl(rawToken: string) {
 
   return `${origin}/assess/${rawToken}`;
 }
-
-export function buildApplyLeaderboardUrl(applyRawToken: string) {
-  const origin = getPublicAppUrl();
-  if (!origin) {
-    return null;
-  }
-
-  return `${origin}/apply/${applyRawToken}/leaderboard`;
-}

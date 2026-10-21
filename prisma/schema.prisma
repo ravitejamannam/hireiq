@@ -145,6 +145,19 @@ enum ApplyMode {
   HIREIQ_HOSTED
 }
 
+/// Google Indexing API notification. Never a claim that Google indexed the URL.
+enum IndexingNotificationType {
+  URL_UPDATED
+  URL_DELETED
+}
+
+enum IndexingNotificationStatus {
+  PENDING
+  SUBMITTED
+  FAILED
+  UNCONFIGURED
+}
+
 /// T84 submission handoff only. Not an Application pipeline state.
 enum HostedApplySubmissionStatus {
   RECEIVED
@@ -166,6 +179,12 @@ enum ApplicationIngestionStatus {
   PROCESSING
   PROCESSED
   FAILED
+}
+
+enum AiPreference {
+  UNKNOWN
+  ALLOWED
+  REFUSED
 }
 
 enum InterviewerAvailability {
@@ -570,6 +589,14 @@ model Company {
   evidenceMatchingEnabled Boolean @default(false)
   /// When true, only an interviewer with a qualified training record can be the lead.
   requireQualifiedLead Boolean @default(false)
+  /// Public /feeds/{slug}/jobs.xml. Off until an admin enables it.
+  jobsFeedEnabled Boolean @default(false)
+  /// Public /feeds/{slug}/linkedin.xml. Off until company ID and poster email are saved.
+  linkedInFeedEnabled Boolean @default(false)
+  /// LinkedIn organization ID supplied by the employer. Not a posting ID.
+  linkedInCompanyId String?
+  /// LinkedIn poster email supplied by the employer. Required before the LinkedIn feed can be enabled.
+  linkedInPosterEmail String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -655,6 +682,16 @@ model Company {
   offerEsigns               OfferEsign[]
   interviewerTraining       InterviewerTraining[]
   shadowObservations        ShadowObservation[]
+  screeningPolicies         JobScreeningPolicy[]
+  practicalCriterionScores  PracticalCriterionScore[]
+  stageReminders            StageReminder[]
+  closeOutBatches           CloseOutBatch[]
+  spotChecks                SpotCheck[]
+  indexingNotifications     IndexingNotification[]
+  applicantImportBatches    ApplicantImportBatch[]
+  applicantImportTemplates  ApplicantImportTemplate[]
+  inboundEmailRoutes        InboundEmailRoute[]
+  inboundEmailMessages      InboundEmailMessage[]
 }
 
 model Job {
@@ -744,6 +781,12 @@ model Job {
   talentRediscoveryRuns TalentRediscoveryRun[]
   talentRediscoveryActions TalentRediscoveryAction[]
   talentRediscoveryInvites TalentRediscoveryInvite[]
+  screeningPolicies JobScreeningPolicy[]
+  closeOutBatches   CloseOutBatch[]
+  spotChecks        SpotCheck[]
+  applicantImportBatches ApplicantImportBatch[]
+  inboundEmailRoutes     InboundEmailRoute[]
+  inboundEmailMessages   InboundEmailMessage[]
 }
 
 /// Versioned hiring specification. Job remains the operational root.
@@ -914,12 +957,17 @@ model Candidate {
   /// Set when we email this person once to ask about future roles.
   futureRolesAskedAt DateTime?
 
+  /// Tombstone set by erasure. Pending work must refuse to write personal data for an erased candidate.
+  erasedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   companyId Int
 
   company      Company        @relation(fields: [companyId], references: [id])
+  erasures     CandidateErasure[]
+  retentionHolds RetentionHold[]
   applications Application[]
   ingestionEvents ApplicationIngestionEvent[]
   profile      CandidateProfile?
@@ -1756,8 +1804,15 @@ model Application {
   expertScore Int?
   rejectionReason String?
   rejectionReasonCode String?
+  /** Set when an application-form must-have answer did not match. A recruiter decides what happens next. */
+  knockoutFailedAt DateTime?
+  /// Fail-closed mirror of (aiPreference <> ALLOWED), kept by a database trigger. Do not treat false as consent.
   aiEvaluationOptOut Boolean @default(false)
   aiOptOutAt DateTime?
+  /// What was explicitly stated. UNKNOWN never permits AI processing.
+  aiPreference AiPreference @default(UNKNOWN)
+  aiPreferenceSource String?
+  aiPreferenceAt DateTime?
   consentAt DateTime?
   applyNoticeVersion String?
   humanReviewRequestedAt DateTime?
@@ -1823,6 +1878,8 @@ model Application {
   bookingInvite InterviewBookingInvite?
   portalDocuments CandidatePortalDocument[]
   deletionRequests CandidateDeletionRequest[]
+  stageReminders StageReminder[]
+  spotChecks     SpotCheck[]
 }
 
 model Evaluation {
@@ -1918,6 +1975,7 @@ model CodingTest {
 
   title String
 
+  /// Meaningful only when status is COMPLETED. Practical assignments keep 0 until gradedAt is set.
   score Int
 
   maxScore Int
@@ -1932,8 +1990,152 @@ model CodingTest {
 
   applicationId Int
 
-  application Application @relation(fields: [applicationId], references: [id])
+  /// Practical work sample fields. Null on interviewer-recorded tests.
+  instructions      String?
+  allowedResources  String?
+  estimatedMinutes  Int?
+  compensationNote  String?
+  assignedAt        DateTime?
+  dueAt             DateTime?
+  /// SHA-256 of the candidate link. The raw token is never stored.
+  inviteTokenHash   String?   @unique
+  submittedAt       DateTime?
+  submissionText    String?
+  submissionUrl     String?
+  /// Set once every rubric criterion has a human score.
+  gradedAt          DateTime?
+  /// Rubric snapshot this assignment is graded against.
+  screeningPolicyId Int?
+
+  application     Application               @relation(fields: [applicationId], references: [id])
+  screeningPolicy JobScreeningPolicy?       @relation(fields: [screeningPolicyId], references: [id], onDelete: Restrict)
+  criterionScores PracticalCriterionScore[]
   @@index([applicationId])
+  @@index([screeningPolicyId])
+}
+
+/// Versioned screening configuration for one job. Rows are append-only and the
+/// highest version is current. Weights are recruiter-set, not empirically validated.
+model JobScreeningPolicy {
+  id                        Int      @id @default(autoincrement())
+  companyId                 Int
+  jobId                     Int
+  version                   Int
+  basicWeight               Int
+  practicalWeight           Int
+  evidenceWeight            Int
+  /// Null means no qualification threshold for that component.
+  basicPassPercent          Int?
+  practicalPassPercent      Int?
+  borderlineBandPercent     Int      @default(5)
+  /// How many candidates the recruiter can review first. Not a qualification standard.
+  reviewCapacity            Int      @default(25)
+  practicalTitle            String?
+  practicalInstructions     String?
+  practicalEstimatedMinutes Int?
+  practicalAllowedResources String?
+  practicalDeadlineDays     Int      @default(5)
+  practicalCompensationNote String?
+  practicalRubric           Json     @default("[]")
+  createdByUserId           Int
+  createdAt                 DateTime @default(now())
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job         Job          @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  createdBy   User         @relation("ScreeningPolicyAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  codingTests CodingTest[]
+
+  @@unique([jobId, version])
+  @@index([companyId, jobId])
+}
+
+enum PracticalScoreSource {
+  HUMAN
+  AI_SUGGESTED
+}
+
+/// Append-only criterion score. A correction is a new row; the latest HUMAN row per criterion counts.
+model PracticalCriterionScore {
+  id             Int                  @id @default(autoincrement())
+  companyId      Int
+  codingTestId   Int
+  criterionKey   String
+  points         Int
+  maxPoints      Int
+  source         PracticalScoreSource
+  rationale      String?
+  evidenceQuote  String?
+  gradedByUserId Int?
+  createdAt      DateTime             @default(now())
+
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  codingTest CodingTest @relation(fields: [codingTestId], references: [id], onDelete: Restrict)
+  gradedBy   User?      @relation("PracticalScoreGrader", fields: [gradedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([codingTestId, criterionKey, createdAt])
+  @@index([companyId])
+}
+
+/// One deadline reminder per open assessment or assignment. The unique key stops duplicates.
+/// A recruiter-proposed bulk close-out. Nothing changes until a human approves it.
+model CloseOutBatch {
+  id               Int       @id @default(autoincrement())
+  companyId        Int
+  jobId            Int
+  category         String
+  reason           String
+  applicationIds   Json
+  proposedByUserId Int
+  proposedAt       DateTime  @default(now())
+  approvedByUserId Int?
+  approvedAt       DateTime?
+  cancelledAt      DateTime?
+  result           Json?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job     Job     @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@index([companyId, jobId, proposedAt])
+}
+
+/// A weekly random human check of candidates the screening placed below the cutoff.
+model SpotCheck {
+  id               Int       @id @default(autoincrement())
+  companyId        Int
+  jobId            Int
+  applicationId    Int
+  weekStart        DateTime
+  sourceCategory   String
+  reviewedByUserId Int?
+  reviewedAt       DateTime?
+  outcome          String?
+  note             String?
+  createdAt        DateTime  @default(now())
+
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job         Job         @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  application Application @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@unique([jobId, weekStart, applicationId])
+  @@index([companyId, jobId, weekStart])
+}
+
+model StageReminder {
+  id            Int       @id @default(autoincrement())
+  companyId     Int
+  applicationId Int
+  targetType    String
+  targetId      Int
+  kind          String
+  sentAt        DateTime  @default(now())
+  outcome       String
+  createdAt     DateTime  @default(now())
+
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  application Application @relation(fields: [applicationId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@unique([targetType, targetId, kind])
+  @@index([companyId, applicationId])
 }
 
 model Report {
@@ -2014,6 +2216,8 @@ model User {
   humanRelevanceJudgments HumanRelevanceJudgment[]
   outcomeEvents           OutcomeEvent[]
   auditLogs               AuditLog[]               @relation("AuditLogActor")
+  screeningPolicies       JobScreeningPolicy[]     @relation("ScreeningPolicyAuthor")
+  practicalScores         PracticalCriterionScore[] @relation("PracticalScoreGrader")
   sentInvitations         Invitation[]             @relation("InvitationInviter")
   sentInterviewerInvitations InterviewerInvitation[] @relation("InterviewerInvitationInviter")
   invitedMembers          OrganizationMember[]     @relation("MembershipInviter")
@@ -2195,6 +2399,32 @@ model JobDistribution {
   reconciliationRuns DistributionReconciliationRun[] @relation("DistributionReconciliationRuns")
   resumeUploads HostedApplyResumeUpload[]
   photoUploads  HostedApplyPhotoUpload[]
+  indexingNotifications IndexingNotification[]
+}
+
+/// One Google Indexing API attempt for a public job URL.
+/// SUBMITTED means Google accepted the notification, not that the URL is indexed.
+model IndexingNotification {
+  id                 Int                         @id @default(autoincrement())
+  companyId          Int
+  distributionId     Int
+  publicUrl          String
+  notificationType   IndexingNotificationType
+  status             IndexingNotificationStatus  @default(PENDING)
+  httpStatus         Int?
+  errorCode          String?
+  attemptCount       Int                         @default(0)
+  nextAttemptAt      DateTime?
+  submittedAt        DateTime?
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+
+  company      Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  distribution JobDistribution @relation(fields: [distributionId], references: [id], onDelete: Restrict)
+
+  @@unique([distributionId, notificationType])
+  @@index([companyId, distributionId])
+  @@index([status, nextAttemptAt])
 }
 
 /// External listing identity for one JobDistribution. No fabricated IDs.
@@ -2359,6 +2589,10 @@ model GeneratedAssessment {
   version          Int
   status           GeneratedAssessmentStatus @default(DRAFT)
   timeLimitMinutes Int                       @default(45)
+  /// Items drawn per candidate from the pool.
+  drawCount        Int                       @default(8)
+  /// Allowed resources, accommodations, and support contact shown before the candidate starts.
+  candidateInstructions String?
   items            Json
   publishedAt      DateTime?
   createdAt        DateTime                  @default(now())
@@ -2386,6 +2620,8 @@ model GeneratedAssessmentInvite {
   submittedAt        DateTime?
   expiresAt          DateTime
   grades             Json?
+  /// Null after submit means grading did not finish.
+  gradedAt           DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -2553,6 +2789,8 @@ model InterviewBookingInvite {
   tokenHash     String    @unique
   expiresAt     DateTime
   usedAt        DateTime?
+  /// When set, only open slots of exactly this length can be listed or booked with this link.
+  requiredDurationMinutes Int?
   createdAt     DateTime  @default(now())
 
   application Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
@@ -2728,6 +2966,8 @@ enum OutboundEmailStatus {
   PENDING
   SENT
   FAILED
+  /// Content was removed (erasure or retention). Never retried.
+  CANCELLED
 }
 
 /// Durable outbound email queue. Resend is attempted immediately; failures
@@ -2738,6 +2978,9 @@ model OutboundEmailAttempt {
   subject     String
   text        String
   html        String
+  /// Tenant and candidate the message is about. Null for system mail and for rows queued before these columns existed.
+  companyId   Int?
+  candidateId Int?
   status      OutboundEmailStatus @default(PENDING)
   attempts    Int                 @default(0)
   lastError   String?
@@ -2747,6 +2990,7 @@ model OutboundEmailAttempt {
   updatedAt   DateTime            @updatedAt
 
   @@index([status, nextRetryAt])
+  @@index([companyId, candidateId])
 }
 
 enum OutboundWebhookDeliveryStatus {
@@ -3422,4 +3666,174 @@ model ShadowObservation {
   company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
   @@index([companyId, leadInterviewerId])
+}
+
+/// One erasure ledger row per candidate. Holds step names and counts only, never candidate content.
+model CandidateErasure {
+  id                Int       @id @default(autoincrement())
+  companyId         Int
+  candidateId       Int
+  /// PENDING, COMPLETED or PARTIAL. PARTIAL rows are retried.
+  status            String    @default("PENDING")
+  /// ADMIN_REQUEST, DELETION_QUEUE or RETENTION_POLICY.
+  trigger           String
+  attempts          Int       @default(0)
+  completedSteps    String[]
+  failedSteps       String[]
+  requestedByUserId Int?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  completedAt       DateTime?
+
+  candidate Candidate @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@unique([companyId, candidateId])
+  @@index([status, updatedAt])
+}
+
+/// A documented reason to keep a candidate's data. Retention expiry skips held candidates.
+model RetentionHold {
+  id             Int       @id @default(autoincrement())
+  companyId      Int
+  candidateId    Int
+  reason         String
+  placedByUserId Int
+  createdAt      DateTime  @default(now())
+  releasedAt     DateTime?
+
+  candidate Candidate @relation(fields: [candidateId, companyId], references: [id, companyId], onDelete: Restrict)
+
+  @@index([companyId, candidateId])
+}
+
+/// Recruiter spreadsheet import. Separate from Candidate and Application.
+/// Preview does not create these rows. Confirmation does.
+enum ApplicantImportStatus {
+  CONFIRMED
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum ApplicantImportRowStatus {
+  CREATED
+  ATTACHED
+  SKIPPED
+  FAILED
+}
+
+model ApplicantImportTemplate {
+  id              Int      @id @default(autoincrement())
+  companyId       Int
+  name            String
+  mapping         Json
+  createdByUserId Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model ApplicantImportBatch {
+  id               Int                   @id @default(autoincrement())
+  companyId        Int
+  jobId            Int
+  createdByUserId  Int
+  idempotencyKey   String
+  fileSha256       String
+  fileName         String
+  status           ApplicantImportStatus @default(CONFIRMED)
+  mapping          Json
+  createdCount     Int                   @default(0)
+  attachedCount    Int                   @default(0)
+  skippedCount     Int                   @default(0)
+  failedCount      Int                   @default(0)
+  createdAt        DateTime              @default(now())
+  completedAt      DateTime?
+
+  company Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job     Job                  @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  rows    ApplicantImportRow[]
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, jobId])
+}
+
+model ApplicantImportRow {
+  id                  Int                      @id @default(autoincrement())
+  batchId             Int
+  companyId           Int
+  rowNumber           Int
+  status              ApplicantImportRowStatus
+  candidateId         Int?
+  applicationId       Int?
+  code                String
+  name                String
+  emailMasked         String?
+  externalCandidateId String?
+
+  batch ApplicantImportBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+
+  @@unique([batchId, rowNumber])
+  @@index([companyId])
+}
+
+/// Job-specific inbound email route. The raw token is encrypted for the recruiter view and hashed for lookup.
+enum InboundEmailStatus {
+  RECEIVED
+  PROCESSED
+  REVIEW
+  FAILED
+  REJECTED
+}
+
+model InboundEmailRoute {
+  id               Int      @id @default(autoincrement())
+  companyId        Int
+  jobId            Int
+  tokenHash        String   @unique
+  tokenCiphertext  String?
+  enabled          Boolean  @default(true)
+  createdByUserId  Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  company  Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job      Job                   @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  messages InboundEmailMessage[]
+
+  @@unique([companyId, jobId])
+  @@index([companyId])
+}
+
+model InboundEmailMessage {
+  id               Int                @id @default(autoincrement())
+  companyId        Int
+  jobId            Int
+  routeId          Int
+  providerEventId  String             @unique
+  status           InboundEmailStatus @default(RECEIVED)
+  code             String?
+  applicantName    String?
+  emailMasked      String?
+  /// Normalized address for a later authorized retry. Not written to audit logs.
+  applicantEmailNormalized String?
+  /// unavailable, clean, or infected. unavailable means no scanner is configured.
+  malwareScan      String?
+  attachmentCount  Int                @default(0)
+  storageKey       String?
+  applicationId    Int?
+  candidateId      Int?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  company Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job     Job              @relation(fields: [jobId, companyId], references: [id, companyId], onDelete: Restrict)
+  route   InboundEmailRoute @relation(fields: [routeId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, jobId])
+  @@index([status, updatedAt])
 }

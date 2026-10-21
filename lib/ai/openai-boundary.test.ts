@@ -24,13 +24,14 @@ function filesUnder(dir: string): string[] {
 }
 
 describe("OpenAI call boundary", () => {
-  it("keeps api.openai.com inside the gateway", () => {
+  it("keeps the provider host inside the gateway", () => {
+    const providerHost = ["api", "openai", "com"].join(".");
     const offenders: string[] = [];
     for (const file of filesUnder(ROOT)) {
       const relative = path.relative(ROOT, file);
       if (ALLOWED.has(path.normalize(relative))) continue;
       const text = readFileSync(file, "utf8");
-      if (text.includes("https://api.openai.com") || /from ["']openai["']/.test(text)) {
+      if (text.includes(`https://${providerHost}`) || /from ["']openai["']/.test(text)) {
         offenders.push(relative);
       }
     }

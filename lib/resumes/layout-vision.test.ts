@@ -17,7 +17,7 @@ function audit(optedOut: boolean) {
       pageIndex: 0,
       db: {
         application: {
-          findUnique: async () => ({ aiEvaluationOptOut: optedOut }),
+          findUnique: async () => ({ id: 44, candidateId: 1, companyId: 9, aiPreference: optedOut ? ("REFUSED" as const) : ("ALLOWED" as const), humanReviewRequestedAt: null }),
         },
         aIRun: {
           create: async ({ data }: { data: unknown }) => {

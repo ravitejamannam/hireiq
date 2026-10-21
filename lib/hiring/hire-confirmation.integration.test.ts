@@ -1,5 +1,4 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   ApplicationPipelineStatus,
@@ -9,6 +8,13 @@ import {
   PortalRole,
   RequirementLifecycle,
 } from "@prisma/client";
+import { confirmClientCandidateHire } from "@/app/actions/application-actions";
+import { AuthorizationError } from "@/lib/auth/authorization";
+import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
+import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const actor = vi.hoisted(() => ({ id: "0" }));
 
@@ -20,10 +26,10 @@ vi.mock("next/cache", () => ({
   revalidatePath: () => undefined,
 }));
 
-import { confirmClientCandidateHire } from "@/app/actions/application-actions";
-import { AuthorizationError } from "@/lib/auth/authorization";
-import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
-import { prisma } from "@/lib/prisma";
+
+
+
+
 
 const MARKER = `hire-${process.pid}-${Date.now()}`;
 
@@ -31,7 +37,7 @@ function asUser(id: number) {
   actor.id = String(id);
 }
 
-describe("hire confirmation permission", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("hire confirmation permission", () => {
   const companyIds: number[] = [];
   const userIds: number[] = [];
 

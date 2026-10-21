@@ -36,8 +36,8 @@ export default function SlotPicker({
       setState({
         kind: "error",
         text:
-          code === "SLOT_UNAVAILABLE"
-            ? "That slot was just taken — please pick another."
+          code === "SLOT_UNAVAILABLE" || code === "SLOT_DURATION_MISMATCH"
+            ? "That slot is not available for this booking link — please pick another."
             : "Booking failed. Please refresh and try again.",
       });
       setSelected(null);

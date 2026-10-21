@@ -1,5 +1,4 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   ApplicationPipelineStatus,
@@ -12,17 +11,6 @@ import {
   RequirementSupportState,
   SourcingDatabaseSource,
 } from "@prisma/client";
-
-const actor = vi.hoisted(() => ({ id: "0" }));
-
-vi.mock("@/auth", () => ({
-  auth: async () => ({ user: { id: actor.id } }),
-}));
-
-vi.mock("next/cache", () => ({
-  revalidatePath: () => undefined,
-}));
-
 import {
   confirmClientCandidateHire,
   createApplication,
@@ -46,6 +34,28 @@ import { executeAttachRecruiterTextualEvidence } from "@/lib/candidates/evidence
 import { executeRunMatcherV2 } from "@/lib/candidates/matching/matching-v2-service";
 import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
+
+const actor = vi.hoisted(() => ({ id: "0" }));
+
+vi.mock("@/auth", () => ({
+  auth: async () => ({ user: { id: actor.id } }),
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
+
+
+
+
+
+
+
+
 
 const MARKER = `life-${process.pid}-${Date.now()}`;
 
@@ -53,7 +63,7 @@ function asUser(id: number) {
   actor.id = String(id);
 }
 
-describe("hiring lifecycle", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("hiring lifecycle", () => {
   const companyIds: number[] = [];
   const userIds: number[] = [];
   const interviewerIds: number[] = [];
@@ -232,6 +242,9 @@ describe("hiring lifecycle", () => {
       },
     });
     const application = await createApplication(candidate.id, posted.id);
+    // A recruiter-attached application starts with an UNKNOWN AI preference, which blocks AI. This test needs it on.
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).aiPreference).toBe("UNKNOWN");
+    await prisma.application.update({ where: { id: application.id }, data: { aiPreference: "ALLOWED" } });
     expect(application.companyId).toBe(company.id);
     expect(application.status).toBe(ApplicationPipelineStatus.CV_POOL);
 

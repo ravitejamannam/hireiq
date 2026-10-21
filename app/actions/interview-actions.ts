@@ -122,8 +122,10 @@ export async function sendInterviewRescheduleLink(applicationId: number) {
     orderBy: { id: "desc" },
     select: { applicantEmailNormalized: true, applicantName: true, job: { select: { title: true } } },
   });
+  const owner = await prisma.application.findUnique({ where: { id: applicationId }, select: { candidateId: true, companyId: true } });
   if (invite.bookingUrl && contact?.applicantEmailNormalized) {
     await sendOutboundEmail({
+      scope: owner ? { companyId: owner.companyId, candidateId: owner.candidateId } : undefined,
       to: contact.applicantEmailNormalized,
       subject: `Reschedule your interview: ${contact.job.title}`,
       text: `Hi ${contact.applicantName ?? "there"}, pick a new time: ${invite.bookingUrl}`,

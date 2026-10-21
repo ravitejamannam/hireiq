@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   auditReason,
-  bulkRejectPlan,
   displayScore,
   filterReviewRows,
   moveSelection,
@@ -45,11 +44,6 @@ describe("review queue rules", () => {
   it("requires a reason from the fixed list before a reject is valid", () => {
     expect(auditReason("Missing required skill", 0.42, false)).toContain("Missing required skill");
     expect(auditReason("Missing required skill", 0.42, false)).toContain("aiScore=0.42");
-  });
-
-  it("blocks bulk reject for candidates who asked for human review", () => {
-    const rows = [row({ id: 1, humanReview: true }), row({ id: 2 })];
-    expect(bulkRejectPlan(rows, [1, 2])).toEqual({ allowed: [2], blocked: [1] });
   });
 
   it("puts a strong match first and leaves zero or missing scores at the bottom", () => {

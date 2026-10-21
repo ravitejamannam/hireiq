@@ -1,5 +1,4 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   CandidateClaimType,
@@ -20,7 +19,6 @@ import {
   RequirementAssessmentRunStatus,
   RequirementSupportState,
 } from "@prisma/client";
-
 import { EVIDENCE_GRAPH_NOT_FOUND } from "@/lib/evidence-graph/evidence-graph-errors";
 import {
   executeMaterializeEvidenceGraph,
@@ -35,6 +33,9 @@ import {
   listGraphSourceEvidence,
 } from "@/lib/repositories/evidence-graph-repository";
 import { isAdminEvidenceGraphRole } from "@/lib/validation/evidence-graph-validation";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const MARKER = `egv1-iso-${process.pid}-${Date.now()}`;
 
@@ -286,7 +287,7 @@ async function destroyTenant(companyId: number) {
   await prisma.company.delete({ where: { id: companyId } });
 }
 
-describe("evidence graph two-company server-action boundary", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("evidence graph two-company server-action boundary", () => {
   let companyA: TenantWorld;
   let companyB: TenantWorld;
 

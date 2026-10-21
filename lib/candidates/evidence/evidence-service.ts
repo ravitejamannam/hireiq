@@ -149,6 +149,8 @@ export async function executeCreateEvidence(input: {
     contentSha256: hashEvidenceInlineTextOrNull(inlineText),
     createdAt: input.createdAt,
   });
+  // An erased candidate gets no new evidence.
+  if (!row) evidenceNotFound();
 
   return toSafe(row);
 }

@@ -33,6 +33,10 @@ export type HostedApplySubmitInput = {
   coverLetter: string | null;
   consentAccepted: true;
   futureRolesConsent: boolean;
+  /** Only an explicit "allowed" turns AI evaluation on; anything else is human review only. */
+  aiEvaluationAllowed: boolean;
+  /** "allowed" -> ALLOWED, "human_only" -> REFUSED, anything else (missing, garbled) -> UNKNOWN. */
+  aiPreference: "ALLOWED" | "REFUSED" | "UNKNOWN";
   profile: StructuredProfilePayload;
 };
 
@@ -208,6 +212,8 @@ export function validateHostedApplySubmitBody(body: unknown): HostedApplySubmitI
     coverLetter: typeof coverRaw === "string" ? coverRaw : null,
     consentAccepted: true,
     futureRolesConsent: record.futureRolesConsent === true,
+    aiEvaluationAllowed: record.aiEvaluation === "allowed",
+    aiPreference: record.aiEvaluation === "allowed" ? "ALLOWED" : record.aiEvaluation === "human_only" ? "REFUSED" : "UNKNOWN",
     profile,
   };
 }

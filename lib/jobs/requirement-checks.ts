@@ -119,6 +119,7 @@ export async function quotesForVagueRequirements(
       : null,
     async () => {
       const value = await completeStructured({
+        subject: scope ? { applicationId: scope.applicationId, companyId: scope.companyId } : undefined,
         feature: "requirement_quotes",
         model: QUOTE_MODEL,
         promptVersion: QUOTE_PROMPT_VERSION,

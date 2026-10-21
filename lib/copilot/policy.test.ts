@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import { copilotActorFromUser, copilotJobAllowed } from "@/lib/copilot/policy";
@@ -41,7 +43,6 @@ describe("copilot grounding", () => {
   });
 
   it("does not import the self-id table or send mail from a draft", () => {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
     const service = readFileSync(new URL("./copilot-service.ts", import.meta.url), "utf8");
     expect(service).not.toMatch(/CandidateSelfIdentification|fairness\/self-id|sendOutboundEmail/);
     expect(manualReviewListing("Asha")).toBe("Asha: Manual review");

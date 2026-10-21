@@ -33,6 +33,8 @@ export async function sendDueInterviewReminders(now = new Date()) {
           meetUrl: true,
           application: {
             select: {
+              candidateId: true,
+              companyId: true,
               candidateTimeZone: true,
               ingestionEvents: {
                 orderBy: { id: "desc" },
@@ -72,7 +74,14 @@ export async function sendDueInterviewReminders(now = new Date()) {
       row.interview.application.job.assignedInterviewer?.users[0]?.email,
     ].filter((email): email is string => Boolean(email));
     for (const to of recipients) {
-      await sendOutboundEmail({ to, subject: `Interview reminder: ${row.interview.application.job.title}`, text, html: `<p>${text}</p>` });
+      // Tagged for the candidate even when the recipient is the interviewer: the content is about the candidate's interview.
+      await sendOutboundEmail({
+        to,
+        subject: `Interview reminder: ${row.interview.application.job.title}`,
+        text,
+        html: `<p>${text}</p>`,
+        scope: { companyId: row.interview.application.companyId, candidateId: row.interview.application.candidateId },
+      });
     }
     const applicationRow = await prisma.application.findUnique({
       where: { id: row.interview.applicationId },

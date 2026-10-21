@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import { assertAuditLogTriggers } from "@/lib/audit/assert-audit-trigger";
 import { writeAuditLog } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
 
-describe("audit log triggers", () => {
+const integrationDatabase = gateIntegrationSuite();
+
+describe.skipIf(integrationDatabase.mode === "skip")("audit log triggers", () => {
   it("finds both append-only triggers", async () => {
     await expect(assertAuditLogTriggers()).resolves.toBeUndefined();
     const rows = await prisma.$queryRaw<Array<{ tgname: string }>>`
@@ -53,7 +56,23 @@ describe("audit log triggers", () => {
     await expect(
       prisma.$executeRaw`DELETE FROM "AuditLog" WHERE id = ${row.id}`,
     ).rejects.toThrow(/append-only/);
-    await expect(prisma.$executeRaw`TRUNCATE TABLE "AuditLog"`).rejects.toThrow(/append-only/);
+    // TRUNCATE has no row predicate. Roll it back unless the trigger rejects it,
+    // so a missing trigger cannot commit a wipe of every audit row.
+    let truncateWasAccepted = false;
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`TRUNCATE TABLE "AuditLog"`;
+        truncateWasAccepted = true;
+        throw new Error("rollback-truncate-probe");
+      });
+    } catch (error) {
+      if (truncateWasAccepted) {
+        throw new Error("TRUNCATE was not rejected by the append-only trigger.");
+      }
+      expect(() => {
+        throw error;
+      }).toThrow(/append-only/);
+    }
 
     const stillThere = await prisma.auditLog.findUnique({ where: { id: row.id } });
     expect(stillThere?.reason).toBe("trigger check");

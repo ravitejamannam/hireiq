@@ -1,4 +1,5 @@
 import type { AiRunScope } from "@/lib/ai/ai-run";
+import type { GatewaySubject } from "@/lib/ai/gateway";
 import { runGuardedCompletion } from "@/lib/ai/guarded-completion";
 import {
   CandidateIntelligenceError,
@@ -99,6 +100,7 @@ const CLAIMS_SCHEMA = {
 async function generateWithOpenAi(
   evidenceText: string,
   scope: AiRunScope | null,
+  subject?: GatewaySubject,
 ): Promise<unknown> {
   const apiKey = getOpenAiApiKey();
   if (!apiKey) {
@@ -114,6 +116,7 @@ async function generateWithOpenAi(
       optedOut: false,
       scope,
       request: {
+        subject,
         feature: "evidence_review",
         model,
         promptVersion: CANDIDATE_INTELLIGENCE_PROMPT_VERSION,
@@ -134,7 +137,7 @@ async function generateWithOpenAi(
 
 export async function extractClaimsFromEvidenceText(
   evidenceText: string,
-  guard?: { optedOut: boolean; scope: AiRunScope | null },
+  guard?: { optedOut: boolean; scope: AiRunScope | null; subject?: GatewaySubject },
 ): Promise<ExtractedClaimDraft[]> {
   if (guard?.optedOut) {
     throw new CandidateIntelligenceError(
@@ -153,7 +156,7 @@ export async function extractClaimsFromEvidenceText(
         INTELLIGENCE_AI_NOT_CONFIGURED,
       );
     } else {
-      raw = await generateWithOpenAi(evidenceText, guard?.scope ?? null);
+      raw = await generateWithOpenAi(evidenceText, guard?.scope ?? null, guard?.subject);
     }
   } catch (error) {
     return toProviderError(error);

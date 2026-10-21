@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { aiBlockReasonForSubject, type AiSubject, type ApplicationAiState } from "@/lib/ai/ai-policy";
 import type { AiRunScope } from "@/lib/ai/ai-run";
 import { postOpenAi } from "@/lib/ai/gateway";
 import { getOpenAiApiKey } from "@/lib/ai/job-description-generator";
@@ -14,16 +15,21 @@ export const RESUME_VISION_PROMPT_VERSION = "resume-vision-1";
 
 type ApplicationLookup = {
   application: {
-    findUnique: (args: {
-      where: { id: number };
-      select: { aiEvaluationOptOut: true };
-    }) => Promise<{ aiEvaluationOptOut: boolean } | null>;
+    findUnique: (args: any) => Promise<ApplicationAiState | null>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    findMany?: (args: any) => Promise<ApplicationAiState[]>; // eslint-disable-line @typescript-eslint/no-explicit-any
   };
+};
+
+export type ResumeAiSubject = {
+  applicationId?: number | null;
+  candidateId?: number | null;
+  companyId?: number | null;
 };
 
 /** Company scope for a page-image read. Omit when the caller has no tenant. */
 export type ResumeVisionAudit = AiRunScope & {
   applicationId?: number | null;
+  candidateId?: number | null;
   pageCount: number;
   pageIndex: number;
   db: AiRunScope["db"] & Partial<ApplicationLookup>;
@@ -55,28 +61,30 @@ export function hashResumeVisionInput(input: {
     .digest("hex");
 }
 
-export async function applicationOptedOutOfAi(
+/**
+ * AI may read a resume only when its application (or every application of its candidate) is explicitly
+ * ALLOWED and no human review was requested. A hosted upload before submit, a candidate with no application,
+ * and an UNKNOWN preference all mean no.
+ */
+export async function resumeAiAllowed(
   db: Partial<ApplicationLookup> | undefined,
-  applicationId: number | null | undefined,
+  subject: ResumeAiSubject,
 ) {
-  if (!applicationId || !db?.application) return false;
-  const row = await db.application.findUnique({
-    where: { id: applicationId },
-    select: { aiEvaluationOptOut: true },
-  });
-  return row?.aiEvaluationOptOut === true;
+  if (!db?.application || (!subject.applicationId && !(subject.candidateId && subject.companyId))) return false;
+  const reason = await aiBlockReasonForSubject(subject as AiSubject, db as never);
+  return reason === null;
 }
 
 /**
  * Ask the vision model to read a page image.
- * Returns null when no API key, the call fails, or the related application opted out.
- * Opt-out does not call the model and does not write an AIRun.
+ * Returns null when no API key, the call fails, or AI is not allowed for this resume.
+ * A refusal does not call the model and does not write an AIRun.
  */
 export async function transcribeResumePage(
   image: Uint8Array,
   audit?: ResumeVisionAudit | null,
 ): Promise<string | null> {
-  if (audit && (await applicationOptedOutOfAi(audit.db, audit.applicationId))) {
+  if (!audit || !(await resumeAiAllowed(audit.db, audit))) {
     return null;
   }
 

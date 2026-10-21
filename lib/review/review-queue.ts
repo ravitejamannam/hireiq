@@ -54,14 +54,6 @@ export function isReviewRejectReason(value: string): value is ReviewRejectReason
   return (REVIEW_REJECT_REASONS as readonly string[]).includes(value);
 }
 
-export function bulkRejectPlan(rows: ReviewRow[], ids: number[]) {
-  const selected = rows.filter((row) => ids.includes(row.id));
-  return {
-    allowed: selected.filter((row) => !row.humanReview).map((row) => row.id),
-    blocked: selected.filter((row) => row.humanReview).map((row) => row.id),
-  };
-}
-
 export function filterReviewRows(rows: ReviewRow[], filters: ReviewFilters) {
   const min = filters.minScore === "" ? null : Number(filters.minScore);
   const max = filters.maxScore === "" ? null : Number(filters.maxScore);

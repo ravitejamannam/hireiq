@@ -1,18 +1,6 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { CandidateStatus, JobStatus, OrganizationMemberRole, OrganizationMemberStatus, PortalRole, RequirementLifecycle } from "@prisma/client";
-
-const actor = vi.hoisted(() => ({ id: "0" }));
-
-vi.mock("@/auth", () => ({
-  auth: async () => ({ user: { id: actor.id } }),
-}));
-
-vi.mock("next/cache", () => ({
-  revalidatePath: () => undefined,
-}));
-
 import { bulkReviewApplications, decideReviewApplication } from "@/app/actions/review-queue-actions";
 import { GET as resumeDownload } from "@/app/api/resumes/[documentId]/route";
 import { POST as schedulingSlots } from "@/app/api/scheduling/slots/route";
@@ -24,6 +12,31 @@ import JobInterviewsPage from "@/app/dashboard/jobs/[id]/interviews/page";
 import JobReviewPage from "@/app/dashboard/jobs/[id]/review/page";
 import { deniesCrossCompany, requireUser } from "@/lib/auth/authorization";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
+
+const actor = vi.hoisted(() => ({ id: "0" }));
+
+vi.mock("@/auth", () => ({
+  auth: async () => ({ user: { id: actor.id } }),
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
+
+
+
+
+
+
+
+
+
+
+
 
 const MARKER = `scope-${process.pid}-${Date.now()}`;
 
@@ -31,7 +44,7 @@ function asUser(id: number) {
   actor.id = String(id);
 }
 
-describe("company scope on dashboard routes", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("company scope on dashboard routes", () => {
   const companyIds: number[] = [];
   const userIds: number[] = [];
   let companyAId = 0;

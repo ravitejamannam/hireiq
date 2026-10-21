@@ -97,10 +97,8 @@ async function main() {
         } else if (text && !present(text, label)) layoutMisses.push(`${id} company not in extracted text: ${label}`);
       }
     }
-    for (const skill of skills) {
-      predicted += 1;
-      verified += 1;
-    }
+    predicted += skills.length;
+    verified += skills.length;
     files.push({
       id,
       extractor: extracted.ok ? extracted.extractor : "failed",

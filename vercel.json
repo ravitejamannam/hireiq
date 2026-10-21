@@ -14,6 +14,10 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/ops/retention",
+      "schedule": "0 3 * * *"
+    },
+    {
       "path": "/api/integrations/reconcile",
       "schedule": "0 5 * * *"
     }

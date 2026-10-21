@@ -10,7 +10,7 @@ import {
   requireAdmin,
 } from "@/lib/auth/authorization";
 import { executeRunJobIntelligence } from "@/lib/jobs/intelligence/job-intelligence-service";
-import { optedOutCandidateIds } from "@/lib/ai/opt-out";
+import { optedOutApplicationIds, optedOutCandidateIds } from "@/lib/ai/opt-out";
 import { ONTOLOGY_VERSION } from "@/lib/ontology/skill-alias-catalog";
 import { prisma } from "@/lib/prisma";
 import {
@@ -197,13 +197,16 @@ export async function executeRunSemanticRetrieval(input: {
     notFound();
   }
 
-  const applications = await listApplicationsForLexicalRetrieval(
+  const allApplications = await listApplicationsForLexicalRetrieval(
     input.jobId,
     companyId,
   );
-  if (applications.some((row) => row.companyId !== companyId || row.jobId !== input.jobId)) {
+  if (allApplications.some((row) => row.companyId !== companyId || row.jobId !== input.jobId)) {
     notFound();
   }
+  // Blocked = refused, unknown, or human review requested. Only explicitly ALLOWED applications are embedded or ranked.
+  const optedOut = await optedOutApplicationIds(companyId, allApplications.map((row) => row.id));
+  const applications = allApplications.filter((row) => !optedOut.has(row.id));
 
   const evidenceRows = await listEligibleEvidenceForLexicalRetrieval({
     companyId,

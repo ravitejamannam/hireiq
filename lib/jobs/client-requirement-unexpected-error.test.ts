@@ -21,10 +21,13 @@ vi.mock("@/lib/jobs/posted-requirement", () => ({
 
 import { createClientRequirement } from "@/app/actions/job-actions";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const MARKER = `boom-${process.pid}-${Date.now()}`;
 
-describe("client requirement unexpected errors", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("client requirement unexpected errors", () => {
   const companyIds: number[] = [];
   const userIds: number[] = [];
 

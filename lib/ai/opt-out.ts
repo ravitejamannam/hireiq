@@ -1,3 +1,6 @@
+import type { AiPreference } from "@prisma/client";
+
+import { aiBlockedApplicationIds, aiBlockedCandidateIds, aiBlockReasonForSubject } from "@/lib/ai/ai-policy";
 import { prisma } from "@/lib/prisma";
 
 export type EvaluationConsent = {
@@ -8,59 +11,38 @@ export type EvaluationConsent = {
 export class AiEvaluationOptOutError extends Error {
   readonly code = "AI_EVALUATION_OPT_OUT";
 
-  constructor() {
+  readonly reason: string;
+
+  constructor(reason = "REFUSED") {
     super("Candidate opted out of AI evaluation.");
+    this.reason = reason;
     this.name = "AiEvaluationOptOutError";
   }
 }
 
-export function evaluationAllowed(consent: EvaluationConsent) {
+export function evaluationAllowed(consent: EvaluationConsent & { aiPreference?: AiPreference }) {
+  if (consent.humanReviewRequestedAt) return false;
+  if (consent.aiPreference !== undefined) return consent.aiPreference === "ALLOWED";
   return !consent.aiEvaluationOptOut;
 }
 
+/** Despite the names, these return who AI may NOT process: refused, unknown, or human review requested. */
 export async function optedOutApplicationIds(companyId: number, applicationIds: number[]) {
-  if (applicationIds.length === 0) return new Set<number>();
-  const rows = await prisma.application.findMany({
-    where: { companyId, id: { in: applicationIds }, aiEvaluationOptOut: true },
-    select: { id: true },
-  });
-  return new Set(rows.map((row) => row.id));
+  return aiBlockedApplicationIds(companyId, applicationIds);
 }
 
 export async function optedOutCandidateIds(companyId: number, candidateIds: number[]) {
-  if (candidateIds.length === 0) return new Set<number>();
-  const rows = await prisma.application.findMany({
-    where: { companyId, candidateId: { in: candidateIds }, aiEvaluationOptOut: true },
-    select: { candidateId: true },
-  });
-  return new Set(rows.map((row) => row.candidateId));
+  return aiBlockedCandidateIds(companyId, candidateIds);
 }
 
-/** Throws when this application, or any application for this candidate, opted out. */
+/** Throws unless the application (or every application of the candidate) is explicitly ALLOWED with no human review requested. */
 export async function assertAIEvaluationAllowed(subject: {
   applicationId?: number;
   candidateId?: number;
   companyId?: number;
 }) {
-  if (subject.applicationId) {
-    const row = await prisma.application.findUnique({
-      where: { id: subject.applicationId },
-      select: { aiEvaluationOptOut: true },
-    });
-    if (row?.aiEvaluationOptOut) throw new AiEvaluationOptOutError();
-    return;
-  }
-  if (subject.candidateId) {
-    const row = await prisma.application.findFirst({
-      where: {
-        candidateId: subject.candidateId,
-        companyId: subject.companyId,
-        aiEvaluationOptOut: true,
-      },
-      select: { id: true },
-    });
-    if (row) throw new AiEvaluationOptOutError();
-  }
+  const reason = await aiBlockReasonForSubject(subject);
+  if (reason) throw new AiEvaluationOptOutError(reason);
 }
 
 /** Stops in-flight evaluation. Completed scores stay in the database and are hidden in the review queue. */

@@ -27,8 +27,9 @@ function hashToken(raw: string): string {
 /** Generate a status token for an application (idempotent). */
 export async function ensureStatusToken(
   applicationId: number,
+  db: Pick<typeof prisma, "application"> = prisma,
 ): Promise<string> {
-  const existing = await prisma.application.findUnique({
+  const existing = await db.application.findUnique({
     where: { id: applicationId },
     select: { statusTokenHash: true },
   });
@@ -39,7 +40,7 @@ export async function ensureStatusToken(
   }
 
   const { rawToken, tokenHash } = generateSecureToken();
-  await prisma.application.update({
+  await db.application.update({
     where: { id: applicationId },
     data: { statusTokenHash: tokenHash },
   });

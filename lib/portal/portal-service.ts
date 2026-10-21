@@ -99,6 +99,8 @@ export async function createMagicLink(email: string, origin: string) {
       subject: "Your HireIQ sign-in link",
       text: `Open this link to see your applications. It expires in 30 minutes.\n\n${link.url}`,
       html: `<p>Open this link to see your applications. It expires in 30 minutes.</p><p><a href="${link.url}">Sign in</a></p>`,
+      // One-time link that expires in 30 minutes, for an address that can belong to several people. Never queued for retry.
+      queueOnFailure: false,
     });
   }
   return { rawToken: link.rawToken, expiresAt: link.expiresAt };
@@ -117,8 +119,8 @@ export async function setOptOut(applicationId: number, email: string, optedOut: 
   await prisma.application.update({
     where: { id: application.id },
     data: optedOut
-      ? { aiEvaluationOptOut: true, aiOptOutAt: new Date() }
-      : { aiEvaluationOptOut: false, aiOptOutAt: null },
+      ? { aiPreference: "REFUSED", aiPreferenceSource: "PORTAL", aiPreferenceAt: new Date(), aiOptOutAt: new Date() }
+      : { aiPreference: "ALLOWED", aiPreferenceSource: "PORTAL_OPT_IN", aiPreferenceAt: new Date(), aiOptOutAt: null },
   });
   if (optedOut) await stopQueuedAiEvaluation(application.id);
   await audit({

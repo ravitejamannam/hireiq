@@ -115,8 +115,8 @@ export default function HiringFunnelPanel({
       <section className="rounded-xl border border-zinc-200 bg-white p-6">
         <h2 className="font-semibold text-zinc-900">Source</h2>
         <p className="mt-0.5 text-xs text-zinc-400">
-          Ingestion channel (hosted apply, boards, referral, manual) — not the
-          LinkedIn/Naukri sourcing-database field.
+          Intake method. CSV import and inbound email are not manual entry.
+          A recorded LinkedIn or Naukri sourcing field is kept separate.
         </p>
         {report.sources.length === 0 ? (
           <p className="mt-3 text-sm text-zinc-500">No applications yet.</p>

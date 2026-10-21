@@ -1,20 +1,22 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it } from "vitest";
 import { CandidateStatus, JobStatus, PortalRole } from "@prisma/client";
-
 import { applyReviewDecision } from "@/lib/review/review-queue-service";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const MARKER = `review-${process.pid}-${Date.now()}`;
 
-describe("review queue audit", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("review queue audit", () => {
   const companyIds: number[] = [];
   const userIds: number[] = [];
 
   afterAll(async () => {
     if (companyIds.length === 0) return;
     await prisma.outcomeEvent.deleteMany({ where: { companyId: { in: companyIds } } });
+    await prisma.decisionRecord.deleteMany({ where: { companyId: { in: companyIds } } });
     await prisma.application.deleteMany({ where: { companyId: { in: companyIds } } });
     await prisma.candidate.deleteMany({ where: { companyId: { in: companyIds } } });
     await prisma.job.deleteMany({ where: { companyId: { in: companyIds } } });

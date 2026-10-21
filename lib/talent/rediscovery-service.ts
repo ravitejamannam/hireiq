@@ -356,6 +356,7 @@ export async function inviteRediscoveredCandidate(input: { jobId: number; candid
     subject: `${job.company.name} invited you to apply for ${job.title}`,
     text: `You can apply for ${job.title}. This does not create an application until you accept.\n\n${url}`,
     html: `<p>You can apply for ${job.title}. This does not create an application until you accept.</p><p><a href="${url}">Review the invitation</a></p>`,
+    scope: { companyId: job.companyId, candidateId: input.candidateId },
   });
   await writeAuditLog(prisma, {
     actorUserId: input.actorUserId,
@@ -432,6 +433,7 @@ export async function askPastApplicantsToOptIn(input: { companyId: number; actor
       subject: "Can we consider you for future roles?",
       text: `You applied before we asked this. If you want to be considered for other open roles, open your portal and choose “Consider me for future roles”. Nothing changes unless you say yes.\n\n${link.url}`,
       html: `<p>You applied before we asked this. If you want to be considered for other open roles, open your portal and choose “Consider me for future roles”. Nothing changes unless you say yes.</p><p><a href="${link.url}">Open your portal</a></p>`,
+      scope: { companyId: input.companyId, candidateId: candidate.id },
     });
     await prisma.candidate.update({ where: { id: candidate.id }, data: { futureRolesAskedAt: new Date() } });
     await writeAuditLog(prisma, {
@@ -441,7 +443,8 @@ export async function askPastApplicantsToOptIn(input: { companyId: number; actor
       action: "FUTURE_ROLES_ASKED",
       targetType: "CANDIDATE",
       targetId: candidate.id,
-      reason: email,
+      // No address in the audit row. It is append-only, so personal data written here cannot be erased later.
+      reason: "portal link sent",
     });
     sent += 1;
   }

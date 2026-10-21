@@ -1,10 +1,11 @@
+import { assertE2eDatabase } from "@/lib/testing/e2e-database-guard";
 import { hashPassword } from "@/lib/auth/password";
 import { issuePortalLink } from "@/lib/portal/portal-service";
 import { prisma } from "@/lib/prisma";
 import { writeFileSync } from "node:fs";
 
 async function main() {
-  if (!process.env.DATABASE_URL?.includes("hireiq_e2e_full")) throw new Error("wrong database");
+  assertE2eDatabase();
   const company = await prisma.company.findFirstOrThrow({ where: { publicSlug: "e2e-nimbus" } });
   const other = await prisma.company.findFirstOrThrow({ where: { publicSlug: "e2e-kaveri" } });
   const password = "E2e-full-test-pass-1";
@@ -36,6 +37,20 @@ async function main() {
     orderBy: { id: "asc" },
   });
   const interviewer = await prisma.user.findFirstOrThrow({ where: { email: "interviewer1.nimbus@e2e.hireiq.local" } });
+  // Same company, different interviewer: a job assigned to interviewer 2 with one ordinary application, so the
+  // assignment rule can be tested on its own (interviewer 1 is a member of this company's tenant but not assigned).
+  const interviewerTwo = await prisma.user.findFirstOrThrow({ where: { email: "interviewer2.nimbus@e2e.hireiq.local" } });
+  const assignedElsewhere = await prisma.job.findFirstOrThrow({
+    where: { companyId: company.id, assignedInterviewerId: interviewerTwo.interviewerId! },
+    orderBy: { id: "asc" },
+    select: { id: true },
+  });
+  const otherInterviewerCandidate = await prisma.candidate.create({
+    data: { companyId: company.id, name: "Assigned Elsewhere Applicant", role: "Engineer", experienceYears: 4, status: "APPLIED" },
+  });
+  const otherInterviewerApplication = await prisma.application.create({
+    data: { candidateId: otherInterviewerCandidate.id, jobId: assignedElsewhere.id, companyId: company.id },
+  });
   const portal = await issuePortalLink("shared.person@example.com", "http://localhost:4001");
   writeFileSync("/tmp/hireiq-playwright.json", JSON.stringify({
     adminEmail: email,
@@ -45,6 +60,9 @@ async function main() {
     secondJobId: job.id,
     otherJobId: otherJob.id,
     applicationId: application.id,
+    otherInterviewerEmail: interviewerTwo.email,
+    otherInterviewerJobId: assignedElsewhere.id,
+    otherInterviewerApplicationId: otherInterviewerApplication.id,
     portalUrl: portal?.url ?? null,
   }, null, 2));
   console.log("prepared", portal?.url ? "portal" : "no-portal");

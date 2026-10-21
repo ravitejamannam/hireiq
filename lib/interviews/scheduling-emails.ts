@@ -28,6 +28,8 @@ export type BookingEmailInput = {
   durationMinutes: number;
   meetUrl?: string | null;
   candidateUnsubscribed?: boolean;
+  /** Tenant and candidate. Both emails are about the candidate, so both are tagged for erasure. */
+  scope?: { companyId: number; candidateId: number };
 };
 
 function fmt(date: Date): string {
@@ -120,7 +122,7 @@ export async function deliverBookingConfirmation(
   for (const email of order) {
     if (!email?.to) continue;
     try {
-      const result = await sendOutboundEmail(email);
+      const result = await sendOutboundEmail({ ...email, scope: input.scope });
       if (result.sent) {
         sent += 1;
       } else if (outcome !== "PROVIDER_ERROR") {

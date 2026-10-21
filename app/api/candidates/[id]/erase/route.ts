@@ -40,7 +40,8 @@ export async function POST(
       candidateIdInput: Number.parseInt(id, 10),
       expectedCompanyId: adminCompanyId ?? undefined,
     });
-    return NextResponse.json({ ok: true, ...result }, { headers: NO_STORE });
+    // PARTIAL means some steps failed and the retry job will repeat them. Only step names are returned.
+    return NextResponse.json({ ok: result.status === "COMPLETED", ...result }, { status: result.status === "COMPLETED" ? 200 : 202, headers: NO_STORE });
   } catch (error) {
     if (error instanceof Error && error.message === "CANDIDATE_NOT_FOUND") {
       return NextResponse.json({ ok: false, error: "Candidate not found." }, { status: 404, headers: NO_STORE });

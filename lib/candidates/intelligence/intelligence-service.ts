@@ -24,6 +24,7 @@ import {
   INTELLIGENCE_NOT_FOUND,
   INTELLIGENCE_UNCHANGED_ERROR,
 } from "@/lib/candidates/intelligence/intelligence-errors";
+import { lockCandidateForWrite } from "@/lib/privacy/erasure-guard";
 import { AiEvaluationOptOutError, assertAIEvaluationAllowed } from "@/lib/ai/opt-out";
 import {
   extractClaimsFromEvidenceText,
@@ -177,6 +178,10 @@ async function completeRunWithClaims(input: {
 
   try {
     const row = await prisma.$transaction(async (tx) => {
+      // Holds the candidate lock until commit. An erased candidate gets no claims.
+      if (!(await lockCandidateForWrite(tx, input.key.candidateId, input.key.companyId))) {
+        throw new CandidateIntelligenceError("Candidate opted out of AI evaluation.", INTELLIGENCE_AI_OPT_OUT);
+      }
       const raced = await findCompletedRun(input.key, tx);
       if (raced) {
         await markRunFailed(
@@ -368,6 +373,7 @@ export async function executeGenerateCandidateIntelligence(input: {
   try {
     const claims = await extractClaimsFromEvidenceText(inlineText, {
       optedOut: false,
+      subject: { candidateId: evidence.candidateId, companyId: evidence.companyId },
       scope: {
         companyId: evidence.companyId,
         entityType: "CandidateEvidence",
@@ -375,6 +381,15 @@ export async function executeGenerateCandidateIntelligence(input: {
         db: prisma as never,
       },
     });
+    // The preference may have changed during the model call; do not keep output produced after an opt-out.
+    try {
+      await assertAIEvaluationAllowed({ candidateId: evidence.candidateId, companyId: evidence.companyId });
+    } catch (error) {
+      if (error instanceof AiEvaluationOptOutError) {
+        throw new CandidateIntelligenceError("Candidate opted out of AI evaluation.", INTELLIGENCE_AI_OPT_OUT);
+      }
+      throw error;
+    }
     return completeRunWithClaims({
       runId: run.id,
       key,

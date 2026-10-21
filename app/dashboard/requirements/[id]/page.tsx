@@ -31,7 +31,9 @@ import { getEvaluationsByJobId } from "@/lib/repositories/evaluation-repository"
 import { getInterviewsByJobId } from "@/lib/repositories/interview-repository";
 import { getInterviewers } from "@/lib/repositories/interviewer-repository";
 import { getJobById } from "@/lib/repositories/job-repository";
+import { getPublicAppUrl } from "@/lib/communication/email-config";
 import { prisma } from "@/lib/prisma";
+import { publicHostedDistributionWhere } from "@/lib/jobs/public-feed/public-feed-service";
 
 type RequirementWorkspacePageProps = {
   params: Promise<{
@@ -186,7 +188,10 @@ export default async function RequirementWorkspacePage({
 
   // T127: distribution kit context (apply token + first board distribution)
   const distributionRow = await prisma.jobDistribution.findFirst({
-    where: { jobId: requirementId },
+    where: {
+      jobId: requirementId,
+      ...publicHostedDistributionWhere(),
+    },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -215,6 +220,7 @@ export default async function RequirementWorkspacePage({
       applyUrl={applyUrl}
       distributionId={distributionRow?.id ?? null}
       companyId={requirement.companyId}
+      publicOrigin={getPublicAppUrl() ?? ""}
     />
   );
 }

@@ -1,16 +1,23 @@
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { CandidateStatus, JobStatus } from "@prisma/client";
-
-vi.mock("@/auth", () => ({ auth: async () => null }));
-
 import { prisma } from "@/lib/prisma";
 import { withAIRun } from "@/lib/ai/run";
 import { acceptRediscoveryInvite, askPastApplicantsToOptIn, inviteRediscoveredCandidate, runTalentRediscovery } from "@/lib/talent/rediscovery-service";
 import { TALENT_REDISCOVERY_FEATURE } from "@/lib/talent/rediscovery";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
+
+vi.mock("@/auth", () => ({ auth: async () => null }));
+
+
+
+
+
 
 const MARKER = `rediscover-${Date.now()}`;
 
-describe("talent rediscovery flow", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("talent rediscovery flow", () => {
   const companyIds: number[] = [];
 
   afterAll(async () => {
@@ -46,7 +53,7 @@ describe("talent rediscovery flow", () => {
       data: { name: "Ada", role: "Engineer", experienceYears: 6, status: CandidateStatus.APPLIED, companyId: company.id },
     });
     await prisma.application.create({
-      data: { candidateId: candidate.id, jobId: previous.id, companyId: company.id, futureRolesConsent: true, status: "SHORTLISTED" },
+      data: { candidateId: candidate.id, jobId: previous.id, companyId: company.id, futureRolesConsent: true, status: "SHORTLISTED", aiPreference: "ALLOWED" },
     });
     const evidence = await prisma.candidateEvidence.create({
       data: { companyId: company.id, candidateId: candidate.id, sourceType: "RESUME_DOCUMENT", origin: "CANDIDATE_PROVIDED", inlineText: "Go and Kubernetes" },
@@ -120,8 +127,8 @@ describe("talent rediscovery flow", () => {
     const consented = await prisma.candidate.create({
       data: { name: "Already yes", role: "Engineer", experienceYears: 4, status: CandidateStatus.APPLIED, companyId: company.id },
     });
-    await prisma.application.create({ data: { candidateId: pending.id, jobId: job.id, companyId: company.id, futureRolesConsent: false } });
-    await prisma.application.create({ data: { candidateId: consented.id, jobId: job.id, companyId: company.id, futureRolesConsent: true } });
+    await prisma.application.create({ data: { candidateId: pending.id, jobId: job.id, companyId: company.id, futureRolesConsent: false, aiPreference: "ALLOWED" } });
+    await prisma.application.create({ data: { candidateId: consented.id, jobId: job.id, companyId: company.id, futureRolesConsent: true, aiPreference: "ALLOWED" } });
     await prisma.candidatePortalIdentity.create({ data: { emailNormalized: `${MARKER}-pending@hireiq.test`, candidateId: pending.id, companyId: company.id } });
     await prisma.candidatePortalIdentity.create({ data: { emailNormalized: `${MARKER}-yes@hireiq.test`, candidateId: consented.id, companyId: company.id } });
 

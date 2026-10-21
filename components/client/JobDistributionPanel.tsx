@@ -441,18 +441,6 @@ export default function JobDistributionPanel({
                 >
                   Copy apply URL
                 </button>
-                <a
-                  href={
-                    hostedApplyPathFromSnapshot(
-                      selectedDistribution.applyUrlSnapshot,
-                    )
-                      ? `${hostedApplyPathFromSnapshot(selectedDistribution.applyUrlSnapshot)}/leaderboard`
-                      : `${selectedDistribution.applyUrlSnapshot.replace(/\/$/, "")}/leaderboard`
-                  }
-                  className="rounded-lg border border-zinc-300 px-3 py-1 text-sm font-medium text-black"
-                >
-                  Open public leaderboard
-                </a>
               </div>
             ) : null}
           </div>

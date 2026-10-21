@@ -6,6 +6,7 @@ import { hostedApplyPathFromSnapshot } from "@/lib/apply/hosted-apply-url";
 import { getPublicCareersHub } from "@/lib/careers/careers-service";
 import { getPublicAppUrl } from "@/lib/communication/email-config";
 import { displayJobTitle } from "@/lib/jobs/job-posting-view";
+import { publicJobPath } from "@/lib/jobs/public-feed/public-job-slug";
 
 export const revalidate = 60;
 
@@ -201,7 +202,7 @@ export default async function PublicCareersPage({
                     Apply
                   </Link>
                   <Link
-                    href={`/jobs/${role.distributionId}`}
+                    href={publicJobPath(hub.slug, role.title, role.distributionId)}
                     className="inline-flex items-center rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100"
                   >
                     View posting

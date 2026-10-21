@@ -4,6 +4,7 @@ import {
   SemanticRetrievalRunStatus,
 } from "@prisma/client";
 
+import { writeRowsForLiveCandidates } from "@/lib/privacy/erasure-guard";
 import { prisma } from "@/lib/prisma";
 import type { SemanticApplicationScore } from "@/lib/retrieval/semantic-retrieval-types";
 
@@ -225,18 +226,21 @@ export async function createSemanticRetrievalResults(
   if (input.rows.length === 0) {
     return;
   }
-  await db.semanticRetrievalResult.createMany({
-    data: input.rows.map((row, index) => ({
-      companyId: input.companyId,
-      runId: input.runId,
-      applicationId: row.applicationId,
-      candidateId: row.candidateId,
-      rank: index + 1,
-      semanticScore: row.semanticScore,
-      supportingEvidenceId: row.supportingEvidenceId,
-      method: input.method,
-    })),
-  });
+  // Rows for an erased candidate are dropped, so a stale run cannot put a snapshot back.
+  await writeRowsForLiveCandidates(db, input.companyId, input.rows, (tx, live) =>
+      tx.semanticRetrievalResult.createMany({
+      data: live.map((row, index) => ({
+        companyId: input.companyId,
+        runId: input.runId,
+        applicationId: row.applicationId,
+        candidateId: row.candidateId,
+        rank: index + 1,
+        semanticScore: row.semanticScore,
+        supportingEvidenceId: row.supportingEvidenceId,
+        method: input.method,
+      })),
+    }),
+  );
 }
 
 export async function markSemanticRetrievalRunCompleted(

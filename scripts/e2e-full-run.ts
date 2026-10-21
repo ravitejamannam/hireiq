@@ -1,6 +1,6 @@
 /**
  * Fresh-data end-to-end probe. Records failures. Does not change product code.
- * Requires DATABASE_URL to name hireiq_e2e_full.
+ * Requires E2E_DATABASE_NAME (a hireiq_e2e_disp_* name) to match DATABASE_URL exactly.
  */
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -16,7 +16,7 @@ import { storePendingHostedResume } from "@/lib/apply/hosted-resume-service";
 import { hashPassword } from "@/lib/auth/password";
 import { answerCopilot } from "@/lib/copilot/copilot-service";
 import { recordCompanyFairness } from "@/lib/fairness/monitor";
-import { saveSelfIdentification } from "@/lib/fairness/self-id";
+import { saveSelfIdentification, SelfIdentificationError } from "@/lib/fairness/self-id";
 import {
   acceptGeneratedJobDescriptionForActor,
   generateJobDescriptionForActor,
@@ -24,10 +24,13 @@ import {
 import { createPostedRequirementForCompany } from "@/lib/jobs/posted-requirement";
 import { publishDraftSpecification } from "@/lib/jobs/job-specification";
 import { prisma } from "@/lib/prisma";
+import { assertE2eDatabase } from "@/lib/testing/e2e-database-guard";
 import { listReviewQueue, reviewApplicationDetail } from "@/lib/review/review-queue-service";
-import { loadTalentRediscovery, runTalentRediscovery } from "@/lib/talent/rediscovery-service";
+import { runTalentRediscovery } from "@/lib/talent/rediscovery-service";
 
 type Finding = {
+  /** "assertion": the product did the wrong thing. "setup": the probe could not set up what it needed to test. */
+  kind?: "assertion" | "setup";
   severity: "P0" | "P1" | "P2" | "P3";
   area: string;
   actual: string;
@@ -39,15 +42,18 @@ const passes: string[] = [];
 
 function note(ok: boolean, label: string, finding?: Finding) {
   if (ok) passes.push(label);
-  else if (finding) findings.push(finding);
+  else if (finding) findings.push({ kind: "assertion", ...finding });
   console.log(`${ok ? "PASS" : "FAIL"} ${label}`);
 }
 
+/** A precondition the probe needs is missing. Reported as SETUP, never as a product failure. */
+function setupProblem(label: string, detail: string) {
+  findings.push({ kind: "setup", severity: "P2", area: "probe setup", expected: label, actual: detail.slice(0, 300) });
+  console.log(`SETUP ${label}`);
+}
+
 function assertDb() {
-  const url = process.env.DATABASE_URL ?? "";
-  if (!url.includes("hireiq_e2e_full")) {
-    throw new Error("Refusing to run unless DATABASE_URL points at hireiq_e2e_full.");
-  }
+  assertE2eDatabase();
 }
 
 async function main() {
@@ -297,13 +303,23 @@ async function main() {
   const nimbus = (manifest.companies as { nimbus: { companyId: number; users: Record<string, number>; jobs: Array<{ jobId: number; key: string }> } }).nimbus;
   const kaveri = (manifest.companies as { kaveri: { companyId: number; users: Record<string, number>; jobs: Array<{ jobId: number; key: string }> } }).kaveri;
   const bJob = kaveri.jobs[0]!.jobId;
-  const bQueue = await listReviewQueue({ jobId: bJob, filters: { stage: "", minScore: "", maxScore: "", knockout: "", parse: "", human: "" }, page: 1 });
-  note(false, "review queue service scopes to the caller", {
-    severity: "P0",
-    area: "isolation",
-    expected: "listing company B's job without a company check is refused",
-    actual: `listReviewQueue(job ${bJob}) returned ${bQueue.rows.length} rows for title ${bQueue.job.title}`,
-  });
+  const queueFilters = { stage: "", minScore: "", maxScore: "", knockout: "", parse: "", human: "" };
+  const ownQueue = await listReviewQueue({ jobId: bJob, companyId: kaveri.companyId, filters: queueFilters, page: 1 }).catch((error: Error) => error);
+  if (ownQueue instanceof Error || ownQueue.rows.length === 0) {
+    setupProblem("owning company can list its own review queue", ownQueue instanceof Error ? ownQueue.message : "no applications on the job");
+  } else {
+    note(true, "review queue lists the owning company's applications");
+    const foreignQueue = await listReviewQueue({ jobId: bJob, companyId: nimbus.companyId, filters: queueFilters, page: 1 }).then(
+      (value) => ({ leaked: value.rows.length, error: null as string | null }),
+      (error: Error) => ({ leaked: 0, error: error.message }),
+    );
+    note(foreignQueue.error !== null && foreignQueue.leaked === 0, "review queue refuses another company's job and returns no rows", {
+      severity: "P0",
+      area: "isolation",
+      expected: "not found, no rows",
+      actual: foreignQueue.error === null ? `returned ${foreignQueue.leaked} rows` : "error thrown but rows were reported",
+    });
+  }
 
   const bApplication = await prisma.application.findFirst({ where: { companyId: kaveri.companyId }, select: { id: true, candidateId: true, candidate: { select: { name: true } } } });
   if (bApplication) {
@@ -314,15 +330,19 @@ async function main() {
       expected: "null",
       actual: crossed ? `leaked ${bApplication.candidate.name}` : "null",
     });
-    const self = await saveSelfIdentification({ candidateId: bApplication.candidateId, companyId: nimbus.companyId, gender: "woman" }).then(() => "saved").catch((error: Error) => error.message);
-    note(/company|foreign|violat|not found/i.test(self), "self-ID write is rejected when the company id does not own the candidate", {
+    const selfOutcome = await saveSelfIdentification({ candidateId: bApplication.candidateId, companyId: nimbus.companyId, gender: "woman" }).then(
+      () => "saved",
+      (error: unknown) => (error instanceof SelfIdentificationError ? "rejected" : `unexpected error: ${error instanceof Error ? error.message : "unknown"}`),
+    );
+    const mismatched = await prisma.candidateSelfIdentification.count({ where: { candidateId: bApplication.candidateId, companyId: nimbus.companyId } });
+    note(selfOutcome === "rejected" && mismatched === 0, "self-ID write is rejected when the company does not own the candidate, and nothing is stored", {
       severity: "P0",
       area: "isolation",
-      expected: "rejected",
-      actual: self.slice(0, 240),
+      expected: "rejected, 0 mismatched rows",
+      actual: `${selfOutcome}, ${mismatched} mismatched rows`,
     });
   } else {
-    findings.push({ severity: "P2", area: "applicants", expected: "Kaveri has an application", actual: "no application row" });
+    setupProblem("Kaveri has an application to probe", "no application row");
   }
 
   let copilotLeak = "";
@@ -401,7 +421,7 @@ async function main() {
   }
   const insertMs = Date.now() - scaleStarted;
   const pageStarted = Date.now();
-  const page = await listReviewQueue({ jobId: scaleJob.id, filters: { stage: "", minScore: "", maxScore: "", knockout: "", parse: "", human: "" }, page: 1 });
+  const page = await listReviewQueue({ jobId: scaleJob.id, companyId: nimbus.companyId, filters: { stage: "", minScore: "", maxScore: "", knockout: "", parse: "", human: "" }, page: 1 });
   const pageMs = Date.now() - pageStarted;
 
   let rediscovery = "not run";

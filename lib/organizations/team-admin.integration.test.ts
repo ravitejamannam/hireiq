@@ -1,22 +1,10 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   OrganizationMemberRole,
   OrganizationMemberStatus,
   PortalRole,
 } from "@prisma/client";
-
-const actor = vi.hoisted(() => ({ id: "0" }));
-
-vi.mock("@/auth", () => ({
-  auth: async () => ({ user: { id: actor.id } }),
-}));
-
-vi.mock("next/cache", () => ({
-  revalidatePath: () => undefined,
-}));
-
 import {
   loadCompanyTeam,
   removeOrganizationMember,
@@ -28,6 +16,24 @@ import {
 import { OrganizationMembershipError } from "@/lib/validation/organization-membership-validation";
 import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
+
+const actor = vi.hoisted(() => ({ id: "0" }));
+
+vi.mock("@/auth", () => ({
+  auth: async () => ({ user: { id: actor.id } }),
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
+
+
+
+
 
 const MARKER = `team-${process.pid}-${Date.now()}`;
 
@@ -35,7 +41,7 @@ function asUser(id: number) {
   actor.id = String(id);
 }
 
-describe("organization team authorization", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("organization team authorization", () => {
   const companyIds: number[] = [];
   const userIds: number[] = [];
 

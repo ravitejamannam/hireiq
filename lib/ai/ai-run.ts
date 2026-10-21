@@ -1,4 +1,5 @@
 import type { GatewayResult } from "@/lib/ai/gateway";
+import { createAiRunUnlessErased } from "@/lib/privacy/erasure-guard";
 
 export type AiRunRecord = {
   companyId: number;
@@ -62,7 +63,7 @@ export async function persistAiRun(scope: AiRunScope | null | undefined, result:
     entityId: scope.entityId,
     result,
   });
-  await scope.db.aIRun.create({ data });
+  await createAiRunUnlessErased(scope.db, data);
   return data;
 }
 
@@ -91,6 +92,6 @@ export async function persistRefusedOptOut(
     completionTokens: null,
     reviewerAction: "REFUSED_OPT_OUT",
   };
-  await scope.db.aIRun.create({ data });
+  await createAiRunUnlessErased(scope.db, data);
   return data;
 }

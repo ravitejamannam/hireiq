@@ -1,8 +1,6 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { readFileSync } from "fs";
 import { join } from "path";
-
 import { afterAll, describe, expect, it } from "vitest";
 import {
   CandidateEvidenceOrigin,
@@ -14,7 +12,6 @@ import {
   PortalRole,
   Prisma,
 } from "@prisma/client";
-
 import {
   CANDIDATE_DELETION_REFUSED,
   CandidateDeletionRefused,
@@ -22,6 +19,9 @@ import {
   refusalFromDeleteError,
 } from "@/lib/candidates/candidate-deletion";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const MARKER = `del-${process.pid}-${Date.now()}`;
 const companyIds: number[] = [];
@@ -89,7 +89,7 @@ afterAll(async () => {
   await prisma.company.deleteMany({ where: { id: { in: companyIds } } });
 });
 
-describe("ordinary candidate deletion", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("ordinary candidate deletion", () => {
   it("refuses a candidate with an application and leaves both rows", async () => {
     const { company, candidate } = await bareCandidate("app");
     const job = await prisma.job.create({

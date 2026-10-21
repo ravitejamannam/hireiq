@@ -1,5 +1,4 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   ApplicationPipelineStatus,
@@ -8,6 +7,16 @@ import {
   JobStatus,
   PortalRole,
 } from "@prisma/client";
+import { transitionInterviewerApplicationStatus } from "@/app/actions/application-actions";
+import { confirmClientCandidateHire } from "@/app/actions/application-actions";
+import { submitInterviewerHiringRecommendation } from "@/app/actions/evaluation-actions";
+import { AuthorizationError } from "@/lib/auth/authorization";
+import { ApplicationValidationError } from "@/lib/validation/application-validation";
+import { EvaluationValidationError } from "@/lib/validation/evaluation-validation";
+import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const actor = vi.hoisted(() => ({ id: "0" }));
 
@@ -19,13 +28,13 @@ vi.mock("next/cache", () => ({
   revalidatePath: () => undefined,
 }));
 
-import { transitionInterviewerApplicationStatus } from "@/app/actions/application-actions";
-import { confirmClientCandidateHire } from "@/app/actions/application-actions";
-import { submitInterviewerHiringRecommendation } from "@/app/actions/evaluation-actions";
-import { AuthorizationError } from "@/lib/auth/authorization";
-import { ApplicationValidationError } from "@/lib/validation/application-validation";
-import { EvaluationValidationError } from "@/lib/validation/evaluation-validation";
-import { prisma } from "@/lib/prisma";
+
+
+
+
+
+
+
 
 const MARKER = `rec-${process.pid}-${Date.now()}`;
 
@@ -33,24 +42,115 @@ function asUser(id: number) {
   actor.id = String(id);
 }
 
-describe("interviewer hiring recommendations", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("interviewer hiring recommendations", () => {
   const companyIds: number[] = [];
   const userIds: number[] = [];
   const interviewerIds: number[] = [];
+  const memberIds: number[] = [];
+  const jobIds: number[] = [];
+  const candidateIds: number[] = [];
+  const applicationIds: number[] = [];
+  const evaluationIds: number[] = [];
 
   afterAll(async () => {
-    if (companyIds.length === 0) return;
-    await prisma.outcomeEvent.deleteMany({ where: { companyId: { in: companyIds } } });
-    await prisma.evaluation.deleteMany({
-      where: { application: { companyId: { in: companyIds } } },
-    });
-    await prisma.application.deleteMany({ where: { companyId: { in: companyIds } } });
-    await prisma.candidate.deleteMany({ where: { companyId: { in: companyIds } } });
-    await prisma.job.deleteMany({ where: { companyId: { in: companyIds } } });
-    await prisma.organizationMember.deleteMany({ where: { companyId: { in: companyIds } } });
-    await prisma.user.deleteMany({ where: { id: { in: userIds } } });
-    await prisma.interviewer.deleteMany({ where: { id: { in: interviewerIds } } });
-    await prisma.company.deleteMany({ where: { id: { in: companyIds } } });
+    const companies = companyIds.filter((id) => id > 0);
+    const users = userIds.filter((id) => id > 0);
+    const interviewers = interviewerIds.filter((id) => id > 0);
+    const members = memberIds.filter((id) => id > 0);
+    const jobs = jobIds.filter((id) => id > 0);
+    const candidates = candidateIds.filter((id) => id > 0);
+    const applications = applicationIds.filter((id) => id > 0);
+    const evaluations = evaluationIds.filter((id) => id > 0);
+    if (
+      companies.length +
+        users.length +
+        interviewers.length +
+        members.length +
+        jobs.length +
+        candidates.length +
+        applications.length +
+        evaluations.length ===
+      0
+    ) {
+      return;
+    }
+
+    const failures: string[] = [];
+    const attempt = async (step: string, run: () => Promise<unknown>) => {
+      try {
+        await run();
+        return true;
+      } catch (error) {
+        failures.push(`${step}: ${error instanceof Error ? error.message : "cleanup failed"}`);
+        return false;
+      }
+    };
+
+    // OutcomeEvent restricts Application, Job, and User. Evaluation restricts
+    // Application and Interviewer. Those two deletes do not depend on each other.
+    // OrganizationMember restricts User and Company. Candidate and Job both wait
+    // on Application, then are independent. Company waits on its children.
+    // Interviewer waits on Evaluation, Job, and User, and does not block Company.
+    let outcomesGone = applications.length === 0;
+    if (applications.length > 0) {
+      outcomesGone = await attempt("outcome events", () =>
+        prisma.outcomeEvent.deleteMany({ where: { applicationId: { in: applications } } }));
+    }
+    let evaluationsGone = applications.length === 0 && evaluations.length === 0;
+    if (applications.length > 0 || evaluations.length > 0) {
+      const evaluationWhere =
+        evaluations.length > 0 && applications.length > 0
+          ? { OR: [{ id: { in: evaluations } }, { applicationId: { in: applications } }] }
+          : evaluations.length > 0
+            ? { id: { in: evaluations } }
+            : { applicationId: { in: applications } };
+      evaluationsGone = await attempt("evaluations", () =>
+        prisma.evaluation.deleteMany({ where: evaluationWhere }));
+    }
+    let membersGone = members.length === 0;
+    if (members.length > 0) {
+      membersGone = await attempt("organization members", () =>
+        prisma.organizationMember.deleteMany({ where: { id: { in: members } } }));
+    }
+    let applicationsGone = applications.length === 0;
+    if (outcomesGone && evaluationsGone && applications.length > 0) {
+      applicationsGone = await attempt("applications", () =>
+        prisma.application.deleteMany({ where: { id: { in: applications } } }));
+    }
+    let candidatesGone = candidates.length === 0;
+    if (applicationsGone && candidates.length > 0) {
+      candidatesGone = await attempt("candidates", () =>
+        prisma.candidate.deleteMany({ where: { id: { in: candidates } } }));
+    }
+    let jobsGone = jobs.length === 0;
+    if (outcomesGone && applicationsGone && jobs.length > 0) {
+      jobsGone = await attempt("jobs", () =>
+        prisma.job.deleteMany({ where: { id: { in: jobs } } }));
+    }
+    let usersGone = users.length === 0;
+    if (membersGone && outcomesGone && users.length > 0) {
+      usersGone = await attempt("users", () =>
+        prisma.user.deleteMany({ where: { id: { in: users } } }));
+    }
+    if (evaluationsGone && jobsGone && usersGone && interviewers.length > 0) {
+      await attempt("interviewers", () =>
+        prisma.interviewer.deleteMany({ where: { id: { in: interviewers } } }));
+    }
+    if (
+      outcomesGone &&
+      applicationsGone &&
+      candidatesGone &&
+      jobsGone &&
+      membersGone &&
+      usersGone &&
+      companies.length > 0
+    ) {
+      await attempt("companies", () =>
+        prisma.company.deleteMany({ where: { id: { in: companies } } }));
+    }
+    if (failures.length > 0) {
+      throw new Error(`Hiring recommendation fixture cleanup failed.\n${failures.join("\n")}`);
+    }
   });
 
   it("stores a recommendation without changing the hiring outcome", async () => {
@@ -62,6 +162,7 @@ describe("interviewer hiring recommendations", () => {
         publicSlug: `${MARKER}-a`.toLowerCase().replace(/[^a-z0-9-]/g, ""),
       },
     });
+    companyIds.push(companyA.id);
     const companyB = await prisma.company.create({
       data: {
         name: `${MARKER} b`,
@@ -70,15 +171,16 @@ describe("interviewer hiring recommendations", () => {
         publicSlug: `${MARKER}-b`.toLowerCase().replace(/[^a-z0-9-]/g, ""),
       },
     });
-    companyIds.push(companyA.id, companyB.id);
+    companyIds.push(companyB.id);
 
     const profileA = await prisma.interviewer.create({
       data: { name: `${MARKER} a`, category: InterviewerCategory.ENGINEERING },
     });
+    interviewerIds.push(profileA.id);
     const profileB = await prisma.interviewer.create({
       data: { name: `${MARKER} b`, category: InterviewerCategory.ENGINEERING },
     });
-    interviewerIds.push(profileA.id, profileB.id);
+    interviewerIds.push(profileB.id);
 
     async function user(
       label: string,
@@ -104,7 +206,7 @@ describe("interviewer hiring recommendations", () => {
     const userA = await user("iv-a", PortalRole.INTERVIEWER, null, profileA.id);
     const userB = await user("iv-b", PortalRole.INTERVIEWER, null, profileB.id);
     const memberA = await user("member", PortalRole.CLIENT, companyA.id, null);
-    await prisma.organizationMember.create({
+    const membership = await prisma.organizationMember.create({
       data: {
         userId: memberA,
         companyId: companyA.id,
@@ -112,6 +214,7 @@ describe("interviewer hiring recommendations", () => {
         status: "ACTIVE",
       },
     });
+    memberIds.push(membership.id);
 
     async function application(companyId: number, interviewerId: number) {
       const job = await prisma.job.create({
@@ -122,6 +225,7 @@ describe("interviewer hiring recommendations", () => {
           assignedInterviewerId: interviewerId,
         },
       });
+      jobIds.push(job.id);
       const candidate = await prisma.candidate.create({
         data: {
           name: `${MARKER} ${companyId}`,
@@ -131,7 +235,8 @@ describe("interviewer hiring recommendations", () => {
           companyId,
         },
       });
-      return prisma.application.create({
+      candidateIds.push(candidate.id);
+      const created = await prisma.application.create({
         data: {
           candidateId: candidate.id,
           jobId: job.id,
@@ -139,6 +244,8 @@ describe("interviewer hiring recommendations", () => {
           status: ApplicationPipelineStatus.TECH_EVALUATION,
         },
       });
+      applicationIds.push(created.id);
+      return created;
     }
 
     const applicationA = await application(companyA.id, profileA.id);
@@ -150,6 +257,7 @@ describe("interviewer hiring recommendations", () => {
       "HIRE",
       "Strong system design.",
     );
+    evaluationIds.push(hire.id);
     expect(hire.recommendation).toBe("HIRE");
     expect(hire.notes).toBe("Strong system design.");
     const noHire = await submitInterviewerHiringRecommendation(
@@ -157,6 +265,7 @@ describe("interviewer hiring recommendations", () => {
       "NO_HIRE",
       "Missing production experience.",
     );
+    evaluationIds.push(noHire.id);
     expect(noHire.recommendation).toBe("NO_HIRE");
     expect(
       (await prisma.application.findUnique({

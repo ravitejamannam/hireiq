@@ -129,7 +129,7 @@ for (const path of paths) {
   let response;
   try {
     response = await request(path);
-  } catch (error) {
+  } catch {
     console.log(`${"timeout".padEnd(8)} ${path}`);
     timeouts += 1;
     continue;

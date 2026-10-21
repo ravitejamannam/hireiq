@@ -1,7 +1,6 @@
 import { writeAuditLog } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
-import { anonymiseCandidate } from "@/lib/privacy/retention";
-import { deleteResume } from "@/lib/resumes/storage";
+import { eraseCandidate } from "@/lib/privacy/candidate-erasure";
 
 /** Internal aim. A week or two, not the legal maximum. */
 export const DELETION_TARGET_DAYS = 14;
@@ -52,49 +51,31 @@ export async function listDeletionRequests() {
 }
 
 export async function completeDeletionRequest(input: { requestId: number; actorUserId: number }) {
-  const request = await prisma.candidateDeletionRequest.findUnique({
-    where: { id: input.requestId },
-    include: { candidate: true },
-  });
+  const request = await prisma.candidateDeletionRequest.findUnique({ where: { id: input.requestId } });
   if (!request || request.status !== "QUEUED") throw new Error("This request is already decided.");
-  const scrubbed = anonymiseCandidate({
-    name: request.candidate.name,
-    email: request.emailNormalized,
-    phone: null,
+  const result = await eraseCandidate({
+    companyId: request.companyId,
+    candidateId: request.candidateId,
+    trigger: "DELETION_QUEUE",
+    requestedByUserId: input.actorUserId,
   });
-  const documents = await prisma.candidatePortalDocument.findMany({
-    where: { candidateId: request.candidateId, companyId: request.companyId, replacedAt: null },
-  });
-  for (const document of documents) {
-    await deleteResume(document.storageKey).catch(() => undefined);
+  if (result.status !== "COMPLETED") {
+    // Stays QUEUED. The retry job repeats the failed steps, and completing again is safe.
+    throw new Error(`Erasure is incomplete (${result.failedSteps.join(", ")}). It will be retried. Complete the request again once it finishes.`);
   }
-  await prisma.$transaction([
-    prisma.candidate.update({
-      where: { id: request.candidateId },
-      data: {
-        name: scrubbed.name,
-        location: null,
-        currentEmployer: null,
-        skills: null,
-        expectedCTC: null,
-      },
-    }),
-    prisma.candidatePortalDocument.updateMany({
-      where: { candidateId: request.candidateId, companyId: request.companyId, replacedAt: null },
-      data: { replacedAt: new Date(), parseMessage: "Erased" },
-    }),
-    prisma.candidateDeletionRequest.update({
-      where: { id: request.id },
-      data: {
-        status: "COMPLETED",
-        decidedAt: new Date(),
-        decidedByUserId: input.actorUserId,
-        decisionReason: "Personal data erased. Hiring records kept where the law requires them.",
-      },
-    }),
-  ]);
-  const { deleteSelfIdentification } = await import("@/lib/fairness/self-id");
-  await deleteSelfIdentification(request.candidateId);
+  await prisma.candidateDeletionRequest.updateMany({
+    where: { candidateId: request.candidateId, companyId: request.companyId },
+    data: { emailNormalized: "erased" },
+  });
+  await prisma.candidateDeletionRequest.update({
+    where: { id: request.id },
+    data: {
+      status: "COMPLETED",
+      decidedAt: new Date(),
+      decidedByUserId: input.actorUserId,
+      decisionReason: "Personal data erased. Hiring records kept where the law requires them.",
+    },
+  });
   await writeAuditLog(prisma, {
     actorUserId: input.actorUserId,
     actorRole: "ADMIN",
@@ -127,6 +108,7 @@ export async function retainDeletionRequest(input: { requestId: number; actorUse
     action: "DELETION_RETAINED",
     targetType: "CANDIDATE",
     targetId: request.candidateId,
-    reason: reason.slice(0, 500),
+    // The decision reason is stored on the request. The append-only log keeps only the outcome.
+    reason: "retained | reason recorded on the request",
   });
 }

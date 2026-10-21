@@ -31,6 +31,7 @@ import BillingRecordsPanel, {
 } from "@/components/billing/BillingRecordsPanel";
 import PipelineCard from "@/components/pipeline/PipelineCard";
 import DistributionKit from "@/components/requirements/DistributionKit";
+import JobQualityNotice from "@/components/requirements/JobQualityNotice";
 import SourcedCandidateForm from "@/components/requirements/SourcedCandidateForm";
 import MintOfferLinkButton from "@/components/offers/MintOfferLinkButton";
 import JobEvidenceCapturePanel from "@/components/requirements/JobEvidenceCapturePanel";
@@ -97,6 +98,7 @@ type RequirementWorkspaceClientProps = {
   applyUrl?: string | null;
   distributionId?: number | null;
   companyId?: number;
+  publicOrigin?: string;
 };
 
 const PIPELINE_STAGES: ApplicationPipelineStatus[] = [
@@ -166,6 +168,7 @@ export default function RequirementWorkspaceClient({
   applyUrl,
   distributionId,
   companyId,
+  publicOrigin = "",
 }: RequirementWorkspaceClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("overview");
@@ -330,6 +333,24 @@ export default function RequirementWorkspaceClient({
             </Link>
           ) : null}
           <Link
+            href={`/dashboard/jobs/${requirement.id}/review`}
+            className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+          >
+            Review queue
+          </Link>
+          <Link
+            href={`/dashboard/jobs/${requirement.id}/assessment`}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+          >
+            Basic assessment
+          </Link>
+          <Link
+            href={`/dashboard/jobs/${requirement.id}/screening`}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+          >
+            Screening setup
+          </Link>
+          <Link
             href={`/dashboard/sourcing?requirementId=${requirement.id}`}
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-black hover:bg-zinc-100"
           >
@@ -482,14 +503,29 @@ export default function RequirementWorkspaceClient({
 
       {activeTab === "overview" && (
         <div className="mt-8 space-y-8">
+          <JobQualityNotice
+            title={requirement.title}
+            description={requirement.jobDescription}
+            location={requirement.location}
+            remotePolicy={requirement.remotePolicy}
+            compensationRange={requirement.compensationRange}
+            companyName={requirement.company.name}
+          />
           <DistributionKit
             jobTitle={requirement.title}
+            jobDescription={requirement.jobDescription}
             applyUrl={applyUrl ?? null}
             distributionId={distributionId ?? null}
             companyId={companyId ?? null}
             companyPublicSlug={requirement.company.publicSlug}
+            publicOrigin={publicOrigin}
           />
           <SourcedCandidateForm jobId={requirement.id} />
+          <p className="text-sm text-zinc-600">
+            <Link href={`/dashboard/jobs/${requirement.id}/import`} className="font-semibold underline">
+              Import a CSV or XLSX of applicants
+            </Link>
+          </p>
           <section className="rounded-xl border border-zinc-200 bg-white p-6">
             <h2 className="text-xl font-bold text-black">Requirement information</h2>
             <dl className="mt-4 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2 lg:grid-cols-3">

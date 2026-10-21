@@ -552,53 +552,6 @@ export async function getAssessmentLeaderboardForJob(
   } satisfies AssessmentLeaderboardPage;
 }
 
-export async function getAssessmentLeaderboardForInviteToken(rawToken: unknown) {
-  const parsed = validatePublicAssessmentToken(rawToken);
-  if (!parsed) {
-    throw new AssessmentError(ASSESSMENT_UNAVAILABLE, "UNAVAILABLE");
-  }
-
-  const invite = await prisma.assessmentInvite.findUnique({
-    where: { tokenHash: hashSecureToken(parsed) },
-    select: {
-      revokedAt: true,
-      application: { select: { jobId: true } },
-    },
-  });
-
-  if (!invite || invite.revokedAt) {
-    throw new AssessmentError(ASSESSMENT_UNAVAILABLE, "UNAVAILABLE");
-  }
-
-  return getAssessmentLeaderboardForJob(invite.application.jobId, {
-    audience: "public",
-  });
-}
-
-export async function getAssessmentLeaderboardForApplyToken(rawToken: unknown) {
-  const parsed = validatePublicAssessmentToken(rawToken);
-  if (!parsed) {
-    throw new AssessmentError(ASSESSMENT_UNAVAILABLE, "UNAVAILABLE");
-  }
-
-  const applyToken = await prisma.applyToken.findUnique({
-    where: { tokenHash: hashSecureToken(parsed) },
-    select: {
-      revokedAt: true,
-      distribution: {
-        select: { jobId: true },
-      },
-    },
-  });
-
-  if (!applyToken || applyToken.revokedAt) {
-    throw new AssessmentError(ASSESSMENT_UNAVAILABLE, "UNAVAILABLE");
-  }
-
-  return getAssessmentLeaderboardForJob(applyToken.distribution.jobId, {
-    audience: "public",
-  });
-}
 
 export async function getApplicationAssessmentSummary(applicationId: number) {
   const invite = await prisma.assessmentInvite.findUnique({

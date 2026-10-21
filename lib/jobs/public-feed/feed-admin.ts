@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { getPublicAppUrl } from "@/lib/communication/email-config";
 import { generateFeedToken } from "@/lib/jobs/public-feed/feed-token";
+import { publicJobPath } from "@/lib/jobs/public-feed/public-job-slug";
 
 /**
  * Admin feed management (T96 Phase 5).
@@ -55,8 +56,15 @@ export async function listCompanyFeedSummaries(): Promise<CompanyFeedSummary[]> 
 export type CompanyFeedDetail = {
   companyId: number;
   companyName: string;
+  publicSlug: string;
   appUrlConfigured: boolean;
   feedUrl: string | null;
+  jobsFeedEnabled: boolean;
+  linkedInFeedEnabled: boolean;
+  linkedInCompanyId: string;
+  linkedInPosterEmail: string;
+  jobsFeedPath: string;
+  linkedInFeedPath: string;
   jobs: Array<{
     distributionId: number;
     title: string;
@@ -74,7 +82,15 @@ export async function getCompanyFeedDetail(input: {
   const companyId = validateCompanyId(input.companyId);
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      name: true,
+      publicSlug: true,
+      jobsFeedEnabled: true,
+      linkedInFeedEnabled: true,
+      linkedInCompanyId: true,
+      linkedInPosterEmail: true,
+    },
   });
   if (!company) {
     throw new FeedManagementError("COMPANY_NOT_FOUND");
@@ -108,13 +124,22 @@ export async function getCompanyFeedDetail(input: {
   return {
     companyId: company.id,
     companyName: company.name,
+    publicSlug: company.publicSlug,
     appUrlConfigured: origin !== null,
     feedUrl,
+    jobsFeedEnabled: company.jobsFeedEnabled,
+    linkedInFeedEnabled: company.linkedInFeedEnabled,
+    linkedInCompanyId: company.linkedInCompanyId ?? "",
+    linkedInPosterEmail: company.linkedInPosterEmail ?? "",
+    jobsFeedPath: `/feeds/${company.publicSlug}/jobs.xml`,
+    linkedInFeedPath: `/feeds/${company.publicSlug}/linkedin.xml`,
     jobs: distributions.map((d) => ({
       distributionId: d.id,
       title: d.pinnedSpecificationVersion.title,
       location: d.pinnedSpecificationVersion.location,
-      publicJobUrl: origin ? `${origin}/jobs/${d.id}` : null,
+      publicJobUrl: origin
+        ? `${origin}${publicJobPath(company.publicSlug, d.pinnedSpecificationVersion.title, d.id)}`
+        : null,
       applyUrl: d.applyUrlSnapshot,
     })),
   };

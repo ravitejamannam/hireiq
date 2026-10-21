@@ -155,7 +155,6 @@ export default async function HostedApplyPage({ params }: ApplyPageProps) {
         </section>
 
         <footer className="py-10 text-center">
-          <LinkLeaderboard token={token} />
           {page.companyPublicSlug ? (
             <p className="mt-3">
               <Link
@@ -173,16 +172,5 @@ export default async function HostedApplyPage({ params }: ApplyPageProps) {
         </footer>
       </div>
     </main>
-  );
-}
-
-function LinkLeaderboard({ token }: { token: string }) {
-  return (
-    <a
-      href={`/apply/${encodeURIComponent(token)}/leaderboard`}
-      className="text-sm font-semibold text-zinc-500 underline underline-offset-2 hover:text-zinc-700"
-    >
-      View this role&apos;s leaderboard →
-    </a>
   );
 }

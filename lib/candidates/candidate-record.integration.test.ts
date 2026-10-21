@@ -1,26 +1,59 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { readFileSync } from "fs";
 import { join } from "path";
-
 import { afterAll, describe, expect, it } from "vitest";
 import { CandidateStatus } from "@prisma/client";
-
 import { updateCandidateRecord } from "@/lib/candidates/candidate-record";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const MARKER = `cand-${process.pid}-${Date.now()}`;
 const companyIds: number[] = [];
+const candidateIds: number[] = [];
+const candidateCompanyIds = new Map<number, number>();
 
 afterAll(async () => {
-  if (companyIds.length === 0) return;
-  await prisma.candidate.deleteMany({
-    where: { companyId: { in: companyIds } },
-  });
-  await prisma.company.deleteMany({ where: { id: { in: companyIds } } });
+  const companies = companyIds.filter((id) => id > 0);
+  const candidates = candidateIds.filter((id) => id > 0);
+  if (companies.length + candidates.length === 0) return;
+
+  const failures: string[] = [];
+  const attempt = async (step: string, run: () => Promise<unknown>) => {
+    try {
+      await run();
+      return true;
+    } catch (error) {
+      failures.push(`${step}: ${error instanceof Error ? error.message : "cleanup failed"}`);
+      return false;
+    }
+  };
+
+  // Candidate.company is Restrict. A candidate blocks only its own company.
+  let candidatesGone = candidates.length === 0;
+  if (candidates.length > 0) {
+    candidatesGone = await attempt("candidates", () =>
+      prisma.candidate.deleteMany({ where: { id: { in: candidates } } }));
+  }
+  const blockedCompanies = new Set<number>();
+  if (!candidatesGone) {
+    for (const candidateId of candidates) {
+      const companyId = candidateCompanyIds.get(candidateId);
+      if (companyId && companyId > 0) blockedCompanies.add(companyId);
+    }
+  }
+  const deletableCompanies = companies.filter((id) => !blockedCompanies.has(id));
+  if (deletableCompanies.length > 0) {
+    await attempt("companies", () =>
+      prisma.company.deleteMany({ where: { id: { in: deletableCompanies } } }));
+  }
+  if (failures.length > 0) {
+    throw new Error(`Candidate record fixture cleanup failed.\n${failures.join("\n")}`);
+  }
 });
 
-describe("candidate company immutability", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("candidate company immutability", () => {
   it("updates editable fields and keeps the stored company", async () => {
     const companyA = await prisma.company.create({
       data: {
@@ -30,6 +63,7 @@ describe("candidate company immutability", () => {
         publicSlug: `${MARKER}-a`.toLowerCase(),
       },
     });
+    companyIds.push(companyA.id);
     const companyB = await prisma.company.create({
       data: {
         name: `${MARKER} b`,
@@ -38,7 +72,7 @@ describe("candidate company immutability", () => {
         publicSlug: `${MARKER}-b`.toLowerCase(),
       },
     });
-    companyIds.push(companyA.id, companyB.id);
+    companyIds.push(companyB.id);
     const candidate = await prisma.candidate.create({
       data: {
         name: "Before",
@@ -48,6 +82,8 @@ describe("candidate company immutability", () => {
         companyId: companyA.id,
       },
     });
+    candidateIds.push(candidate.id);
+    candidateCompanyIds.set(candidate.id, companyA.id);
 
     const updated = await updateCandidateRecord(
       candidate.id,

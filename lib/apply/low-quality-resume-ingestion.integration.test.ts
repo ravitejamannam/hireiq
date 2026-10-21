@@ -1,5 +1,4 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { afterAll, describe, expect, it } from "vitest";
 import {
   ApplicationPipelineStatus,
@@ -7,13 +6,15 @@ import {
   HostedResumeParseStatus,
   JobStatus,
 } from "@prisma/client";
-
 import { claimPendingResumeInIngestion } from "@/lib/apply/hosted-resume-service";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const MARKER = `lq-${process.pid}-${Date.now()}`;
 
-describe("low-quality resume ingestion", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("low-quality resume ingestion", () => {
   const companyIds: number[] = [];
 
   afterAll(async () => {
@@ -151,7 +152,7 @@ describe("low-quality resume ingestion", () => {
     const weakDoc = await prisma.candidateResumeDocument.findFirstOrThrow({
       where: { storageKey: `${MARKER}-weak-file` },
     });
-    expect(weakDoc.parseStatus).toBe("PARSED");
+    expect(weakDoc.parseStatus).toBe("READY");
     expect(weakDoc.parseErrorCode).toBe("LOW_QUALITY");
     expect(
       await prisma.candidateEvidence.count({
@@ -162,7 +163,7 @@ describe("low-quality resume ingestion", () => {
     const cleanDoc = await prisma.candidateResumeDocument.findFirstOrThrow({
       where: { storageKey: `${MARKER}-clean-file` },
     });
-    expect(cleanDoc.parseStatus).toBe("PARSED");
+    expect(cleanDoc.parseStatus).toBe("READY");
     expect(cleanDoc.parseErrorCode).toBeNull();
     expect(
       await prisma.candidateEvidence.count({

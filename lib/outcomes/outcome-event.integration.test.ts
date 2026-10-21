@@ -1,8 +1,6 @@
 import "@/lib/evidence-graph/evidence-graph-test-env";
-
 import { readFileSync } from "fs";
 import { join } from "path";
-
 import { afterAll, describe, expect, it } from "vitest";
 import {
   ApplicationPipelineStatus,
@@ -13,7 +11,6 @@ import {
   PortalRole,
   RequirementLifecycle,
 } from "@prisma/client";
-
 import { generateBillingForHiredApplication } from "@/lib/billing/generate-hire-billing";
 import {
   commitApplicationStatusChange,
@@ -21,6 +18,9 @@ import {
 } from "@/lib/outcomes/outcome-event-writes";
 import { deleteAuditLogsForTests } from "@/lib/audit/write-audit-log";
 import { prisma } from "@/lib/prisma";
+import { gateIntegrationSuite } from "@/lib/testing/integration-database-gate";
+
+const integrationDatabase = gateIntegrationSuite();
 
 const MARKER = `m13-${process.pid}-${Date.now()}`;
 const companyIds: number[] = [];
@@ -95,7 +95,7 @@ afterAll(async () => {
   await prisma.company.deleteMany({ where: { id: { in: companyIds } } });
 });
 
-describe("outcome events", () => {
+describe.skipIf(integrationDatabase.mode === "skip")("outcome events", () => {
   it("emits one shortlist for admin and interviewer and ignores a repeat", async () => {
     const adminWorld = await world("admin-short");
     const interviewerWorld = await world("int-short");
