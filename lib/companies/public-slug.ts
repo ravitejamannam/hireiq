@@ -2,11 +2,13 @@ import { randomBytes } from "node:crypto";
 
 import type { Prisma } from "@prisma/client";
 
+import { isValidPublicSlug } from "@/lib/companies/public-slug-rules";
 import { prisma } from "@/lib/prisma";
 
-const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const MAX_SLUG_LENGTH = 64;
 const BASE_SLUG_LENGTH = 48;
+const MAX_SLUG_LENGTH = 64;
+
+export { isValidPublicSlug };
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -21,14 +23,6 @@ export function slugifyCompanyName(name: string): string {
     .replace(/-+$/g, "");
 
   return normalized || "company";
-}
-
-export function isValidPublicSlug(value: string): boolean {
-  return (
-    value.length >= 1 &&
-    value.length <= MAX_SLUG_LENGTH &&
-    SLUG_RE.test(value)
-  );
 }
 
 export function publicCareersPath(companySlug: string): string {

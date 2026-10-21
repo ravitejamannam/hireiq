@@ -1,4 +1,4 @@
-import { isValidPublicSlug } from "@/lib/companies/public-slug";
+import { isValidPublicSlug } from "@/lib/companies/public-slug-rules";
 
 const SLUG_TITLE_LENGTH = 48;
 
