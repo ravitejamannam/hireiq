@@ -83,7 +83,7 @@ jobs:
         env:
           POSTGRES_USER: ci
           POSTGRES_PASSWORD: ci
-          POSTGRES_DB: hireiq
+          POSTGRES_DB: hireiq_e2e_disp_ci
         ports:
           - 5432:5432
         options: >-
@@ -92,7 +92,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://ci:ci@localhost:5432/hireiq
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/hireiq_e2e_disp_ci
+      E2E_DATABASE_NAME: hireiq_e2e_disp_ci
       AUTH_SECRET: ci-auth-secret-for-pipeline-only
       APP_URL: http://localhost:4000
       ADMIN_EMAIL: admin@hireiq.local
